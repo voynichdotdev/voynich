@@ -1,0 +1,36 @@
+{
+  "name": "@voynich/contract",
+  "version": "0.1.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "openapi.json"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./fixtures": {
+      "types": "./dist/fixtures.d.ts",
+      "import": "./dist/fixtures.js"
+    },
+    "./openapi.json": "./openapi.json"
+  },
+  "scripts": {
+    "build": "node scripts/sync-manifest.mjs && tsc -p tsconfig.json && node dist/write-openapi.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pack:vendor": "node scripts/pack.mjs"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
