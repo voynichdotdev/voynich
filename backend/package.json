@@ -1,0 +1,12 @@
+{
+  "name": "voynich-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "workspaces": ["contract", "sdk", "enclave"],
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json"
+  }
+}

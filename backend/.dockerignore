@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/keys
+.local
+.git
+.anchor
+target
+vendor-out
+models
+programs
+tests
+**/*.log

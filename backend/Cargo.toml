@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "programs/attest",
+    "programs/voynich",
+]
+resolver = "2"
