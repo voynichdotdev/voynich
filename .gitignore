@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.next-prod/
+.next-prod-b/
+dist/
+target/
+keys/
+.env
+.env.local
+.local/
+.run/
+vendor-out/
+*.tsbuildinfo
+backend/programs/artifacts/*.so
+.DS_Store
+Thumbs.db
