@@ -1,0 +1,32 @@
+use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum VoynichError {
+    #[msg("Only the configured authority may perform this action.")] Unauthorized,
+    #[msg("Protocol configuration is invalid.")] InvalidConfig,
+    #[msg("Model metadata or cipher format is invalid.")] InvalidModel,
+    #[msg("The model is not uploading.")] ModelNotUploading,
+    #[msg("Seal the model before granting it.")] ModelNotSealed,
+    #[msg("The model does not accept new calls.")] ModelNotLive,
+    #[msg("The weights accounts do not match the model.")] InvalidWeights,
+    #[msg("The upload has a gap or an out-of-range write.")] InvalidWrite,
+    #[msg("Every weights byte must be written before sealing.")] UploadIncomplete,
+    #[msg("The ciphertext hash does not match.")] CiphertextHashMismatch,
+    #[msg("The attestation record is invalid or expired.")] InvalidAttestation,
+    #[msg("The enclave measurement is not allowed by this model.")] MeasurementNotAllowed,
+    #[msg("The enclave registration does not match its attestation.")] InvalidEnclave,
+    #[msg("The wrapped key must be a version 1 envelope of 105 bytes.")] InvalidWrappedKey,
+    #[msg("The enclave does not hold an active grant.")] GrantRequired,
+    #[msg("The call has already settled or been refunded.")] CallNotOpen,
+    #[msg("The call settlement deadline has passed.")] CallDeadlinePassed,
+    #[msg("The call deadline has not passed.")] CallNotRefundable,
+    #[msg("The required Ed25519 verification instruction is missing or does not match.")] InvalidSignature,
+    #[msg("The escrow mint or token accounts are invalid.")] InvalidTokenAccount,
+    #[msg("A payment recipient does not match the call snapshot.")] InvalidRecipient,
+    #[msg("The escrow cannot cover the requested payment.")] InsufficientEscrow,
+    #[msg("An arithmetic limit was exceeded.")] ArithmeticOverflow,
+    #[msg("The open answer bytes are empty, exceed the configured limit, or do not match the output hash.")] InvalidOpenAnswer,
+    #[msg("The callback specification or remaining accounts are invalid.")] InvalidCallback,
+    #[msg("The call pricing unit or escrow ceiling is invalid for this instruction.")] InvalidCall,
+    #[msg("The measurement digest, source metadata, or status is invalid.")] InvalidMeasurement,
+}
