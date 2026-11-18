@@ -1,0 +1,73 @@
+{
+  "name": "voynich",
+  "version": "0.2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "node": {
+        "types": "./dist/node.d.ts",
+        "import": "./dist/node.js"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./program": {
+      "types": "./dist/program.d.ts",
+      "import": "./dist/program.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./idl/voynich": {
+      "types": "./dist/generated/voynich.d.ts",
+      "import": "./dist/generated/voynich.js"
+    },
+    "./idl/attest": {
+      "types": "./dist/generated/attest.d.ts",
+      "import": "./dist/generated/attest.js"
+    },
+    "./idl/bounty": {
+      "types": "./dist/generated/bounty.d.ts",
+      "import": "./dist/generated/bounty.js"
+    },
+    "./crypto": {
+      "types": "./dist/crypto.d.ts",
+      "import": "./dist/crypto.js"
+    },
+    "./adapter": {
+      "types": "./dist/adapter.d.ts",
+      "import": "./dist/adapter.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "bin": {
+    "voynich": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@solana/web3.js": "1.99.0",
+    "@solana/spl-token": "0.4.14",
+    "@voynich/contract": "^0.1.26",
+    "@types/bn.js": "5.2.0",
+    "bn.js": "5.2.5",
+    "buffer": "6.0.3",
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0"
+  }
+}
