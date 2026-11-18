@@ -1,0 +1,10 @@
+{
+  "heldOutDrawings": 32000,
+  "trainDrawings": 448000,
+  "top1": 0.9116,
+  "top3": 0.9671,
+  "parameters": 62528,
+  "onnxBytes": 252081,
+  "epochs": 8,
+  "seed": 32
+}

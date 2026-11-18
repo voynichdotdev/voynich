@@ -4,5 +4,5 @@
     "strict": true, "noUncheckedIndexedAccess": true, "verbatimModuleSyntax": true,
     "esModuleInterop": true, "skipLibCheck": true, "noEmit": true
   },
-  "include": ["setup.ts"]
+  "include": ["localnet-setup.ts", "setup.ts"]
 }
