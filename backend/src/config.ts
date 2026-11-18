@@ -1,0 +1,33 @@
+import { z } from 'zod'
+import { address, host, httpUrl, origins, parseEnv, port } from './engines/server/config.js'
+
+export const env = parseEnv(z.object({
+  MODE: z.enum(['fixture', 'chain']).default('fixture'),
+  PORT: port(9702), HOST: host(), CORS_ORIGINS: origins.optional().transform(value => value ?? []),
+  DATABASE_URL: z.string().optional(), CLUSTER: z.enum(['localnet', 'devnet', 'mainnet-beta']).default('localnet'),
+  SOLANA_RPC_URL: httpUrl.default('http://127.0.0.1:9704'),
+  PROGRAM_ID: address.optional(), ATTESTATION_PROGRAM_ID: address.optional(),
+  BOUNTY_PROGRAM_ID: address.optional(),
+  ATTESTATION_RECORD_LAYOUT_VERSION: z.coerce.number().int().positive().optional(),
+  FEE_RECIPIENT: address.optional(), PROTOCOL_SHARE_BPS: z.coerce.number().int().min(0).max(10000).optional(),
+  CALL_DEADLINE_SLOTS: z.string().regex(/^[1-9]\d*$/).optional(), TOKEN_MINT: address.optional(),
+  BUYBACK_INTERVAL_SECONDS: z.coerce.number().int().positive().optional(),
+  PUBLIC_API_URL: httpUrl.default('http://127.0.0.1:9702'),
+  RPC_RPS: z.coerce.number().positive().optional(),
+  RPC_SCAN_INTERVAL_MS: z.coerce.number().int().nonnegative().optional(),
+  LASERSTREAM_ENDPOINT: httpUrl.optional(),
+  LASERSTREAM_API_KEY: z.string().optional(),
+  INDEXER_RECONCILE_MS: z.coerce.number().int().positive().optional(),
+  LOOKUP_TABLE: address.optional(),
+  KEEPER_KEYPAIR: z.string().optional(),
+  FEE_RECIPIENT_KEYPAIR: z.string().optional(),
+  JUPITER_API_KEY: z.string().optional(),
+  BUYBACK_AMOUNT_BASE_UNITS: z.string().regex(/^[1-9]\d*$/).optional(),
+  BUYBACK_RESERVE_LAMPORTS: z.string().regex(/^(0|[1-9]\d*)$/).optional(),
+  BUYBACK_SLIPPAGE_BPS: z.coerce.number().int().min(0).max(10000).optional(),
+  TRADING_FEE_DBC_POOL: address.optional(),
+  TRADING_FEE_DAMM_POOL: address.optional(),
+  TRADING_FEE_BUYBACK_BPS: z.coerce.number().int().min(0).max(10000).optional(),
+  TRADING_FEE_CLAIM_MIN_LAMPORTS: z.string().regex(/^(0|[1-9]\d*)$/).optional(),
+  TRADING_FEE_CLAIM_INTERVAL_SECONDS: z.coerce.number().int().positive().optional(),
+}))
