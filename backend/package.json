@@ -3,10 +3,51 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": "22.x" },
-  "workspaces": ["contract", "sdk", "enclave"],
+  "engines": {
+    "node": "22.x"
+  },
+  "workspaces": [
+    "contract",
+    "sdk",
+    "enclave"
+  ],
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json"
+    "typecheck": "npm run build --workspace @voynich/contract && npm run build --workspace voynich && tsc --noEmit -p tsconfig.json",
+    "build": "node scripts/generate.mjs && npm run build --workspace @voynich/contract && npm run build --workspace voynich && npm run build --workspace voynich-enclave && tsc -p tsconfig.json && tsc -p scripts/tsconfig.json",
+    "start": "node scripts/start-service.mjs api",
+    "start:indexer": "node scripts/start-service.mjs indexer",
+    "start:crank": "node scripts/start-service.mjs crank",
+    "localnet:setup": "tsx scripts/localnet-setup.ts",
+    "contract:pack": "node contract/scripts/pack.mjs",
+    "build:sbf": "anchor build --arch sbf",
+    "build:programs": "node scripts/build-programs.mjs",
+    "test:programs": "node --import tsx --test tests/programs.ts",
+    "typecheck:programs": "tsc --noEmit -p tests/tsconfig.json"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@hono/node-server": "2.1.6",
+    "@meteora-ag/cp-amm-sdk": "^1.5.1",
+    "@meteora-ag/dynamic-bonding-curve-sdk": "^2.0.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "@solana/spl-token": "0.4.14",
+    "@solana/web3.js": "1.99.0",
+    "@triton-one/yellowstone-grpc": "4.0.2",
+    "@voynich/contract": "*",
+    "bn.js": "^5.2.5",
+    "hono": "4.13.16",
+    "pg": "8.16.3",
+    "voynich": "*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/bn.js": "5.2.0",
+    "@types/node": "22.19.1",
+    "@types/pg": "8.23.1",
+    "prisma": "7.10.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
   }
 }
