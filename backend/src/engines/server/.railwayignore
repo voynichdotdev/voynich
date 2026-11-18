@@ -1,0 +1,36 @@
+# What a Node backend's Railway upload leaves out (gitignore syntax; a leading / anchors to this folder).
+# Check the upload with: rg --files --hidden --no-ignore-vcs --ignore-file .railwayignore .
+
+# installed and built on Railway
+**/node_modules/
+/dist/
+**/*.tsbuildinfo
+
+# secrets and keys never upload
+**/.env
+**/.env.*
+!/.env.example
+**/keys/
+**/*keypair*.json
+**/*.key
+**/*.pem
+
+# a Cargo.toml at the root makes Railpack build a Rust image with no Node in it
+/Cargo.toml
+/Cargo.lock
+/Anchor.toml
+/programs/
+/target/
+/.anchor/
+
+# Railpack honours an uploaded .dockerignore, which can strip what the build needs
+/.dockerignore
+
+# local state, reports and proofs
+/.git/
+/.local/
+/.tmp/
+/var/
+/reports/
+**/*.log
+**/*.test.ts

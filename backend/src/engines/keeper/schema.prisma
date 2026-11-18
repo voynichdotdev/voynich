@@ -1,0 +1,18 @@
+// The keeper journal's table. Copy into the project's schema.prisma.
+
+model KeeperTransaction {
+  /// what the transaction does, e.g. "sweep:<mint>:<epoch>"; one row per action
+  key                  String   @id
+  /// signed | confirmed | failed | expired
+  state                String
+  signature            String   @unique
+  signedBase64         String
+  blockhash            String
+  lastValidBlockHeight BigInt
+  contextSlot          BigInt
+  error                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([state, createdAt])
+}

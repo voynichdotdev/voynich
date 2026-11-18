@@ -1,0 +1,42 @@
+// Indexer tables. Paste into the project's schema.prisma and migrate; prisma-store.ts and
+// table-lease.ts reach them by these mapped names in plain SQL.
+
+/// One row per transaction seen at a watched address: its decoded facts, staged here and then
+/// applied in chain order. applied_at stays null until its page commits.
+model IndexedTransaction {
+  signature        String    @id @db.VarChar(88)
+  slot             BigInt
+  transactionIndex Int       @default(0) @map("transaction_index")
+  blockTime        DateTime? @map("block_time") @db.Timestamptz(6)
+  failed           Boolean
+  addresses        String[]
+  facts            Json?
+  decodeError      String?   @map("decode_error")
+  chainError       Json?     @map("chain_error")
+  appliedAt        DateTime? @map("applied_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([appliedAt, slot, transactionIndex])
+  @@map("indexed_transactions")
+}
+
+/// Where re-reading each watched address stops. discoveredBy is set for addresses an indexed
+/// transaction introduced; configured addresses leave it null.
+model IndexerCursor {
+  address         String   @id @db.VarChar(44)
+  latestSignature String?  @map("latest_signature") @db.VarChar(88)
+  latestSlot      BigInt?  @map("latest_slot")
+  discoveredBy    String?  @map("discovered_by") @db.VarChar(88)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("indexer_cursors")
+}
+
+/// Leader leases for background workers (table-lease.ts). Expiry is compared in database time.
+model WorkerLease {
+  name      String   @id
+  owner     String
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@map("worker_leases")
+}
