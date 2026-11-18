@@ -1,0 +1,3 @@
+ALTER TABLE "enclaves"
+ADD COLUMN "reachable" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "lastSeen" TIMESTAMPTZ(3);

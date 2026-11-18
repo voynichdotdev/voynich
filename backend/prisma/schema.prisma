@@ -1,0 +1,397 @@
+// First-draft read model. The indexer applies verified emit_cpi events in chain order.
+// Ciphertext remains in Solana Weights accounts; neither model keys nor plaintext enter this DB.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ModelStatus {
+  uploading
+  sealed
+  live
+  retired
+}
+
+enum HardwareType {
+  dev
+  tdx
+  sev_snp
+}
+
+// Refundability is derived from an open call's deadline and the indexed current slot.
+enum CallStatus {
+  open
+  settled
+  refunded
+}
+
+enum AnswerMode {
+  sealed
+  open
+}
+
+enum PriceUnit {
+  call
+  token
+}
+
+enum PaymentRole {
+  owner
+  operator
+  protocol
+}
+
+enum BountyStatus {
+  open
+  claimed
+  cancelled
+}
+
+enum MeasurementStatus {
+  active
+  deprecated
+}
+
+model Model {
+  address             String      @id @db.VarChar(44)
+  name                String
+  owner               String      @db.VarChar(44)
+  manifest            Json
+  manifestBytes       Bytes       @db.ByteA
+  status              ModelStatus @default(uploading)
+  createdSlot         BigInt
+  sealedSlot          BigInt?
+  plaintextSize       BigInt
+  ciphertextSize      BigInt
+  ciphertextSha256    String?     @db.Char(64)
+  cipherId            String
+  noncePrefix         Bytes      @db.ByteA
+  allowedMeasurements String[]
+  // Decimal holds the full unsigned u64 domain; PostgreSQL bigint cannot.
+  price               Decimal    @db.Decimal(20, 0)
+  priceMint           String?    @db.VarChar(44)
+  priceUnit           PriceUnit  @default(call)
+  operatorShareBps     Int
+  uploadKey           String?    @db.VarChar(44)
+  uploadKeys          String[]   @default([])
+  hashVersion         Int        @default(0)
+  sealedChunks        Int        @default(0)
+  baseSha256          String?    @db.Char(64)
+  baseSizeBytes       BigInt?
+  baseFormat          String?    @db.VarChar(32)
+  baseSource          String?    @db.VarChar(256)
+  callsSettled        BigInt     @default(0)
+  updatedSlot         BigInt
+  indexingIssue       String?
+  weights             Weights[]
+  grants              Grant[]
+  calls               Call[]
+  receipts            Receipt[]
+
+  @@index([name])
+  @@index([owner, createdSlot])
+  @@index([status, callsSettled])
+  @@index([status, createdSlot])
+  @@index([priceMint, price])
+  @@map("models")
+}
+
+model Weights {
+  address       String @id @db.VarChar(44)
+  modelAddress  String @db.VarChar(44)
+  model         Model  @relation(fields: [modelAddress], references: [address])
+  index         Int
+  // Global ciphertext offsets. Each written range is [start, end), relative to this account.
+  offset        BigInt
+  size          BigInt
+  writtenRanges Json
+  bytesWritten  BigInt @default(0)
+  updatedSlot   BigInt
+
+  @@unique([modelAddress, index])
+  @@map("weights")
+}
+
+// Preserve each observed version when an on-chain attestation account is refreshed in place.
+// Receipts retain the version that was read at settlement, including its original expiry.
+model AttestationRecord {
+  address          String       @db.VarChar(44)
+  recordedSlot     BigInt
+  signingKey       String       @db.VarChar(44)
+  encryptionKey    Bytes        @db.ByteA
+  hardwareType     HardwareType
+  measurement      String
+  expiresAtSlot    BigInt
+  programId        String       @db.VarChar(44)
+  layoutVersion    Int
+  enclaves         Enclave[]
+  receipts         Receipt[]
+
+  @@id([address, recordedSlot])
+  @@index([signingKey, recordedSlot])
+  @@map("attestation_records")
+}
+
+model Enclave {
+  address                   String            @id @db.VarChar(44)
+  signingKey                String            @unique @db.VarChar(44)
+  encryptionKey             Bytes             @db.ByteA
+  operator                  String            @db.VarChar(44)
+  endpoint                  String
+  attestationRecordAddress  String            @db.VarChar(44)
+  attestationRecordedSlot   BigInt
+  attestationRecord         AttestationRecord @relation(fields: [attestationRecordAddress, attestationRecordedSlot], references: [address, recordedSlot])
+  registeredSlot            BigInt
+  updatedSlot               BigInt
+  callsSettled              BigInt            @default(0)
+  reachable                 Boolean           @default(false)
+  lastSeen                  DateTime?         @db.Timestamptz(3)
+  grants                    Grant[]
+  calls                     Call[]
+  receipts                  Receipt[]
+
+  @@index([operator])
+  @@map("enclaves")
+}
+
+model Grant {
+  address        String  @id @db.VarChar(44)
+  modelAddress   String  @db.VarChar(44)
+  model          Model   @relation(fields: [modelAddress], references: [address])
+  enclaveAddress String  @db.VarChar(44)
+  enclave        Enclave @relation(fields: [enclaveAddress], references: [address])
+  wrappedKey     Bytes   @db.ByteA
+  grantedBy      String  @db.VarChar(44)
+  grantedSlot    BigInt
+  revokedSlot    BigInt?
+
+  @@unique([modelAddress, enclaveAddress])
+  @@index([enclaveAddress])
+  @@map("grants")
+}
+
+model Call {
+  address              String     @id @db.VarChar(44)
+  caller               String     @db.VarChar(44)
+  callerIsProgram      Boolean    @default(false)
+  modelAddress         String     @db.VarChar(44)
+  model                Model      @relation(fields: [modelAddress], references: [address])
+  enclaveAddress       String     @db.VarChar(44)
+  enclave              Enclave    @relation(fields: [enclaveAddress], references: [address])
+  inputHash            String     @db.Char(64)
+  escrowAmount         Decimal    @db.Decimal(20, 0)
+  priceUnit            PriceUnit  @default(call)
+  unitPrice            Decimal?   @db.Decimal(20, 0)
+  priceMint            String?    @db.VarChar(44)
+  openedSlot           BigInt
+  deadlineSlot         BigInt
+  status               CallStatus @default(open)
+  answerMode           AnswerMode @default(sealed)
+  openSignature        String     @db.VarChar(88)
+  refundSignature      String?    @db.VarChar(88)
+  refundedSlot         BigInt?
+  updatedSlot          BigInt
+  receipt              Receipt?
+
+  @@index([caller, openedSlot])
+  @@index([modelAddress, openedSlot])
+  @@index([enclaveAddress, openedSlot])
+  @@index([status, deadlineSlot])
+  @@map("calls")
+}
+
+model Receipt {
+  address                  String            @id @db.VarChar(44)
+  callAddress              String            @unique @db.VarChar(44)
+  call                     Call              @relation(fields: [callAddress], references: [address])
+  modelAddress             String            @db.VarChar(44)
+  model                    Model             @relation(fields: [modelAddress], references: [address])
+  enclaveAddress           String            @db.VarChar(44)
+  enclave                  Enclave           @relation(fields: [enclaveAddress], references: [address])
+  inputHash                String            @db.Char(64)
+  outputHash               String            @db.Char(64)
+  enclaveSignature         Bytes             @db.ByteA
+  answerMode               AnswerMode        @default(sealed)
+  openAnswer               Bytes?            @db.ByteA
+  callerIsProgram          Boolean           @default(false)
+  deliveredCount           BigInt?
+  returnedAmount           Decimal?          @db.Decimal(20, 0)
+  slot                     BigInt
+  transactionSignature     String            @db.VarChar(88)
+  attestationRecordAddress String            @db.VarChar(44)
+  attestationRecordedSlot  BigInt
+  attestationRecord        AttestationRecord @relation(fields: [attestationRecordAddress, attestationRecordedSlot], references: [address, recordedSlot])
+  payments                 Payment[]
+
+  @@index([transactionSignature])
+  @@index([modelAddress, slot])
+  @@index([enclaveAddress, slot])
+  @@map("receipts")
+}
+
+model Payment {
+  receiptAddress String      @db.VarChar(44)
+  receipt        Receipt     @relation(fields: [receiptAddress], references: [address])
+  role           PaymentRole
+  recipient      String      @db.VarChar(44)
+  mint           String?     @db.VarChar(44)
+  amount         Decimal     @db.Decimal(20, 0)
+
+  @@id([receiptAddress, role])
+  @@index([recipient, mint])
+  @@map("payments")
+}
+
+// API transaction ledger: TxBuild + TxRecord from the copied tx engine.
+model Transaction {
+  id                   String   @id
+  wallet               String   @db.VarChar(44)
+  action               String
+  actionData           Json
+  transactionBase64    String
+  blockhash            String   @db.VarChar(44)
+  lastValidBlockHeight BigInt
+  contextSlot          BigInt?
+  cosigned             Boolean
+  status               String   @default("built")
+  signature            String?  @db.VarChar(88)
+  signedBase64         String?
+  submissionKey        String?
+  error                Json?
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([wallet, createdAt])
+  @@index([status, createdAt])
+  @@map("transactions")
+}
+
+// Exact table and column names used by the copied indexer engine's SQL.
+model IndexedTransaction {
+  signature        String    @id @db.VarChar(88)
+  slot             BigInt
+  transactionIndex Int       @default(0) @map("transaction_index")
+  blockTime        DateTime? @map("block_time") @db.Timestamptz(3)
+  failed           Boolean
+  addresses        String[]
+  facts            Json?
+  decodeError      String?   @map("decode_error")
+  chainError       Json?     @map("chain_error")
+  appliedAt        DateTime? @map("applied_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([appliedAt, slot, transactionIndex])
+  @@map("indexed_transactions")
+}
+
+model IndexerCursor {
+  address         String   @id @db.VarChar(44)
+  latestSignature String?  @map("latest_signature") @db.VarChar(88)
+  latestSlot      BigInt?  @map("latest_slot")
+  discoveredBy    String?  @map("discovered_by") @db.VarChar(88)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("indexer_cursors")
+}
+
+model WorkerLease {
+  name      String   @id
+  owner     String
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@map("worker_leases")
+}
+
+model KeeperTransaction {
+  key                  String   @id
+  state                String
+  signature            String   @unique
+  signedBase64         String
+  blockhash            String
+  lastValidBlockHeight BigInt
+  contextSlot          BigInt
+  error                String?
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([state, createdAt])
+}
+
+// Exact unmapped names are required by server/readiness.ts.
+model ServiceReadiness {
+  id          String    @id
+  ready       Boolean   @default(false)
+  nextProbeAt DateTime  @default(now()) @db.Timestamptz(3)
+  checkedAt   DateTime? @db.Timestamptz(3)
+  lastError   String?
+}
+
+model SharedProtocolState {
+  id          String   @id
+  currentSlot BigInt   @default(0)
+  config      Json?
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model TokenMint {
+  mint     String @id @db.VarChar(44)
+  decimals Int
+  // A mint address remains the honest display symbol until metadata is supplied.
+  symbol   String
+}
+
+model Buyback {
+  key            String   @id
+  mint           String   @db.VarChar(44)
+  inputMint      String?  @db.VarChar(44)
+  inputAmount    Decimal  @db.Decimal(20, 0)
+  acquiredAmount Decimal? @db.Decimal(20, 0)
+  instructions   Json
+  lookupTables   String[]
+  state          String
+  swapKey        String
+  burnKey        String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+}
+
+
+model Bounty {
+  address        String          @id @db.VarChar(44)
+  creator        String          @db.VarChar(44)
+  nonce          Decimal         @db.Decimal(20, 0)
+  modelAddress   String          @db.VarChar(44)
+  targetLabel    String
+  mint           String?         @db.VarChar(44)
+  amount         Decimal         @db.Decimal(20, 0)
+  status         BountyStatus    @default(open)
+  winner         String?         @db.VarChar(44)
+  winningCall    String?         @db.VarChar(44)
+  winningReceipt String?         @db.VarChar(44)
+  createdSlot    BigInt
+  claimedSlot    BigInt?
+  attemptsCount  BigInt          @default(0)
+  updatedSlot    BigInt
+  attempts       BountyAttempt[]
+
+  @@index([status, createdSlot])
+  @@index([modelAddress, status])
+  @@map("bounties")
+}
+
+model BountyAttempt {
+  address       String  @id @db.VarChar(44)
+  bountyAddress String  @db.VarChar(44)
+  bounty        Bounty  @relation(fields: [bountyAddress], references: [address])
+  drawer        String  @db.VarChar(44)
+  callAddress   String  @unique @db.VarChar(44)
+  createdSlot   BigInt
+  refunded      Boolean @default(false)
+
+  @@index([bountyAddress, createdSlot])
+  @@index([drawer, createdSlot])
+  @@map("bounty_attempts")
+}
