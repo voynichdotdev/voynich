@@ -1,0 +1,326 @@
+'use client'
+
+// The account is one place in every state: the calls as the work, what the wallet owns and operates beside them.
+// With no wallet, nothing read yet or a failed read, the same regions stand with that state where the data would be.
+
+import Link from 'next/link'
+import { useCallback, useEffect, useState } from 'react'
+import type { Account, Call, Earnings } from '@voynich/contract'
+import { FIXTURE } from '@voynich/contract/fixtures'
+import { api, read, type Read } from '@/lib/api'
+import { loadLastPieceFromApi, loadSavedStreamPieces, removeSavedStreamPiece, type SavedStreamPiece } from '@/lib/call'
+import { LINKS, SKETCH32 } from '@/lib/facts'
+import { group, hardware, money, short } from '@/lib/format'
+import { play } from '@/lib/sound'
+import { errorMessage, send, type TxStageName } from '@/lib/tx'
+import { wallet } from '@/lib/wallet'
+import { useWallet } from '@/src/engines/wallet/react'
+import { WalletButton } from '@/components/nav/WalletButton'
+import { State, StateTile } from '@/components/tile/Tile'
+import { toast } from '@/components/ui/Toast'
+import { Amount, Empty, Failed, Hash, Loading } from '@/components/ui/kit'
+import { q } from '@/components/receipt/shared'
+import s from './account.module.css'
+
+type Names = Record<string, string>
+// What the regions hold: nothing to read from, a read under way, a read that failed, or the account.
+type Held = { is: 'connect' } | { is: 'loading' } | { is: 'failed'; message: string; retry?: () => void } | { is: 'data'; account: Account }
+
+export function AccountView({ fixture, as = null, walletAddress = null }: { fixture: string | null; as?: 'owner' | null; walletAddress?: string | null }) {
+  const w = useWallet(wallet)
+  // With no wallet connected, `?wallet=<pubkey>` inspects that wallet read-only, `?as=owner` shows
+  // the account of the wallet that owns sketch-32, and a named scenario on a sample API shows its caller's account.
+  const [sample, setSample] = useState<string | null | undefined>(!walletAddress && (fixture || as) ? undefined : null)
+  const [r, setR] = useState<Read<Account> | null>(null)
+  const [names, setNames] = useState<Names>({})
+  const address = walletAddress ?? w.address ?? sample ?? null
+  const canSign = !!address && w.address === address
+
+  useEffect(() => {
+    if (walletAddress || (!fixture && !as) || w.address) return
+    let live = true
+    if (as === 'owner') {
+      void read(api(fixture).model(SKETCH32.id)).then((m) => {
+        if (!live) return
+        if (!m.ok) { setSample(null); setR(m) } else setSample(m.data.owner)
+      })
+      return () => { live = false }
+    }
+    void read(api(fixture).config()).then((c) => {
+      if (!live) return
+      if (!c.ok) { setSample(null); setR(c) } else setSample(c.data.fixture ? FIXTURE.caller : null)
+    })
+    return () => { live = false }
+  }, [walletAddress, fixture, as, w.address])
+
+  const load = useCallback(async (who: string) => {
+    const client = api(fixture)
+    const [account, list] = await Promise.all([read(client.account(who)), read(client.models({ limit: 100 }))])
+    if (list.ok) setNames(Object.fromEntries(list.data.items.map((m) => [m.address, m.name])))
+    return account
+  }, [fixture])
+
+  useEffect(() => {
+    if (!address) return
+    let live = true
+    setR(null)
+    void load(address).then((a) => { if (live) setR(a) })
+    return () => { live = false }
+  }, [address, load])
+
+  const waiting = !walletAddress && (!w.ready || w.status === 'connecting' || sample === undefined)
+  const held: Held = r && !r.ok ? { is: 'failed', message: r.message, retry: address ? () => { setR(null); void load(address).then(setR) } : undefined }
+    : !address ? (waiting ? { is: 'loading' } : { is: 'connect' })
+    : !r ? { is: 'loading' }
+    : { is: 'data', account: r.data }
+
+  return (
+    <div className="container page">
+      <div className="page-head">
+        <div>
+          <h1 className="t-h1">Account</h1>
+          {address ? <p className={s.who}><Hash value={address} chars={8} label="wallet address" /></p> : <p className="t-small">Your calls, the models you own and the enclaves you operate.</p>}
+        </div>
+      </div>
+      <Regions fixture={fixture} held={held} names={names} wallet={address} canSign={canSign} onChange={(calls) => { if (r?.ok) setR({ ok: true, data: { ...r.data, calls } }) }} />
+    </div>
+  )
+}
+
+function Regions({ fixture, held, names, wallet: who, canSign, onChange }: { fixture: string | null; held: Held; names: Names; wallet: string | null; canSign: boolean; onChange: (calls: Call[]) => void }) {
+  const [pending, setPending] = useState<{ call: string; kind: 'refund' | 'settle'; stage: 'building' | TxStageName } | null>(null)
+  const [loadingPiece, setLoadingPiece] = useState<string | null>(null)
+  const [savedPieces, setSavedPieces] = useState<Record<string, SavedStreamPiece>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const account = held.is === 'data' ? held.account : null
+  const calls = account?.calls ?? []
+  const refundable = calls.filter((c) => c.status === 'refundable').length
+
+  useEffect(() => {
+    const loaded = loadSavedStreamPieces()
+    let changed = false
+    for (const c of calls) {
+      if ((c.status === 'settled' || c.status === 'refunded') && loaded[c.address]) {
+        removeSavedStreamPiece(c.address)
+        delete loaded[c.address]
+        changed = true
+      }
+    }
+    setSavedPieces(changed ? { ...loaded } : loaded)
+  }, [calls])
+
+  const refund = async (call: Call) => {
+    if (pending || !who) return
+    const client = api(fixture)
+    setErrors((e) => ({ ...e, [call.address]: '' }))
+    setPending({ call: call.address, kind: 'refund', stage: 'building' })
+    try {
+      const build = await client.refundCall(call.address, { wallet: who })
+      await send(client, build, (stage) => setPending({ call: call.address, kind: 'refund', stage }))
+      play('refund')
+      removeSavedStreamPiece(call.address)
+      onChange(calls.map((c) => (c.address === call.address ? { ...c, status: 'refunded' as const, failure: c.failure ? { ...c.failure, refundState: 'refunded' as const } : null } : c)))
+      toast({ state: 'refunded', text: `${money(call.price)} ${call.price.symbol} returned to the caller` })
+    } catch (e) {
+      play('failed')
+      setErrors((x) => ({ ...x, [call.address]: errorMessage(e) }))
+    } finally {
+      setPending(null)
+    }
+  }
+
+  const settle = async (call: Call, piece: SavedStreamPiece) => {
+    if (pending || !who) return
+    const client = api(fixture)
+    setErrors((e) => ({ ...e, [call.address]: '' }))
+    setPending({ call: call.address, kind: 'settle', stage: 'building' })
+    try {
+      const build = await client.settleCall(call.address, {
+        wallet: who,
+        count: String(piece.count),
+        runningHash: piece.runningHash,
+        signature: piece.signature,
+      })
+      await send(client, build, (stage) => setPending({ call: call.address, kind: 'settle', stage }))
+      let receipt = build.addresses.receipt ?? null
+      if (!receipt) {
+        try {
+          const updated = await client.call(call.address)
+          receipt = updated.receipt
+        } catch {}
+      }
+      play('verified')
+      removeSavedStreamPiece(call.address)
+      setSavedPieces((prev) => {
+        const next = { ...prev }
+        delete next[call.address]
+        return next
+      })
+      onChange(calls.map((c) => (c.address === call.address ? { ...c, status: 'settled' as const, receipt: receipt ?? c.receipt } : c)))
+      toast({
+        state: 'settled',
+        text: `${money({ ...call.price, amount: piece.spentAmount })} ${call.price.symbol} paid, ${money({ ...call.price, amount: piece.remainingAmount })} ${call.price.symbol} returned to the caller`,
+      })
+    } catch (e) {
+      play('failed')
+      setErrors((x) => ({ ...x, [call.address]: errorMessage(e) }))
+    } finally {
+      setPending(null)
+    }
+  }
+
+  const loadPiece = async (call: Call) => {
+    if (pending || loadingPiece) return
+    setErrors((e) => ({ ...e, [call.address]: '' }))
+    setLoadingPiece(call.address)
+    try {
+      const saved = await loadLastPieceFromApi(api(fixture), call)
+      setSavedPieces((prev) => ({ ...prev, [call.address]: saved }))
+    } catch (e) {
+      setErrors((x) => ({ ...x, [call.address]: errorMessage(e) }))
+    } finally {
+      setLoadingPiece(null)
+    }
+  }
+
+  const quiet = held.is === 'connect' ? 'No wallet connected' : held.is === 'failed' ? 'Not read' : held.is === 'loading' ? null : 'None yet'
+  // What a side region says when it has no rows of its own to show.
+  const aside = (none: React.ReactNode, about: React.ReactNode) =>
+    held.is === 'loading' || held.is === 'failed' ? null
+    : <p className="t-small">{held.is === 'connect' ? about : none}</p>
+
+  return (
+    <div className={`grid ${s.layout}`}>
+      <section className={s.main} aria-labelledby="calls">
+        <div className="panel">
+          <div className="panel-head"><h2 id="calls">Calls</h2>{account ? <span className="mono dim">{group(calls.length)}</span> : null}</div>
+          {held.is === 'connect' ? (
+            <div className="panel-body">
+              <Empty title="Connect a wallet to see its account" action={<WalletButton kind="primary" />}>
+                The calls it opened, with their receipts and refunds, are read from chain.
+              </Empty>
+            </div>
+          ) : held.is === 'loading' ? (
+            <div className="panel-body"><Loading rows={6} /></div>
+          ) : held.is === 'failed' ? (
+            <div className="panel-body">
+              <Failed title="Your account did not load" message={held.message} retry={held.retry ? <button type="button" className="btn" data-size="s" onClick={held.retry}>Try again</button> : undefined} />
+            </div>
+          ) : calls.length === 0 ? (
+            <div className="panel-body">
+              <Empty title="No calls from this wallet yet" action={<Link href={`/models${q(fixture)}`} className="btn" data-kind="primary">Browse models</Link>}>
+                A call it opens is listed here with its receipt, or its refund when the deadline passes.
+              </Empty>
+            </div>
+          ) : (
+            <>
+              {refundable ? (
+                <p className={s.now} role="status"><StateTile state="refundable" />{refundable === 1 ? 'One call is past its deadline. Its escrow is refundable.' : `${refundable} calls are past their deadline. Their escrow is refundable.`}</p>
+              ) : null}
+              <ul className={s.calls}>
+                <li className={`${s.call} ${s.callHead}`} aria-hidden="true"><span>State</span><span>Model</span><span className={s.num}>Price</span><span className={s.num}>Opened</span><span className={s.num}>Deadline</span><span /></li>
+                {calls.map((c) => {
+                  const busy = pending?.call === c.address
+                  const name = c.modelName ?? names[c.model]
+                  return (
+                    <li key={c.address} className={s.call} data-state={c.status}>
+                      <span className={s.state}><State state={c.status} /></span>
+                      <span className={s.model}><Link className="link mono" href={`/models/${name ?? c.model}${q(fixture)}`}>{name ?? short(c.model, 4)}</Link></span>
+                      <span className={s.num}><span className="t-label">Price</span><Amount value={c.price} /></span>
+                      <span className={s.num}><span className="t-label">Opened</span><span className="mono">{group(c.openedSlot)}</span></span>
+                      <span className={s.num}><span className="t-label">Deadline</span><span className="mono">{group(c.deadlineSlot)}</span></span>
+                      <span className={s.act} aria-live="polite">
+                        {c.status === 'settled' && c.receipt ? <Link className="link" href={`/receipts/${c.receipt}${q(fixture)}`} data-arrow>Receipt</Link>
+                          : c.status === 'refundable' && canSign ? (
+                            <button type="button" className="btn" data-size="s" data-kind="primary" data-pending={busy || undefined} disabled={!!pending} onClick={() => void refund(c)}>
+                              {busy ? <><StateTile state="pending" size={14} />{pending.stage === 'signing' ? 'Awaiting signature' : pending.stage === 'confirming' ? 'Confirming' : 'Building'}</> : 'Refund'}
+                            </button>
+                          ) : c.status === 'open' && c.priceUnit === 'token' && canSign ? (
+                            savedPieces[c.address] ? (
+                              <button type="button" className="btn" data-size="s" data-kind="primary" data-pending={busy || undefined} disabled={!!pending} onClick={() => void settle(c, savedPieces[c.address]!)}>
+                                {busy ? <><StateTile state="pending" size={14} />{pending.stage === 'signing' ? 'Awaiting signature' : pending.stage === 'confirming' ? 'Confirming' : 'Building'}</> : `Settle (${group(savedPieces[c.address]!.count)} tok)`}
+                              </button>
+                            ) : (
+                              <button type="button" className="btn" data-size="s" data-pending={loadingPiece === c.address || undefined} disabled={!!pending || !!loadingPiece} onClick={() => void loadPiece(c)}>
+                                {loadingPiece === c.address ? <><StateTile state="pending" size={14} />Loading</> : 'Load last piece'}
+                              </button>
+                            )
+                          ) : c.status === 'refundable' ? <span className="t-small dim">Refundable</span>
+                          : c.status === 'refunded' ? <span className="t-small">Escrow returned</span>
+                          : <span className="t-small dim">Awaiting the enclave</span>}
+                      </span>
+                      {c.failure && c.status === 'refundable' && !errors[c.address] ? <p className={`t-small dim ${s.why}`}>{c.failure.message}</p> : null}
+                      {errors[c.address] ? <p className={`t-small bad ${s.why}`} role="alert">{errors[c.address]}{c.status === 'refundable' ? ' Press Refund to send it again.' : ''}</p> : null}
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )}
+        </div>
+      </section>
+
+      <aside className={s.side}>
+        <section className="panel" aria-labelledby="owned">
+          <div className="panel-head"><h2 id="owned">Models you own</h2>{account ? <span className="mono dim">{account.models.length}</span> : null}</div>
+          <div className="panel-body">
+            <Earned label="Owner earnings" rows={account?.ownerEarnings ?? []} quiet={quiet} />
+            {account?.models.length ? (
+              <ul className={s.owned}>
+                {account.models.map((m) => (
+                  <li key={m.address}>
+                    <Link href={`/models/${m.name}${q(fixture)}`} className={s.ownedRow}>
+                      <StateTile state={m.status} />
+                      <span className="mono">{m.name}</span>
+                      <span className="t-small dim">{m.status}</span>
+                      <span className={s.count}><span className="mono">{group(m.callsSettled)}</span><span className="t-small dim">{m.callsSettled === '1' ? 'call settled' : 'calls settled'}</span></span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : aside(
+              <>No sealed models under this wallet. <Link className="link" href={`/seal${q(fixture)}`} data-arrow>Seal a model</Link></>,
+              <>The models this wallet sealed and what they earned. <Link className="link" href={`/seal${q(fixture)}`} data-arrow>Seal a model</Link></>,
+            )}
+          </div>
+        </section>
+
+        <section className="panel" aria-labelledby="operated">
+          <div className="panel-head"><h2 id="operated">Enclaves you operate</h2>{account ? <span className="mono dim">{account.enclaves.length}</span> : null}</div>
+          <div className="panel-body">
+            <Earned label="Operator earnings" rows={account?.operatorEarnings ?? []} quiet={quiet} />
+            {account?.enclaves.length ? (
+              <ul className={s.owned}>
+                {account.enclaves.map((e) => (
+                  <li key={e.address}>
+                    <Link href={`/enclaves/${e.address}${q(fixture)}`} className={s.ownedRow}>
+                      <StateTile state={e.status === 'live' ? 'live' : 'expired'} />
+                      <span className="mono">{short(e.address, 4)}</span>
+                      <span className="t-small dim">{hardware(e.hardwareType)}, {e.status}</span>
+                      <span className={s.count}><span className="mono">{group(e.callsSettled)}</span><span className="t-small dim">{e.callsSettled === '1' ? 'call settled' : 'calls settled'}</span></span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : aside(
+              <>No enclaves under this wallet. <Link className="link" href={LINKS.operators.run} data-arrow>Run an enclave</Link></>,
+              <>The enclaves this wallet operates and what they earned. <Link className="link" href={LINKS.operators.run} data-arrow>Run an enclave</Link></>,
+            )}
+          </div>
+        </section>
+      </aside>
+    </div>
+  )
+}
+
+// What a side of the account has earned, one figure a mint; a word in its place when there is no figure.
+function Earned({ label, rows, quiet }: { label: string; rows: Earnings[]; quiet: string | null }) {
+  return (
+    <div className={s.earned}>
+      <div className="t-label">{label}</div>
+      {rows.length ? rows.map((e) => <Amount key={e.mint ?? 'sol'} value={e} size="m" />)
+        : quiet ? <span className={`t-small dim ${s.quiet}`}>{quiet}</span>
+        : <span className="skeleton" style={{ width: '40%', height: 28 }} />}
+    </div>
+  )
+}

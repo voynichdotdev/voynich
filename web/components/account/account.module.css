@@ -1,0 +1,49 @@
+/* The account: the calls as the work, what the wallet owns and operates beside them. */
+
+.who { margin-top: 10px; color: var(--text-2); }
+.layout { row-gap: var(--gutter); align-items: start; }
+.main { grid-column: span 8; min-width: 0; }
+.side { grid-column: span 4; min-width: 0; display: flex; flex-direction: column; gap: var(--gutter); }
+@media (max-width: 1023px) { .main, .side { grid-column: 1 / -1; } }
+
+.now { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; color: var(--text); border-bottom: 1px solid var(--line); }
+
+/* calls */
+.call {
+  display: grid; grid-template-columns: 120px minmax(0, 1fr) 116px 112px 112px 164px;
+  column-gap: 16px; align-items: center; min-height: 52px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid var(--line);
+}
+.calls > li:last-child { border-bottom: 0; }
+.callHead { min-height: 36px; font-size: 12px; font-weight: 500; color: var(--text-3); }
+.num { text-align: right; min-width: 0; }
+.call :global(.t-label) { display: none; }
+.act { display: flex; justify-content: flex-end; align-items: center; min-width: 0; }
+.why { grid-column: 2 / -1; margin-top: -6px; padding-bottom: 12px; }
+
+@media (max-width: 639px) {
+  .callHead { display: none; }
+  .call { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'state act' 'model price' 'opened deadline'; row-gap: 10px; padding: 14px 16px; align-items: baseline; }
+  .state { grid-area: state; align-self: center; }
+  .act { grid-area: act; align-self: center; }
+  .model { grid-area: model; }
+  .call > :nth-child(3) { grid-area: price; }
+  .call > :nth-child(4) { grid-area: opened; text-align: left; }
+  .call > :nth-child(5) { grid-area: deadline; }
+  .call :global(.t-label) { display: inline; margin-right: 8px; }
+  .why { grid-column: 1 / -1; margin-top: 0; padding-bottom: 0; }
+}
+
+/* owned and operated */
+.earned { display: flex; flex-direction: column; gap: 10px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.earned:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+.quiet { min-height: 28px; display: flex; align-items: center; }
+.owned { margin: -16px -16px -16px; }
+.owned > li + li { border-top: 1px solid var(--line); }
+.ownedRow { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; min-height: 48px; padding: 0 16px; font-size: 13px; transition: background-color var(--step-1); }
+.count { display: flex; align-items: baseline; gap: 6px; }
+@media (hover: hover) and (pointer: fine) { .ownedRow:hover { background: var(--surface-2); } }
+.ownedRow:focus-visible { background: var(--surface-2); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .ownedRow { transition: none; } }
+
+/* a link in a side line moves to the next line whole */
+.side :global(.link) { white-space: nowrap; }

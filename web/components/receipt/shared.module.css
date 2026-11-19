@@ -1,0 +1,15 @@
+.split { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.legend > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.legend dt { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; letter-spacing: 0.01em; color: var(--text-3); }
+.legend dd { color: var(--text); min-width: 0; }
+.legend dd.note { font-size: 12px; color: var(--text-3); line-height: 1.4; }
+.swatch { flex: none; width: 8px; height: 12px; border-radius: var(--r-tile); }
+
+/* a whole hash: one row, or two equal halves */
+.half { display: inline-flex; align-items: flex-start; gap: 6px; min-width: 0; max-width: 100%; }
+.half > :global(.mono) { min-width: 0; color: var(--text); }
+.half > :global(.mono) > span { display: inline-block; }
+.copy { flex: none; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-3); border-radius: var(--r-tile); }
+.copy[data-copied] { color: var(--ochre); }
+@media (hover: hover) and (pointer: fine) { .copy:hover { color: var(--text); background: var(--surface-2); } }
