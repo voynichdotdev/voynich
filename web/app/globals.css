@@ -1,0 +1,12 @@
+:root {
+  color-scheme: dark;
+  --ground: #05080f;
+  --surface: #0a0f19;
+  --line: #182033;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: #dce4f4;
+}
