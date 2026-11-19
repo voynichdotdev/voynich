@@ -1,0 +1,9 @@
+.foot { border-top: 1px solid var(--line); padding-block: var(--s7) var(--s5); background: var(--ground); position: relative; z-index: 1; }
+.grid { display: grid; grid-template-columns: minmax(0, 4fr) repeat(4, minmax(0, 2fr)); column-gap: var(--gutter); row-gap: var(--s6); }
+.id { display: flex; flex-direction: column; gap: 12px; }
+.col h2 { margin-bottom: 12px; }
+.col ul { display: flex; flex-direction: column; gap: 8px; }
+.col a { font-size: 14px; color: var(--text-2); transition: color var(--step-1); }
+.base { margin-top: var(--s7); padding-top: var(--s4); border-top: 1px solid var(--line); display: flex; gap: var(--s5); flex-wrap: wrap; }
+@media (hover: hover) and (pointer: fine) { .col a:hover { color: var(--text); } }
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .id { grid-column: 1 / -1; } }

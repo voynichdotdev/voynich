@@ -1,0 +1,6 @@
+.box { position: relative; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 220px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-panel); padding: 4px; z-index: 70; }
+.item { width: 100%; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 10px; font-size: 13px; color: var(--text); border-radius: var(--r-tile); text-align: left; }
+.item img { border-radius: 2px; }
+.note { padding: 10px; font-size: 13px; color: var(--text-2); line-height: 1.4; max-width: 260px; }
+@media (hover: hover) and (pointer: fine) { .item:hover { background: var(--slate-2); } }
