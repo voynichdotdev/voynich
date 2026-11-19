@@ -1,0 +1,149 @@
+{
+ "master": 0.8,
+ "cues": {
+  "answering": {
+   "files": [
+    "answering.wav"
+   ],
+   "gain": 1,
+   "loop": true
+  },
+  "arrive": {
+   "files": [
+    "arrive.wav"
+   ],
+   "gain": 1
+  },
+  "check": {
+   "files": [
+    "check-0.wav",
+    "check-1.wav",
+    "check-2.wav",
+    "check-3.wav",
+    "check-4.wav"
+   ],
+   "gain": 1,
+   "order": "sequence"
+  },
+  "chunk": {
+   "files": [
+    "chunk-0.wav",
+    "chunk-1.wav",
+    "chunk-2.wav",
+    "chunk-3.wav",
+    "chunk-4.wav"
+   ],
+   "gain": 1,
+   "minGapMs": 166
+  },
+  "clear": {
+   "files": [
+    "clear.wav"
+   ],
+   "gain": 1
+  },
+  "copy": {
+   "files": [
+    "copy.wav"
+   ],
+   "gain": 1
+  },
+  "encrypt": {
+   "files": [
+    "encrypt.wav"
+   ],
+   "gain": 1
+  },
+  "escrow": {
+   "files": [
+    "escrow.wav"
+   ],
+   "gain": 1
+  },
+  "failed": {
+   "files": [
+    "failed.wav"
+   ],
+   "gain": 1
+  },
+  "grant": {
+   "files": [
+    "grant.wav"
+   ],
+   "gain": 1
+  },
+  "loop": {
+   "files": [
+    "loop.mp3"
+   ],
+   "gain": 0.5,
+   "periodMs": 48000
+  },
+  "press": {
+   "files": [
+    "press-0.wav",
+    "press-1.wav",
+    "press-2.wav",
+    "press-3.wav",
+    "press-4.wav"
+   ],
+   "gain": 1
+  },
+  "refund": {
+   "files": [
+    "refund.wav"
+   ],
+   "gain": 1
+  },
+  "sealed": {
+   "files": [
+    "sealed.wav"
+   ],
+   "gain": 1
+  },
+  "sign": {
+   "files": [
+    "sign.wav"
+   ],
+   "gain": 1
+  },
+  "stroke": {
+   "files": [
+    "stroke-0.wav",
+    "stroke-1.wav",
+    "stroke-2.wav",
+    "stroke-3.wav"
+   ],
+   "gain": 1,
+   "minGapMs": 250
+  },
+  "tick": {
+   "files": [
+    "tick-0.wav",
+    "tick-1.wav",
+    "tick-2.wav",
+    "tick-3.wav",
+    "tick-4.wav",
+    "tick-5.wav",
+    "tick-6.wav",
+    "tick-7.wav"
+   ],
+   "gain": 1,
+   "minGapMs": 50
+  },
+  "toggle": {
+   "files": [
+    "toggle-0.wav",
+    "toggle-1.wav"
+   ],
+   "gain": 1,
+   "order": "pick"
+  },
+  "verified": {
+   "files": [
+    "verified.wav"
+   ],
+   "gain": 1
+  }
+ }
+}
