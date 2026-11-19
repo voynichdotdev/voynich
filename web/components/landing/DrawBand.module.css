@@ -1,0 +1,7 @@
+.band { padding-block: var(--s9); border-top: 1px solid var(--line); }
+.head { display: flex; flex-direction: column; gap: 12px; max-width: 640px; margin-bottom: var(--s7); }
+.work { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); column-gap: var(--gutter); row-gap: var(--s5); align-items: start; }
+.call, .cipher { min-width: 0; }
+.cipher { display: flex; flex-direction: column; gap: var(--s4); font-size: 14px; color: var(--text-2); }
+.cipherPanel { overflow: hidden; }
+@media (max-width: 1099px) { .work { grid-template-columns: minmax(0, 1fr); } }
