@@ -1,0 +1,58 @@
+{
+  "base": "/docs",
+  "home": "start/what-voynich-is",
+  "groups": [
+    {
+      "id": "start",
+      "title": "Start",
+      "pages": [
+        {
+          "slug": "start/what-voynich-is",
+          "title": "What Voynich is",
+          "job": "The sealed model, the three people around it (owner, operator, caller) and where each one goes next."
+        },
+        {
+          "slug": "start/call-a-model",
+          "title": "Call a model in five minutes",
+          "job": "From nothing to a verified answer from sketch-32 with its receipt, in the browser, the SDK and the CLI."
+        },
+        {
+          "slug": "start/seal-a-model",
+          "title": "Seal a model in ten minutes",
+          "job": "From an ONNX file and a manifest to a live model with an address, on /seal and from the CLI."
+        }
+      ]
+    },
+    {
+      "id": "concepts",
+      "title": "Concepts",
+      "pages": [
+        {
+          "slug": "concepts/sealed-models",
+          "title": "Sealed models",
+          "job": "What a Model is on chain: the ciphertext accounts, the cipher and chunking, the hash, the manifest, the allowed measurements, the statuses and what changes each."
+        },
+        {
+          "slug": "concepts/enclaves-and-attestation",
+          "title": "Enclaves and attestation",
+          "job": "What an enclave is, what the hardware report says, what the attestation record holds, measurements, expiry and refresh."
+        },
+        {
+          "slug": "concepts/grants",
+          "title": "Grants",
+          "job": "How the model key moves: wrapping, grants by the owner, grants from enclave to enclave, revoking, where the key exists in plaintext."
+        },
+        {
+          "slug": "concepts/calls-and-receipts",
+          "title": "Calls and receipts",
+          "job": "A call from escrow to receipt: what is encrypted to whom, the deadline, settlement, refunds, and what each check on a receipt proves."
+        },
+        {
+          "slug": "concepts/fees-and-the-token",
+          "title": "Fees and the token",
+          "job": "The price per call, its mint, the split at settlement, and VOYNICH: the one place the token is told."
+        }
+      ]
+    }
+  ]
+}

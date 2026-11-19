@@ -1,0 +1,115 @@
+---
+title: Call a model in five minutes
+description: From nothing to a verified answer from sketch-32 and its receipt, on the site, from the SDK and from the CLI.
+---
+
+This page ends with an answer from `sketch-32` that the caller alone can read, a receipt on chain, and three checks passed.
+
+## What it takes
+
+- A Solana wallet that holds the model's price, the fee of one transaction and the rent of one Call account. The price of `sketch-32` is in SOL and is shown on its page.
+- For the SDK and the CLI: Node 22 or later.
+
+## On the site
+
+<Steps>
+<Step title="Open the model">
+
+Go to [/models/sketch-32](/models/sketch-32). The page shows the model's facts, its ciphertext read from chain, the enclaves that hold it and the call panel.
+
+</Step>
+<Step title="Connect a wallet">
+
+The panel reads "Connect a wallet" until one is connected, then "Ready".
+
+</Step>
+<Step title="Draw and call">
+
+Draw one of the 32 things on the drawing surface and press **Call**. The drawing is encrypted in the browser to the enclave's key ("Encrypting the input").
+
+</Step>
+<Step title="Sign once">
+
+The wallet shows one transaction: it opens the call and moves the price into escrow ("Awaiting signature", then "Price in escrow").
+
+</Step>
+<Step title="Read the answer">
+
+The enclave answers ("Enclave answering"). The browser decrypts the answer and runs the three checks on its receipt. The panel reads "Verified" and shows the label, the checks and a link to the receipt at `/receipts/<id>`.
+
+</Step>
+</Steps>
+
+## From code
+
+<Ways>
+<Way label="SDK">
+
+Install the packed `voynich` and `@voynich/contract` tarballs from `backend/vendor-out/` (see [SDK: Install](/docs/sdk/install)), then set the API URL and keypair:
+
+```bash
+export VOYNICH_API_URL=https://api.voynich.dev
+export VOYNICH_KEYPAIR=<path to a Solana keypair file>
+```
+
+```ts
+import voynich from 'voynich'
+
+const pixels: number[] = new Array(784).fill(0)
+const { output, receipt, verified } = await voynich.call('sketch-32', pixels)
+console.log(output, receipt.address, verified)
+```
+
+`pixels` is the 28×28 drawing row by row, 0 for background and 1 for ink. A drawing can also be passed as strokes. Every form is in [SDK: call](/docs/sdk/call#input).
+
+</Way>
+<Way label="CLI">
+
+Build and link `voynich` from `backend/` (see [CLI: Install](/docs/cli/install)), then set the API URL:
+
+```bash
+export VOYNICH_API_URL=https://api.voynich.dev
+```
+
+Save a drawing as `drawing.json`:
+
+```json
+{ "strokes": [[[40, 60], [120, 200], [220, 80]]], "width": 280, "height": 280 }
+```
+
+```bash
+voynich call sketch-32 drawing.json --keypair <path to a Solana keypair file>
+```
+
+The command prints the output, the receipt and the result of each check as JSON. Every flag is in [CLI: call](/docs/cli/call).
+
+</Way>
+</Ways>
+
+## What came back
+
+| Part | What it is |
+| --- | --- |
+| `output` | `label`, the thing the model saw, and `scores`, its five most probable labels with their probabilities. |
+| `receipt` | The record on chain: the call, the model, the enclave, the hash of the encrypted input and of the encrypted output, the enclave's signature, the slot, and what was paid to whom. |
+| `verified` | True: the enclave's key signed this input and this output, the chain recorded that key under the configured attestation program running software the owner allowed, and the record was in force when the call settled. |
+
+The receipt stays. Anyone can check it again from its address: paste it at `/receipts/<id>` or see [Verify a receipt](/docs/guides/verify-a-receipt).
+
+## When a call does not settle
+
+A call that the enclave has not settled by its deadline can be refunded in full. The site offers the refund on [/account](/account). See [Refund a call](/docs/guides/refund-a-call).
+
+## Next
+
+<Cards>
+<Card href="/docs/concepts/calls-and-receipts" title="Calls and receipts">
+What was encrypted to whom, and what each check proves.
+</Card>
+<Card href="/docs/sdk/call" title="SDK: call">
+Every option, step and failure.
+</Card>
+<Card href="/docs/start/seal-a-model" title="Seal a model">
+Put a model of your own behind an address.
+</Card>
+</Cards>

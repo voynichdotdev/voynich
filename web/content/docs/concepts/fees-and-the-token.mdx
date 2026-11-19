@@ -1,0 +1,61 @@
+---
+title: Fees and the token
+description: What a call costs, how its price splits between the owner, the operator and the protocol, and what the protocol share does for VOYNICH.
+---
+
+A call has one price. It is set by the model's owner, paid by the caller, and split at settlement between the owner, the operator and the protocol.
+
+## The price
+
+The owner sets a price, its pricing unit (`call` or `token`), and the mint it is paid in: SOL, or any SPL Token mint. `sketch-32` and `text-1m` are priced in SOL.
+
+- **`call` (`PriceUnit::Call`).** One flat price per call. Opening a call via `open_call` deposits `model.price` into escrow.
+- **`token` (`PriceUnit::Token`).** A unit price per output token. Opening a call via `open_metered_call` deposits a caller-chosen escrow `ceiling` (at least `model.price`, and above `0` whenever `model.price > 0`) that caps the caller's maximum spend.
+
+The price is an integer in the mint's base units (lamports for SOL). The owner changes the price, mint, operator share or `price_unit` with `set_price`. A call locks the price, unit and ceiling in force when it opened.
+
+## Escrow
+
+Opening a call moves the escrow amount (`model.price` for a per-call model, or `ceiling` for a per-token model) from the caller into the call's escrow. It stays there until one of two things happens:
+
+- the call settles with the enclave's signature: `settle_call` pays out `model.price`, or `settle_metered_call` pays out `count * price` (`<= ceiling`) across owner, operator and protocol while returning `ceiling - total` (`returned_amount`) to the caller in the same instruction (`count = 0` returns 100% of `ceiling`)
+- the deadline passes, and the whole escrow (including the full `ceiling` on a per-token call) returns to the caller
+
+There is no third way out of escrow.
+
+## The split
+
+Settlement pays three parties in the instruction that writes the receipt:
+
+| Party | Receives |
+| --- | --- |
+| Operator | `price × operator share / 10,000`, rounded down |
+| Protocol | `price × protocol share / 10,000`, rounded down |
+| Owner | the rest of the price |
+
+Shares are in basis points: 10,000 is the whole price.
+
+- **The operator share** is set by the owner for each model, with the price. It is what an operator earns for answering a call to that model.
+- **The protocol share** is one rate for every model. It is `protocolShareBps` in `GET /v1/config`.
+- The operator share plus the protocol share is at most 10,000.
+
+The owner, the operator, the fee recipient and both shares are fixed in the call when it opens, so a call settles on the terms it opened with. The three amounts are written into the receipt.
+
+## What else a call costs
+
+| Cost | Paid by |
+| --- | --- |
+| The transaction fee of `open_call` or `open_metered_call` | the caller |
+| Rent for the Call account, 349 bytes plus 33 bytes per callback account | the caller |
+| The transaction fee of `settle_call` or `settle_metered_call` | the settling payer (typically the operator's enclave) |
+| Rent for the Receipt account, 407 bytes plus `open_answer` (423 bytes for metered calls) | the settling payer |
+
+Sealing a model costs its owner the rent of the Model account and of the Weights accounts that hold the ciphertext, plus the fees of the upload's transactions.
+
+## The token
+
+<Rows data="token" />
+
+VOYNICH is tied to calls. The protocol share of every settled call is paid to the launch wallet in the settling instruction. A crank buys VOYNICH on the market with what the wallet receives and burns what it bought. 25% of VOYNICH trading fees also route through the same buyback-and-burn crank.
+
+Each receipt shows the protocol's amount and the wallet it went to.

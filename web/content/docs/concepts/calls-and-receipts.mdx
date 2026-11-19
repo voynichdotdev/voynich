@@ -1,0 +1,164 @@
+---
+title: Calls and receipts
+description: A call from escrow to receipt, what is encrypted to whom, and what each check on a receipt proves.
+---
+
+A call is one input sent to one sealed model, paid for once. A receipt is what the call leaves on chain: which model answered, inside which enclave, to which input, with which output, and who was paid.
+
+## The path of a call
+
+<Diagram name="call" />
+
+1. **Choose.** The caller picks a live model. The client picks a live, [reachable](/docs/api/enclaves#reachability) enclave that holds a grant for it.
+2. **Encrypt.** The input is encrypted on the caller's device to the enclave's encryption key.
+3. **Open.** The caller signs `open_call` (for a per-call model) or `open_metered_call` with an escrow `ceiling` (for a per-token model), choosing `sealed` (default) or `open` as the answer mode. The escrow moves into the call account, and the call records the hash of the encrypted input, the pricing unit, the ceiling, the answer mode and a deadline.
+4. **Answer.** The enclave decrypts the input and runs the model. For a `sealed` call it encrypts the output to the caller and hashes the output envelope. For an `open` call it serializes plaintext answer bytes (such as compact UTF-8 JSON with `label` and `probability` for `sketch-32`) and hashes those bytes. In both modes it signs the call, the input hash and the output hash.
+5. **Settle.** The enclave sends `settle_call`. The program checks the signature against the enclave's recorded key, verifies that any `open` answer bytes are within `Config.max_open_answer_bytes` and hash to `output_hash`, writes the receipt (with the open answer bytes when `open`), invokes any registered `on_receipt` callback program and pays out the escrow.
+6. **Verify.** The client checks the receipt (and decrypts the output envelope when `sealed`, or reads the open answer from chain when `open`) before it shows the answer.
+
+## What is encrypted
+
+The input and the output each travel as an envelope:
+
+```text
+0x01 (1 byte)
+ephemeral X25519 public key of the sender (32 bytes)
+XChaCha20 nonce (24 bytes)
+ciphertext with its Poly1305 tag (16 bytes)
+```
+
+An envelope is at least 73 bytes. Its key is derived for that one envelope:
+
+| Step | Value |
+| --- | --- |
+| Shared secret | X25519 between the sender's ephemeral key and the recipient's key |
+| Key derivation | HKDF-SHA256, 32 bytes out |
+| Salt | sender public key, then recipient public key |
+| Info, input | `voynich/call-input/v1` |
+| Info, output | `voynich/call-output/v1` |
+| Cipher | XChaCha20-Poly1305, no associated data |
+
+**The input** is encrypted to the enclave's encryption key. Its plaintext is UTF-8 JSON with these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `input` | The model's input. For a `sketch` model: 784 numbers from 0 to 1, the 28×28 drawing row by row, background 0 and ink 1. For a `tensor` model: a flat array of numbers in the order of the manifest's `inputShape`, as many as its dimensions multiply to. For a `text` model: a UTF-8 prompt string (with optional `maxTokens` for generative models). |
+| `outputPublicKey` | A fresh X25519 public key, base64, that the caller made for this call. The enclave encrypts the answer (or each stream piece) to it. |
+| `stopToken` | Optional 16-byte random token, base64, included on per-token streams. Only the caller and the enclave know it, so calling `POST /v1/calls/{id}/stop` with `stopToken` stops generation cooperatively without another wallet signature while blocking third parties (`403 UNAUTHORIZED`). |
+
+Only the enclave reads the input. For a `sealed` call, only the holder of the fresh key reads the output, and the relay that carries both sees envelopes. For an `open` call, the input stays encrypted to the enclave while the output bytes are written into the Receipt on chain so any caller or Solana program can read them directly.
+
+**The input hash** is the SHA-256 of the envelope's bytes: the serialized envelope, not its base64 text and not the JSON inside it. The **output hash** is the SHA-256 of the output envelope for a `sealed` call, or the SHA-256 of the `open_answer` bytes for an `open` call.
+
+## The call on chain
+
+`open_call` (per-call) or `open_metered_call` (per-token) creates a Call account:
+
+| Fact | Meaning |
+| --- | --- |
+| Caller | The wallet or Solana program PDA that funds the escrow and receives any refund. A separate `payer` signer pays Call account rent (for a wallet call, `payer` equals `caller`). |
+| Caller is program | `true` when `open_call` or `open_metered_call` was invoked by another program via CPI; `false` for a direct wallet call. |
+| Model, enclave | The sealed model and the enclave chosen to answer. |
+| Input hash | SHA-256 of the input envelope. |
+| Answer mode | `sealed` (encrypted output envelope, off chain) or `open` (plaintext answer bytes written into the Receipt up to `Config.max_open_answer_bytes`). |
+| Callback | Optional `callback_program` and up to 8 `callback_accounts` invoked on `on_receipt` inside `settle_call` right after the Receipt is written. |
+| Pricing unit and escrow | `price_unit` (`call` or `token`), the model's unit `price`, and `ceiling` (`price` for per-call; the caller-supplied maximum escrow for per-token). On deadline expiry, `refund_call` returns the full escrowed amount (`ceiling` for per-token calls) to `caller`. |
+| Deadline | The slot after which the call can be refunded: the opening slot plus the protocol's call deadline, read as `callDeadlineSlots` from `GET /v1/config`. |
+| Status | `open`, `settled` or `refunded`. |
+
+A call reads as `refundable` when it is still `open` and the current slot is past its deadline.
+
+## What the enclave signs
+
+For a standalone model (`Model.base` is `None`), the enclave signs exactly these 114 bytes with its Ed25519 signing key:
+
+```text
+UTF-8 "voynich/receipt/v1" (18 bytes)
+call address (32 bytes)
+SHA-256 of the input envelope (32 bytes)
+SHA-256 of the output envelope or open answer bytes (32 bytes)
+```
+
+For a sealed adapter (`Model.base` is `Some(base)`), the enclave signs these 146 bytes, committing cryptographically to the exact verified base model hash:
+
+```text
+UTF-8 "voynich/receipt/v2" (18 bytes)
+call address (32 bytes)
+SHA-256 of the input envelope (32 bytes)
+SHA-256 of the output envelope or open answer bytes (32 bytes)
+base.sha256 from Model.base (32 bytes)
+```
+
+There are no separators and no length prefixes. The signing key exists only inside the enclave, and the chain holds its [attestation record](/docs/concepts/enclaves-and-attestation).
+
+## Signed pieces
+
+On a per-token (`priceUnit: "token"`) text call, the enclave caps generation at `min(maxTokens, maxOutputTokens, floor(ceiling / price))`, flushes on valid UTF-8 token boundaries, and signs every piece as it streams.
+
+Each piece's plaintext JSON is `{ index, text, tokens, finishReason }` (`finishReason` is `null` until the final piece, where it is `"eos"`, `"length"`, `"ceiling"` or `"stopped"`), encrypted to the caller's `outputPublicKey` with `encryptCallOutput` (`voynich/call-output/v1`).
+
+The pieces chain through a 32-byte running hash bound to the call and its input hash:
+
+```text
+H_0 = SHA-256("voynich/stream-init/v1" || call (32B) || input_hash (32B))
+H_i = SHA-256("voynich/stream-piece/v1" || H_{i-1} (32B) || u64_le(count) (8B) || SHA-256(piece_envelope_bytes) (32B))
+```
+
+For each piece, the enclave signs its cumulative token count `count` and running hash `H_i` with its Ed25519 signing key:
+
+- **Standalone model (`voynich/piece/v1`, 120 bytes):** `UTF-8 "voynich/piece/v1" (16B) || call (32B) || input_hash (32B) || u64_le(count) (8B) || running_hash (32B)`.
+- **Sealed adapter (`voynich/piece/v2`, 152 bytes):** `UTF-8 "voynich/piece/v2" (16B) || call (32B) || input_hash (32B) || u64_le(count) (8B) || running_hash (32B) || base.sha256 (32B)`.
+
+Before decrypting any piece, the client verifies sequential `index`, monotonic `count = prevCount + deltaTokens` (requiring `deltaTokens > 0` on intermediate pieces and allowing `deltaTokens === 0` only on a terminal piece with a non-null `finishReason`), `SHA-256(envelope) === pieceHash`, the running hash transition `H_i`, and the Ed25519 signature over `voynich/piece/v1` or `voynich/piece/v2`.
+
+While a per-token call streams, the caller sees each verified piece, the live token count, and the spend against the escrowed ceiling (`count * unitPrice` vs `ceiling`). Pressing `Stop & settle` on the model page or calling `stream.stop()` sends `stopToken` to `POST /v1/calls/{id}/stop`; the enclave flushes any buffered tokens in a terminal `finishReason: "stopped"` piece and settles immediately via `settle_metered_call`, returning the unspent ceiling in the same transaction.
+
+If a stream stalls or disconnects before `deadline_slot` while the caller holds a signed piece, the caller can self-settle directly using `settle_metered_call` (`POST /v1/calls/{id}/settle/build`, `voynich.settle()`, `stream.settle()`, or `voynich settle --from-pieces`). On chain, `settle_metered_call` restricts `payer` to `call.operator` or `call.caller` (`Unauthorized` for third parties) so observers cannot front-run a live stream with an early piece. If the caller self-settles while the enclave is still finishing, the enclave detects the settled call, adopts the on-chain Receipt PDA, and finishes cleanly without failing the call. Once `current_slot > deadline_slot`, `settle_metered_call` rejects with `CallDeadlinePassed` and `refund_call` returns 100% of `ceiling`.
+
+## The receipt
+
+For a per-call model, `settle_call` carries the signature (and the open answer bytes when the call's answer mode is `open`). The program verifies the signature in the same transaction through the Ed25519 precompile, against the key in the enclave's record (requiring `voynich/receipt/v2` when `Model.base` is set and `voynich/receipt/v1` otherwise), and refuses an enclave whose record has expired. For an `open` call, it also checks that the answer bytes are non-empty, within `Config.max_open_answer_bytes`, and hash to `output_hash`. Then, in one instruction, it writes the Receipt (`407 + open_answer.len()` bytes) and pays the escrow to the owner, the operator and the protocol share.
+
+For a per-token model, `settle_metered_call` carries `(count, running_hash, signature, ed25519_instruction_index)`. It verifies `signature` over the 120-byte `voynich/piece/v1` (standalone) or 152-byte `voynich/piece/v2` (adapter with `Model.base.sha256`) message, checks `total = count * call.price <= call.ceiling`, writes a 423-byte metered Receipt (`output_hash = running_hash`, plus trailing `delivered_count: u64` and `returned_amount: u64`), splits `total` across owner, operator and protocol, and returns `returned_amount = call.ceiling - total` to `caller` in the same instruction (`count = 0` returns 100% of `ceiling`). The split is told in [Fees and the token](/docs/concepts/fees-and-the-token).
+
+| Fact | Meaning |
+| --- | --- |
+| Call, model, enclave | What was called, and which enclave answered. |
+| Caller | The wallet or program PDA that opened the call, with `caller_is_program` recorded on chain when opened through CPI. |
+| Input hash, output hash | The two SHA-256 hashes the enclave signed (`running_hash` as `output_hash` on a metered call). |
+| Answer mode, open answer | `sealed` with empty bytes, or `open` with the verified answer bytes stored on chain. |
+| Delivered count, returned | On a per-token metered receipt (`423` bytes): `delivered_count` tokens settled and `returned_amount` returned to `caller` from escrow (`null` on per-call receipts). |
+| Signature | The enclave's 64-byte Ed25519 signature. |
+| Slot | The slot the call settled in. |
+| Payments | The mint, the total, and the amount and recipient for the owner, the operator and the protocol share. |
+
+A receipt is found by its own address, by its call's address, or by the signature of the settling transaction.
+
+## What the checks prove
+
+A client runs five checks before it shows an answer. Anyone can run them later from the receipt alone.
+
+| Check | What is compared | What it proves |
+| --- | --- | --- |
+| Signature | The receipt's signature over the call address, input hash and output hash (`voynich/receipt/v1|v2` for per-call, or `voynich/piece/v1|v2` with `delivered_count` and `running_hash` for metered calls, appending `base.sha256` for adapter models), against the enclave's signing key. The caller also hashes the envelopes it sent and received (or the open answer bytes) and compares them with the receipt's hashes. | This enclave key answered this input with this output (and exact token count on metered calls). |
+| Attestation record | The signing key against the key in the enclave's attestation record, and the record's measurement against the model's allowed measurements. | The chain recorded that key under the configured attestation program, running software the owner allowed. |
+| Expiry | The record's recorded slot ≤ the receipt's slot < the record's expiry slot. | The record was in force when the call settled. A record that expires later leaves the receipt valid. |
+| Open answer | The raw on-chain Receipt account (`401` legacy sealed, `406 + N`, `407 + N`, or `423` metered) is decoded from RPC. For an `open` receipt, the SHA-256 of its `open_answer` bytes must equal `output_hash`. For a metered receipt, on-chain `delivered_count`, `returned_amount` and `total` must match the API view. | The readable answer or metered settlement totals stored on chain match what the enclave signed. |
+| Base model | Decodes `Model.base` directly from the on-chain Model account (`decodeModelBaseBytes`), confirms `ReceiptView.modelBase` matches, and checks that the enclave signature commits to `base.sha256` via `voynich/receipt/v2` (per-call) or `voynich/piece/v2` (metered). Passes for standalone models where `Model.base` is `None`; pre-v2 adapter receipts separate cleanly as `signature: true, base: false`. | An adapter model ran on the exact open-weight base committed on chain. |
+
+On `/receipts/[id]`, a 423-byte metered receipt displays **Delivered** (`<count> tokens`), **Returned to caller**, and **Running hash** (in place of **Output hash**), and the **Payments** panel shows the escrowed **Ceiling** (`total + returnedAmount`), the 3-way split of `total`, and the returned remainder beside all five verification checks. Running them by hand is in [Verify a receipt](/docs/guides/verify-a-receipt).
+
+## Refunds
+
+A call that has no receipt when its deadline passes is refunded with `refund_call`. The full escrow returns to the caller. The caller can send it, and the protocol's crank sends it for calls nobody collects.
+
+While a call waits or after it fails, its refund state is one of:
+
+| Refund state | Meaning |
+| --- | --- |
+| `unavailable` | The call settled. There is nothing to refund. |
+| `pending-deadline` | The call is open and its deadline has not passed. |
+| `refundable` | The deadline has passed without a receipt. `refund_call` returns the escrow. |
+| `refunded` | The escrow is back with the caller. |
+
+Taking a refund is in [Refund a call](/docs/guides/refund-a-call).

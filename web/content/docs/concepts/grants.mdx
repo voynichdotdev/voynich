@@ -1,0 +1,84 @@
+---
+title: Grants
+description: How a model's key reaches an enclave, from the owner or from another enclave, and the only places the key exists in the clear.
+---
+
+A grant is one model's key, wrapped so that one enclave alone can unwrap it. It is an account on chain. An enclave that holds a grant for a model can open that model, and nothing else can.
+
+<Diagram name="grant" />
+
+## The wrapped key
+
+The model key is the 32 random bytes the weights were encrypted with. A grant holds it inside an envelope encrypted to the enclave's encryption key:
+
+```text
+0x01 (1 byte)
+ephemeral X25519 public key of the sender (32 bytes)
+XChaCha20 nonce (24 bytes)
+the model key, encrypted, with its Poly1305 tag (32 + 16 bytes)
+```
+
+That is 105 bytes. The envelope's key is derived with X25519 and HKDF-SHA256 from the sender's ephemeral key and the enclave's encryption key, with the salt `sender public key, then recipient public key` and the info `voynich/grant/v1`.
+
+The wrapped key is public, like the ciphertext. Only the enclave's encryption secret, held inside the enclave, unwraps it.
+
+## A grant from the owner
+
+The owner wraps the model key on their own device to an enclave and signs `grant_by_owner`. The program writes the grant when:
+
+- the model is `sealed` or `live`
+- the enclave's attestation record is in force at that slot
+- the enclave's measurement is on the model's list of allowed measurements
+
+The first grant moves the model from `sealed` to `live`.
+
+## A grant from an enclave
+
+An enclave that holds a grant can grant the next enclave. The owner does not sign and does not need to be online, so a model gains capacity as operators arrive.
+
+The granting enclave reads the newcomer's Enclave account and attestation record, wraps the model key to the newcomer's encryption key inside the runtime, and signs `grant_by_enclave` with its signing key. The program writes the grant when:
+
+- the model is `live`
+- the granting enclave's own grant is not revoked
+- both enclaves' attestation records are in force at that slot
+- both measurements are on the model's list of allowed measurements
+
+The key moves from an attested enclave to an attested enclave running software the owner allowed. The grant records which enclave made it.
+
+## What an enclave does with a grant
+
+When an enclave sees a grant made to it, it:
+
+1. fetches the model's ciphertext from the Weights accounts
+2. checks the SHA-256 of the ciphertext against the hash in the Model
+3. unwraps the model key with its encryption secret
+4. decrypts the weights and loads the model, all in the enclave's memory
+
+From then it answers calls for that model.
+
+## Revoking
+
+The owner revokes a grant with `revoke_grant`. From that slot:
+
+- no new call opens with that enclave for that model
+- that enclave can no longer grant the model on
+- calls already open with it settle or refund as usual
+
+Granting the same enclave again replaces the grant and lifts the revocation.
+
+A grant reads as `live`, `expired` while its enclave's attestation record is expired, or `revoked`.
+
+## Where the key exists
+
+<Diagram name="custody" />
+
+The model key exists in the clear in two kinds of place:
+
+- the owner's device, at sealing
+- enclaves that hold an attestation record in force, with a measurement the owner listed
+
+Everywhere else it exists wrapped: in Grant accounts on chain, in transit, in any copy anyone makes. The weights follow the same rule: ciphertext on chain and in transit, plaintext only in an enclave's memory.
+
+Money follows the key. A call's escrow leaves only against a signature from such an enclave, or back to the caller. See [Calls and receipts](/docs/concepts/calls-and-receipts).
+
+Granting and revoking step by step is in [Manage a model](/docs/guides/manage-a-model).

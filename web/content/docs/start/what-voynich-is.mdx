@@ -1,0 +1,51 @@
+---
+title: What Voynich is
+description: Voynich in one page: the sealed model, the three people around it, and where each of them starts.
+---
+
+Voynich is a Solana protocol for closed models. A model's weights are stored on chain as ciphertext that anyone can fetch and nobody can read. Only an enclave whose key the chain has recorded in an attestation record can open them and run the model. The owner keeps the model without keeping a server.
+
+## The sealed model
+
+Everything in Voynich is built around one object: the sealed model. It is an account address. Behind it are the model's encrypted weights, the rules for who may open them, and its price per call. See [Sealed models](/docs/concepts/sealed-models).
+
+The first sealed model is `sketch-32`. It names what a person has drawn, out of 32 things, and it is called by drawing at [/models/sketch-32](/models/sketch-32).
+
+## Three people
+
+| Person | Does | Gets |
+| --- | --- | --- |
+| The **owner** | Seals a model: encrypts the weights on their own device, writes the ciphertext to chain, sets a price per call and lists the enclave software that may open it. | The owner's part of every call's price, paid to their wallet when the call settles. |
+| The **operator** | Runs the enclave runtime (on a standard server under `attest` at mainnet launch, or inside a confidential VM once Solana Confidential Compute's mainnet verifier is active). Once its key is recorded on chain it registers, is granted models, and answers calls. | The operator share of every call its enclave settles. |
+| The **caller** | Sends an input encrypted to an enclave and pays the model's price. | An answer only they can read, signed by the enclave, with a receipt on chain. |
+
+## How it holds together
+
+- **The key.** The model key exists in the clear on the owner's device at sealing and inside granted enclaves. Everywhere else it is wrapped. See [Grants](/docs/concepts/grants).
+- **The attestation.** The chain records which enclave keys are authorized and what software measurement runs there. At mainnet launch `Config.attestation_program` points to `attest` for standard-server enclaves (`dev`), and switches via `set_config` once Solana Confidential Compute's mainnet verifier opens. See [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+- **The call.** The price waits in escrow. It leaves only against the enclave's signature, or back to the caller. See [Calls and receipts](/docs/concepts/calls-and-receipts).
+- **The money.** Each settled call pays the owner, the operator and the protocol in one instruction. See [Fees and the token](/docs/concepts/fees-and-the-token).
+
+## What there is to use
+
+| Surface | For |
+| --- | --- |
+| The site | Calling a model by hand, drawing for bounties on [/bounties](/bounties), sealing one, reading enclaves and receipts, a wallet's own side. |
+| The [SDK](/docs/sdk/install) | Calling, verifying and sealing from code: `await voynich.call('sketch-32', input)`. |
+| The [CLI](/docs/cli/install) | The same from a terminal, and running an enclave. |
+| The [HTTP API](/docs/api/overview) | Every read and every transaction build, for any language. |
+| The [program](/docs/program/accounts) | The accounts and instructions themselves, for programs that read receipts or build their own transactions. |
+
+## Start here
+
+<Cards>
+<Card href="/docs/start/call-a-model" title="Call a model in five minutes">
+Draw at sketch-32 and verify its answer, by hand and from code.
+</Card>
+<Card href="/docs/start/seal-a-model" title="Seal a model in ten minutes">
+From an ONNX file to a live model with an address.
+</Card>
+<Card href="/docs/operators/hardware" title="Run an enclave">
+What an operator runs, registers and earns.
+</Card>
+</Cards>

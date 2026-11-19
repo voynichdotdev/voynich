@@ -1,0 +1,113 @@
+/* ---------- code ---------- */
+.code { margin: 24px 0; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); min-width: 0; }
+.codeHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 36px; padding: 0 6px 0 14px; border-bottom: 1px solid var(--line); }
+.codeLang { font-size: 12px; font-weight: 500; letter-spacing: 0.01em; color: var(--text-3); }
+.code { max-width: 100%; }
+.codeBody { overflow-x: auto; overflow-y: hidden; outline-offset: -2px; border-radius: 0 0 var(--r-panel) var(--r-panel); }
+.codeBody::-webkit-scrollbar, .tableWrap::-webkit-scrollbar, .waysTabs::-webkit-scrollbar { height: 10px; }
+.codeBody::-webkit-scrollbar-track, .tableWrap::-webkit-scrollbar-track, .waysTabs::-webkit-scrollbar-track { background: transparent; border-top: 1px solid var(--line); }
+.codeBody::-webkit-scrollbar-thumb, .tableWrap::-webkit-scrollbar-thumb, .waysTabs::-webkit-scrollbar-thumb { background: var(--slate-3); border: 3px solid var(--surface); border-radius: 5px; }
+.tableWrap::-webkit-scrollbar-thumb { border-color: var(--ground); }
+/* a touch screen keeps its scrollbar out of sight: the bar under the code stands in for it */
+.codeBar { display: none; height: 10px; padding: 3px 0; border-top: 1px solid var(--line); }
+.codeBar i { display: block; height: 3px; border-radius: 2px; background: var(--slate-4); }
+@media (pointer: coarse) {
+  .codeBar:not([hidden]) { display: block; }
+  .codeBody::-webkit-scrollbar { display: none; }
+  .codeBody { scrollbar-width: none; }
+}
+@supports not selector(::-webkit-scrollbar) { .codeBody, .tableWrap, .waysTabs { scrollbar-width: thin; scrollbar-color: var(--slate-3) transparent; } }
+.codeBody :global(.shiki) { margin: 0; padding: 14px 16px; background: transparent !important; width: max-content; min-width: 100%; }
+.codeBody :global(.shiki) code { font-family: var(--font-mono); font-size: 13px; line-height: 1.65; letter-spacing: 0; font-variant-ligatures: none; tab-size: 2; }
+
+.copy { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: var(--r-tile); font-size: 12px; font-weight: 500; letter-spacing: 0.01em; color: var(--text-3); transition: color var(--step-1), background-color var(--step-1); }
+.copy[data-copied] { color: var(--ochre); }
+.copy:active { background: var(--text); color: var(--ground); }
+
+/* ---------- ways ---------- */
+.ways { margin: 24px 0; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); min-width: 0; }
+.waysTabs { display: flex; align-items: center; padding: 7px 8px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.waysTabs :global(.seg) { border-color: transparent; background: transparent; padding: 0; }
+.waysPanel > :first-child { margin-top: 0; }
+.waysPanel > :last-child { margin-bottom: 0; }
+.waysPanel > p { padding: 14px 16px 0; }
+.waysPanel > p:last-child { padding-bottom: 14px; }
+.waysPanel .code { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.waysPanel .code + .code, .waysPanel p + .code { border-top: 1px solid var(--line); margin-top: 14px; }
+
+/* ---------- steps ---------- */
+.steps { counter-reset: step; margin: 28px 0; padding: 0; list-style: none; }
+.step { counter-increment: step; position: relative; padding: 0 0 28px 44px; min-width: 0; }
+.step:last-child { padding-bottom: 0; }
+.step::before {
+  content: counter(step); position: absolute; left: 0; top: 0; width: 20px; height: 28px; border-radius: var(--r-tile);
+  display: flex; align-items: center; justify-content: center; background: var(--slate-3); color: var(--glyph);
+  font-family: var(--font-mono); font-weight: 700; font-size: 15px; line-height: 1;
+}
+.step::after { content: ''; position: absolute; left: 9.5px; top: 36px; bottom: 8px; width: 1px; background: var(--line); }
+.step:last-child::after { content: none; }
+.stepTitle { font-size: 17px; font-weight: 600; line-height: 28px; letter-spacing: -0.01em; color: var(--text); }
+.stepBody { margin-top: 6px; }
+.stepBody > :first-child { margin-top: 0; }
+.stepBody > :last-child { margin-bottom: 0; }
+
+/* ---------- fields ---------- */
+.fields { margin: 24px 0; border-top: 1px solid var(--line); }
+.fieldsHead, .field { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); column-gap: 24px; border-bottom: 1px solid var(--line); }
+.fieldsHead { font-size: 13px; font-weight: 500; letter-spacing: 0.01em; color: var(--text-3); padding: 9px 0; }
+.field { padding: 14px 0; }
+.fieldName { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fieldName > code { align-self: flex-start; font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+.fieldType { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px; line-height: 1.4; color: var(--text-3); }
+.fieldType :global(.mono) { font-size: 13px; overflow-wrap: anywhere; }
+.fieldReq { font-weight: 500; letter-spacing: 0.01em; color: var(--text-2); }
+.fieldSays { font-size: 15px; line-height: 1.5; color: var(--text-2); min-width: 0; }
+.fieldSays > p { margin: 0; max-width: none; font-size: inherit; line-height: inherit; }
+.fieldSays > p + p { margin-top: 8px; }
+@media (max-width: 559px) {
+  .fieldsHead { display: none; }
+  .field { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+}
+
+/* ---------- tables ---------- */
+.tableWrap { margin: 24px 0; overflow-x: auto; border-top: 1px solid var(--line); outline-offset: 2px; }
+.tableWrap table { font-size: 14px; line-height: 1.5; min-width: 100%; width: auto; }
+.tableWrap [data-fit] { width: 1%; white-space: nowrap; padding-right: 40px; }
+.tableWrap th { text-align: left; font-size: 13px; font-weight: 500; letter-spacing: 0.01em; color: var(--text-3); padding: 9px 20px 9px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tableWrap td { padding: 11px 20px 11px 0; border-bottom: 1px solid var(--line); color: var(--text-2); vertical-align: top; min-width: 96px; }
+.tableWrap th:last-child, .tableWrap td:last-child { padding-right: 0; }
+.tableWrap td:first-child { color: var(--text); }
+.tableWrap td code { white-space: nowrap; }
+.cellCopy { display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+
+/* ---------- callout ---------- */
+.callout { position: relative; margin: 24px 0; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--r-panel); font-size: 15px; line-height: 1.5; color: var(--text-2); }
+.callout[data-kind='important'] { padding-left: 22px; color: var(--text); }
+.calloutLine { position: absolute; left: 6px; top: 8px; width: 6px; height: calc(100% - 16px); overflow: visible; }
+.callout > p { margin: 0; max-width: none; font-size: inherit; line-height: inherit; color: inherit; }
+.callout > p + p { margin-top: 8px; }
+
+/* ---------- cards ---------- */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; margin: 24px 0; }
+.card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); transition: background-color var(--step-1), border-color var(--step-1); }
+.cardTitle { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 15px; font-weight: 600; letter-spacing: -0.005em; color: var(--text); }
+.cardArrow { color: var(--text-3); transition: color var(--step-1); }
+.cardSays { font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.cardSays > p { margin: 0; max-width: none; font-size: inherit; line-height: inherit; }
+
+/* ---------- headings ---------- */
+.heading { position: relative; }
+.anchor { margin-left: 8px; font-family: var(--font-mono); font-weight: 400; font-size: 0.8em; color: var(--text-3); opacity: 0; }
+.anchor:focus-visible { opacity: 1; }
+
+@media (hover: hover) and (pointer: fine) {
+  .copy:hover:not(:active) { color: var(--text); background: var(--surface-2); }
+  .card:hover { background: var(--surface-2); border-color: var(--line-2); }
+  .card:hover .cardArrow { color: var(--ochre); }
+  .heading:hover .anchor { opacity: 1; }
+  .anchor:hover { color: var(--ochre); }
+}
+.card:focus-visible { background: var(--surface-2); border-color: var(--line-2); }
+.card:focus-visible .cardArrow { color: var(--ochre); }
+@media (hover: none) { .anchor { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .copy, .card, .cardArrow { transition: none; } }

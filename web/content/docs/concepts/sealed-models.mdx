@@ -1,0 +1,197 @@
+---
+title: Sealed models
+description: What a sealed model is on chain, how its weights are encrypted and stored, and the states it moves through.
+---
+
+A sealed model is a model whose weights are stored on Solana as ciphertext. It has an address. Anyone can fetch every byte behind that address, and the bytes open only inside an enclave that holds a [grant](/docs/concepts/grants).
+
+A sealed model is two kinds of account:
+
+- one **Model** account, which holds the facts about the model and the rules for opening it
+- one or more **Weights** accounts, which hold the ciphertext
+
+## What the Model holds
+
+| Fact | Meaning |
+| --- | --- |
+| Owner | The wallet that sealed the model. It sets the price, grants enclaves and retires the model. |
+| Name | 1 to 32 characters: lowercase letters and digits in groups joined by single hyphens, such as `sketch-32`. The name gives the Model its address, so a name is taken once. A model is addressed by its name or by its account address. |
+| Manifest | What the model takes and returns, up to 4,096 bytes. See [The manifest](#the-manifest). |
+| Weights accounts | The accounts that hold the ciphertext, in order: 1 to 64 (~640 MiB). |
+| Size | The length of the ciphertext in bytes. |
+| Ciphertext hash | The root hash of the complete ciphertext (`hash_version = 1`: 64 KiB chunk Merkle root; `hash_version = 0`: legacy flat SHA-256). Empty until the model is sealed, fixed from then on. |
+| Cipher | The cipher id, the chunk size and the nonce prefix. See [The cipher](#the-cipher). |
+| Base model | Optional `ModelBase` (`sha256`, `sizeBytes`, `format` in `onnx`/`safetensors`/`gguf`, and `source` URI in `https://`/`http://`/`ipfs://`/`hf://`) pinning a sealed adapter to a public open-weight base model. `null` for standalone models. Displayed as `Base model` and `Base SHA-256` on `/models/<name>`. |
+| Allowed measurements | The enclave software that may open the model: 1 to 8 measurements. See [Allowed measurements](#allowed-measurements). |
+| Price and mint | What one call costs, in base units of the mint the owner chose. No mint means SOL. |
+| Operator share | The part of each call's price paid to the operator whose enclave answers, in basis points. The split is told in [Fees and the token](/docs/concepts/fees-and-the-token). |
+| Status | `uploading`, `sealed`, `live` or `retired`. See [Statuses](#statuses). |
+| Calls settled | How many calls to the model have settled. |
+
+The exact account layout is in [Program: Accounts](/docs/program/accounts).
+
+## The manifest
+
+The manifest is stored in the Model in the clear. It tells a caller what to send and an enclave how to run the model.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | slug | The model's name. |
+| `inputKind` | `sketch`, `tensor` or `text` | `sketch` takes a drawing. `tensor` takes numbers as JSON. `text` takes a UTF-8 prompt string. |
+| `inputShape` | positive integers | The shape of the input tensor. Required for `sketch` and `tensor`; optional for `text`. |
+| `labels` | strings | What each output index means, in order. Required for `sketch` and `tensor`; optional for `text` (classification when set, greedy autoregressive generation `{ text, tokens, finishReason }` when omitted). |
+| `tokenizer` | `TokenizerRef` | Required for `text`: `format` (`byte-level`, `bpe` or `word-piece`), `vocabSize`, `maxInputTokens`, optional `maxOutputTokens`, optional `bosTokenId`/`eosTokenId`/`padTokenId`, and verified `source` + `sha256` for `bpe`/`word-piece`. |
+| `inputName` | string, optional | The name of the ONNX input. |
+| `outputName` | string, optional | The name of the ONNX output. |
+| `preprocess` | string, optional | How a raw input becomes the tensor. |
+
+The manifest of `sketch-32`:
+
+```json
+{
+  "name": "sketch-32",
+  "inputKind": "sketch",
+  "inputShape": [1, 1, 28, 28],
+  "inputName": "input",
+  "outputName": "logits",
+  "preprocess": "Crop the drawing to its ink, scale the longer side to 24 px keeping aspect, center it in 28x28; float32, background 0, ink 1.",
+  "labels": [
+    "airplane", "apple", "banana", "bicycle", "bird", "butterfly", "car", "cat",
+    "clock", "cloud", "cup", "envelope", "eye", "fish", "flower", "guitar",
+    "hat", "house", "key", "ladder", "light bulb", "moon", "mountain", "pizza",
+    "snail", "spider", "star", "sun", "sword", "television", "tree", "umbrella"
+  ]
+}
+```
+
+The weights file itself is ONNX.
+
+### On chain
+
+The Model stores the manifest as compact UTF-8 JSON of at most 4,096 bytes. A `sketch` manifest leaves out each of `inputShape`, `inputName`, `outputName` and `preprocess` whose value is the sketch default, the value shown above. Read back, a `sketch` manifest carries all four, the defaults filled in, so the API, the SDK and the enclave runtime always see the whole manifest.
+
+The manifest and the allowed measurements travel in the `create_model` transaction, which is at most 1,104 bytes. [`POST /v1/models/quote`](/docs/api/models#post-v1modelsquote) measures that transaction for a model's metadata, and a sealing allocates its Weights accounts once the quote's `canCreate` is `true`.
+
+## The cipher
+
+Weights are encrypted on the owner's device, before anything is sent, with cipher id `xchacha20poly1305-64k-v1`.
+
+| Part | Value |
+| --- | --- |
+| Algorithm | XChaCha20-Poly1305 |
+| Model key | 32 random bytes, drawn on the owner's device |
+| Chunk | 65,536 bytes of plaintext; the last chunk holds the remainder |
+| Tag | 16 bytes, one per chunk, stored after the chunk |
+| Nonce prefix | 16 random bytes, drawn at every sealing and stored in the Model |
+| Nonce of chunk `i` | the nonce prefix, then `i` as an unsigned 64-bit little-endian integer (24 bytes) |
+
+The ciphertext is the sealed chunks one after another, each with its tag:
+
+```text
+ciphertext bytes = plaintext bytes + 16 × ceil(plaintext bytes / 65,536)
+sealed chunk i starts at byte i × 65,552
+```
+
+Each chunk authenticates on its own, so any range of the model can be opened and checked without the rest: take the complete sealed chunks the range touches, authenticate each one, and cut the range out of the result.
+
+## The hash
+
+New models (`hash_version = 1`) seal their ciphertext with a domain-separated binary Merkle root over its 65,552-byte sealed chunks (`CIPHER_CHUNK_BYTES = 65,536 + 16`):
+
+```text
+leaf(i) = SHA-256("voynich/chunk/v1" || u32_le(i) || chunk_bytes_i)
+parent(left, right) = SHA-256("voynich/node/v1" || left || right)
+```
+
+During sealing, the upload key folds batches of up to 8 chunks per transaction into an incremental Merkle frontier on the Model account (`seal_range`), and `seal_model` finalizes the frontier into the 32-byte root (inline-hashing up to 8 remaining chunks when a model is small). Legacy models (`hash_version = 0`, such as the original `sketch-32`) use a flat SHA-256 over all ciphertext bytes in order. In both versions, once sealed the bytes behind the address cannot change, and enclaves and callers verify the exact hash before opening the model.
+
+## Where the ciphertext sits
+
+The ciphertext is written into Weights accounts. A Weights account is a 56-byte header followed by ciphertext, and a Solana account holds up to 10 MiB, so one account carries up to 10,485,704 bytes of ciphertext. `sketch-32` sits in one. A model has up to 64 Weights accounts (~640 MiB), and its ciphertext is theirs in order. The header records which model the account belongs to, its place in the model's list, its size, how much of it has been written and its global ciphertext byte offset.
+
+The bytes are public. Read them from the accounts over any RPC, or as a range through the API:
+
+```text
+GET /v1/models/sketch-32/weights?offset=0&length=256
+```
+
+`offset` starts at 0 and `length` is between 1 and 1,048,576 bytes (256 when omitted). The response carries the range as base64 with the Weights accounts it came from. See [HTTP API: Models](/docs/api/models).
+
+## Allowed measurements
+
+A measurement is the 48-byte fingerprint of the software running inside an enclave, written as 96 lowercase hex characters. The attestation record records it with the enclave's key.
+
+A Model lists 1 to 8 measurements, set when the model is created. A grant is made only to an enclave whose recorded measurement is on that list. The owner chooses which enclave software may ever hold the model's key, and the list is public. See [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+
+## Sealed adapters (base + adapter)
+
+Instead of sealing an entire multi-hundred-megabyte base model on chain, an owner can pin a public open-weight base in `Model.base` (`sha256`, `sizeBytes`, `format`, `source`) and seal only a compact `voynich/adapter/v1` payload into the model's `Weights` accounts.
+
+A `voynich/adapter/v1` payload starts with the 4-byte ASCII magic `VOYA`, version byte `1`, a 4-byte little-endian JSON header length, a UTF-8 JSON header (`{ version: 1, baseSha256, format: "onnx", tensors }`), and packed little-endian `float32` tensor data. Each tensor entry applies one of three operations to a named `FLOAT` ONNX initializer:
+
+- `replace`: replaces the initializer's values outright.
+- `delta`: adds `delta` elementwise to the base tensor (`W + delta`).
+- `lora`: applies a low-rank update to a 2D `[outDim, inDim]` initializer (`W + (alpha / rank) * (A @ B)` with `A: [outDim, rank]` and `B: [rank, inDim]`).
+
+When an enclave receives a grant for a model carrying `Model.base`:
+
+1. It resolves `base.source` (`https://`, `http://`, `hf://<owner>/<repo>[@<rev>]/<path>`, or `ipfs://<cid>[/<path>]`), streams the base file with a strict `<= base.sizeBytes` cap, verifies `SHA-256 === base.sha256`, and caches the public base file content-addressed in `ENCLAVE_BASE_CACHE_DIR` (`<sha256>.<format>`, re-verifying SHA-256 on cache reads).
+2. It opens and decrypts the sealed adapter ciphertext from Solana strictly in memory via `openModelWeights`.
+3. It merges the adapter onto the verified base strictly in memory via `applyOnnxAdapter` (never writing adapter plaintext or merged weights to disk) and loads the merged graph into ONNX Runtime.
+
+Localnet end-to-end proof (`b3s2-adapter`, LoRA `rank = 2, alpha = 4` + bias `delta` over the `252,081`-byte `sketch-32.onnx` base):
+
+| Metric | Value |
+| --- | --- |
+| Adapter size vs base | `1,233` bytes vs `252,081` bytes (`204.45x` smaller) |
+| Sealing | `6` transactions, `6.18` s |
+| Enclave open (`GET /health` & `voynich enclave status`) | `openBaseSeconds: 0.008` s, `openWeightsSeconds: 0.036` s, `grantToFirstAnswerSeconds: 3.748` s |
+| Verified inference (`4/4` checks) | Identical 28x28 ring input: standalone `sketch-32` answered `"sun"`, `b3s2-adapter` answered `"banana"` (`0.9999999999999998`), and standalone `sketch-32` continued settling `"sun"` alongside it |
+
+### Second sealed model: `text-1m`
+
+`text-1m` (source and open training script in `backend/models/text-1m/`) is a sealed causal language adapter beside `sketch-32`. Its manifest uses `inputKind: "text"` with a `byte-level` tokenizer:
+
+```json
+{
+  "name": "text-1m",
+  "inputKind": "text",
+  "inputName": "input_ids",
+  "outputName": "logits",
+  "tokenizer": {
+    "format": "byte-level",
+    "vocabSize": 258,
+    "maxInputTokens": 128,
+    "maxOutputTokens": 64,
+    "bosTokenId": 256,
+    "eosTokenId": 257
+  }
+}
+```
+
+| Metric | Value |
+| --- | --- |
+| Base architecture | 4-layer causal `byte-level` Transformer (`d_model = 192`, `n_heads = 6`, `d_ff = 512`, `context_len = 128`, `vocab_size = 258`: UTF-8 `0..255` + `BOS = 256` + `EOS = 257`, `1,506,434` parameters, opset-13 dynamic `1 <= seq <= 128`) |
+| Open base (`text-1m-base.onnx`) | `6,143,522` bytes, SHA-256 `1184a80cdd836f39c6e4af1e26c463042eeaaeecf0b7ee3750f4dbffcc93c84f` |
+| Sealed adapter (`text-1m.voya`) | `214,673` bytes (`28.62x` smaller than base, 1 Weights account): rank-8 (`alpha = 16`) LoRA on all 16 attention projections + `lm_head_w` plus elementwise `delta` on `lm_head_b` (`18` tensors, `53,010` adapter parameters) |
+| Base pretraining split (seed `42`) | `1,003,854` train tokens / `111,540` held-out tokens (prose held-out loss `1.9118`) |
+| Domain held-out split (`7,667` train / `836` held-out tokens) | Frozen base: loss `3.1173`, bpb `4.4973`, ppl `22.59`. Sealed adapter: loss `2.8538`, bpb `4.1171`, ppl `17.35` |
+| ONNX parity & CPU latency | `onnxMaxLogitDiff: 1.51e-05` (`< 1e-4`), `cpuMsPer32Tokens: 24.71` ms |
+
+Call `text-1m` from the CLI with `--text` (or `--open` for an on-chain open answer):
+
+```bash
+voynich call text-1m --text "Q: What is a sealed adapter?
+A:" --open
+```
+
+## Statuses
+
+| Status | The model is | What can happen |
+| --- | --- | --- |
+| `uploading` | created, its ciphertext being written | The upload key writes the ciphertext, in any order. The owner seals once every account is written to its end and the hash matches. |
+| `sealed` | complete, its hash fixed | Nothing can write to its Weights accounts again. The owner grants a first enclave. |
+| `live` | granted to a first enclave | Callers open calls. The owner sets the price, grants further enclaves, revokes grants, retires. Granted enclaves grant further enclaves. |
+| `retired` | closed to new calls and new grants | Open calls settle until their deadline and refund after it. |
+
+Sealing a model from the first step to `live` is in [Seal a model in ten minutes](/docs/start/seal-a-model). Changing a live model is in [Manage a model](/docs/guides/manage-a-model).

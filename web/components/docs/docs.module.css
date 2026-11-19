@@ -1,0 +1,122 @@
+/* The docs shell: rail, article, contents. */
+
+.shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); align-items: stretch; }
+.main { min-width: 0; padding: 40px 0 var(--s9) 48px; border-left: 1px solid var(--line); }
+
+/* ---------- rail ---------- */
+.rail { position: sticky; top: var(--nav-h); height: calc(100dvh - var(--nav-h)); overflow-y: auto; padding: 24px 24px 48px 0; align-self: start; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.searchField { display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; padding: 0 8px 0 12px; margin-bottom: 24px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-tile); font-size: 14px; color: var(--text-3); text-align: left; transition: border-color var(--step-1), color var(--step-1); }
+.searchField > span { flex: 1; }
+.searchField kbd, .search kbd { font-family: var(--font-mono); font-size: 12px; line-height: 1; color: var(--text-3); padding: 4px 6px; border: 1px solid var(--line-2); border-radius: var(--r-tile); background: var(--surface); }
+
+.groups { display: flex; flex-direction: column; gap: 24px; }
+.groupTitle { font-size: 12px; font-weight: 500; line-height: 1.3; letter-spacing: 0.01em; color: var(--text-3); padding: 0 0 6px 12px; }
+.pageLink { position: relative; display: block; padding: 5px 0 5px 12px; font-size: 14px; line-height: 1.4; letter-spacing: -0.003em; color: var(--text-2); border-radius: var(--r-tile); transition: color var(--step-1); text-wrap: pretty; }
+.pageLink[aria-current='page'] { color: var(--text); font-weight: 500; }
+.here { position: absolute; left: 0; top: 50%; width: 6px; height: 20px; margin-top: -10px; overflow: visible; }
+
+/* ---------- phone: the bar and the sheet ---------- */
+.bar { display: none; }
+.sheet { display: none; }
+
+/* ---------- page ---------- */
+.page { display: grid; grid-template-columns: minmax(0, 720px) 200px; column-gap: 48px; justify-content: space-between; align-items: start; }
+.article { min-width: 0; }
+.title { margin-bottom: 24px; }
+
+.strip { position: relative; height: 240px; margin-bottom: 32px; border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; background: var(--ground); }
+.stripTitle { position: absolute; left: 16px; bottom: 14px; margin: 0; padding: 4px 10px 5px; background: var(--ground); font-size: 17px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; color: var(--text); }
+
+/* ---------- reading ---------- */
+.prose { font-size: 16px; line-height: 1.6; letter-spacing: -0.003em; color: var(--text-2); }
+.article .prose > :first-child { margin-top: 0; }
+.prose :where(p) { margin: 0 0 16px; max-width: 34em; text-wrap: pretty; }
+.prose :where(h2) { font-size: clamp(22px, 2.2vw, 26px); font-weight: 500; line-height: 1.15; letter-spacing: -0.02em; color: var(--text); margin: 56px 0 14px; text-wrap: balance; }
+.prose :where(h3) { font-size: 17px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; color: var(--text); margin: 36px 0 10px; }
+.prose :where(h2 + h3) { margin-top: 20px; }
+.prose :where(h4) { font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--text); margin: 28px 0 8px; }
+.prose :where(strong) { font-weight: 600; color: var(--text); }
+.prose :where(ul, ol):not([class]) { margin: 0 0 16px; padding: 0; max-width: 34em; }
+.prose :where(ul, ol):not([class]) > li { position: relative; padding-left: 24px; margin-bottom: 6px; }
+.prose :where(ul, ol):not([class]) > li > :where(p) { margin-bottom: 6px; }
+.prose :where(ul):not([class]) > li::before { content: ''; position: absolute; left: 4px; top: 0.56em; width: 6px; height: 8px; border-radius: 1px; background: var(--slate-4); }
+.prose :where(ol):not([class]) { counter-reset: item; }
+.prose :where(ol):not([class]) > li { counter-increment: item; }
+.prose :where(ol):not([class]) > li::before { content: counter(item); position: absolute; left: 0; top: 0.2em; width: 16px; text-align: right; font-family: var(--font-mono); font-size: 13px; color: var(--text-3); }
+.prose :where(li) > :where(ul, ol):not([class]) { margin: 6px 0 0; }
+.prose :where(blockquote) { margin: 24px 0; padding: 2px 0 2px 18px; border-left: 2px solid var(--line-2); color: var(--text); }
+.prose :where(blockquote) > :last-child { margin-bottom: 0; }
+.prose :where(hr) { height: 1px; border: 0; margin: 40px 0; background: var(--line); }
+.prose :where(:not(pre) > code) { font-family: var(--font-mono); font-size: max(0.84em, 13px); letter-spacing: 0; font-variant-ligatures: none; color: var(--text); background: var(--surface-2); padding: 0.12em 0.36em; border-radius: var(--r-tile); overflow-wrap: anywhere; }
+.prose :where(mark) { background: none; color: var(--text); }
+.prose :where(img) { margin: 24px 0; border-radius: var(--r-panel); }
+
+/* ---------- previous and next ---------- */
+.foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--line); }
+.footLink { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-panel); transition: background-color var(--step-1), border-color var(--step-1); min-width: 0; }
+.footLink[data-next] { grid-column: 2; text-align: right; }
+.footTitle { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; color: var(--text); text-wrap: balance; }
+
+/* ---------- on this page ---------- */
+.toc { position: sticky; top: calc(var(--nav-h) + 40px); max-height: calc(100dvh - var(--nav-h) - 80px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.tocTitle { font-size: 12px; font-weight: 500; line-height: 1.3; letter-spacing: 0.01em; color: var(--text-3); padding: 0 0 8px 12px; }
+.tocLink { position: relative; display: block; padding: 4px 0 4px 12px; font-size: 13px; line-height: 1.4; letter-spacing: 0; color: var(--text-3); transition: color var(--step-1); text-wrap: pretty; }
+.tocLink[data-depth='3'] { padding-left: 24px; }
+.tocLink[aria-current] { color: var(--text); }
+
+/* ---------- search ---------- */
+.searchBack { position: fixed; inset: 0; z-index: 80; background: rgba(5, 8, 15, 0.86); display: flex; align-items: flex-start; justify-content: center; padding: min(14vh, 120px) 16px 16px; }
+.search { width: 100%; max-width: 600px; max-height: 100%; display: flex; flex-direction: column; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-panel); min-height: 0; }
+.searchHead { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line-2); color: var(--text-3); flex: none; }
+.searchInput { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; font-size: 16px; color: var(--text); }
+.searchInput::placeholder { color: var(--text-3); }
+.searchClose { display: inline-flex; align-items: center; height: 32px; padding: 0 4px; border-radius: var(--r-tile); }
+.searchBody { overflow-y: auto; min-height: 0; }
+.searchNote { padding: 18px 16px; font-size: 14px; line-height: 1.5; color: var(--text-3); }
+.searchNote kbd { margin: 0 1px; }
+.hits { padding: 6px; }
+.hit { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border-radius: var(--r-tile); cursor: pointer; }
+.hit[aria-selected='true'] { background: var(--slate-2); }
+.hitTitle { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.hitSection { font-size: 14px; font-weight: 600; letter-spacing: -0.003em; color: var(--text); min-width: 0; }
+.hitPage { font-size: 12px; font-weight: 500; letter-spacing: 0.01em; color: var(--text-3); flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hit[aria-selected='true'] .hitPage { color: var(--text-2); }
+.hitText { font-size: 13px; line-height: 1.4; color: var(--text-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.hit[aria-selected='true'] .hitText { color: var(--text-2); }
+.hit mark { background: none; color: inherit; text-decoration: underline; text-decoration-color: var(--ochre); text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+.hitText mark { color: var(--text); }
+
+@media (hover: hover) and (pointer: fine) {
+  .searchField:hover { border-color: var(--line-2); color: var(--text-2); }
+  .pageLink:hover, .tocLink:hover { color: var(--text); }
+  .footLink:hover { background: var(--surface); border-color: var(--line-2); }
+  .barMenu:hover, .barSearch:hover { color: var(--text); }
+}
+.searchField:focus-visible { border-color: var(--ochre); outline: none; }
+.footLink:focus-visible { background: var(--surface); border-color: var(--line-2); }
+
+@media (max-width: 1199px) {
+  .page { grid-template-columns: minmax(0, 720px); justify-content: start; }
+  .toc { display: none; }
+}
+
+@media (max-width: 899px) {
+  .shell { display: block; }
+  .rail { display: none; }
+  .main { padding: 28px 0 var(--s9); border-left: 0; }
+  .strip { height: 208px; }
+  .bar { position: sticky; top: var(--nav-h); z-index: 40; display: flex; align-items: center; gap: 4px; height: 48px; margin-inline: calc(-1 * var(--margin)); padding-inline: calc(var(--margin) - 8px); background: var(--ground); border-bottom: 1px solid var(--line); }
+  .barMenu { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 8px; color: var(--text-2); border-radius: var(--r-tile); text-align: left; }
+  .barMenu > svg { flex: none; }
+  .barWhere { min-width: 0; display: flex; align-items: baseline; gap: 8px; font-size: 14px; white-space: nowrap; overflow: hidden; }
+  .barGroup { color: var(--text-3); flex: none; }
+  .barGroup::after { content: '/'; margin-left: 8px; color: var(--line-2); }
+  .barPage { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .barSearch { flex: none; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-2); border-radius: var(--r-tile); }
+  .sheet { display: block; position: fixed; inset: calc(var(--nav-h) + 48px) 0 0 0; z-index: 39; background: var(--ground); overflow-y: auto; padding: 20px var(--margin) 64px; }
+  .sheet .groupTitle { padding-left: 14px; }
+  .sheet .pageLink { padding: 11px 0 11px 14px; font-size: 16px; border-bottom: 1px solid var(--line); }
+  .searchBack { padding-top: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .searchField, .pageLink, .tocLink, .footLink { transition: none; } }

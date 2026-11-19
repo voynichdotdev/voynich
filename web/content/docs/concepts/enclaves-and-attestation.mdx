@@ -1,0 +1,86 @@
+---
+title: Enclaves and attestation
+description: What an enclave is, what its attestation record holds, how the program reads it and how expiry and refresh work.
+---
+
+An enclave is an instance of the enclave runtime registered on chain with an attestation record. It is the only place a sealed model is ever opened. On mainnet, the protocol launches with the `attest` program verifying standard-server enclaves (`dev`) and switches `Config.attestation_program` via `set_config` once Solana Confidential Compute's mainnet verifier opens for Intel TDX and AMD SEV-SNP confidential virtual machines.
+
+## The two keys
+
+When the runtime boots it generates two keys and keeps both secrets sealed inside its state (or inside hardware memory on a confidential VM).
+
+| Key | Kind | Used for |
+| --- | --- | --- |
+| Signing key | Ed25519 | Signing receipts, and signing the enclave's own transactions (register, refresh, grant to another enclave). The attestation record names this key. |
+| Encryption key | X25519 | Receiving the model key in a [grant](/docs/concepts/grants) and receiving call inputs. |
+
+The encryption key is tied to the signing key at registration: `register_enclave` must be signed by the signing key, so only the enclave that holds the attested key can say which encryption key is its own.
+
+## The attestation record
+
+An enclave submits a report that states the software measurement it is running and binds its signing key to a recent Solana slot. The attestation program verifies that report on chain and writes an attestation record. `voynich` does not verify reports itself: it reads the record written by whichever program `Config.attestation_program` names.
+
+- **At mainnet launch (`attest`):** `attest` is deployed alongside `voynich` on mainnet. It verifies reports signed by its configured root key (`dev_root`) for standard-server enclaves (`dev`, hardware type `0`), bound to a recent slot in `SlotHashes`.
+- **With Solana Confidential Compute:** once Confidential Compute's mainnet verifier opens, the admin switches `Config.attestation_program` (and `record_layout_version` when needed) via `set_config` without redeploying `voynich`. That verifier checks Intel TDX (`1`) and AMD SEV-SNP (`2`) hardware reports.
+
+A record states:
+
+| Fact | Meaning |
+| --- | --- |
+| Signing key | The enclave's Ed25519 signing key. |
+| Hardware type | `dev` (0) for a standard-server enclave under `attest`, Intel TDX (1), or AMD SEV-SNP (2). |
+| Measurement | The 48-byte fingerprint of the software inside the enclave. For `voynich-enclave`, this is the SHA-384 of the reproducible `enclave/dist/runtime.js` bundle; anyone can rebuild it from source and confirm the exact `measurement` and `recipeHash` with `npm run verify:build --workspace voynich-enclave` (see [Reproducible build and recipe](/docs/operators/run-the-runtime#reproducible-build-and-recipe)). |
+| Recorded slot | The slot the record was written in. |
+| Expiry slot | The slot from which the record no longer counts. |
+| Report slot | The recent slot the report was bound to. |
+
+The program reads records of the attestation program named in its Config, in the layout version named there. Both are in `GET /v1/config` as `attestationProgramId` and `attestationRecordLayoutVersion`.
+
+### Layout version 1
+
+A record is at the PDA `["record", signing_key]` of the attestation program and is 114 bytes:
+
+| Offset | Bytes | Field |
+| --- | --- | --- |
+| 0 | 8 | discriminator `21890dc127e8d83f` |
+| 8 | 1 | layout version, 1 |
+| 9 | 32 | signing key |
+| 41 | 1 | hardware type |
+| 42 | 48 | measurement |
+| 90 | 8 | recorded slot, little-endian |
+| 98 | 8 | expiry slot, little-endian |
+| 106 | 8 | report slot, little-endian |
+
+One enclave has one record, at one address for the life of its signing key. Attesting again updates it in place.
+
+## What the program checks
+
+Every instruction that relies on an enclave reads its record again at that moment: `register_enclave`, `refresh_enclave`, `grant_by_owner`, `grant_by_enclave`, `open_call` and `settle_call`. The record counts when all of this holds:
+
+- it is owned by the configured attestation program and sits at the address derived from the signing key
+- it has the configured layout version and names the enclave's signing key
+- its hardware type is one of the three and its measurement is not zero
+- its recorded slot is not in the future
+- its expiry slot is after the current slot
+
+For a grant or a call, the record must also still state the hardware type and measurement the Enclave account holds, and that measurement must be on the model's list of [allowed measurements](/docs/concepts/sealed-models#allowed-measurements).
+
+## The Enclave account
+
+Registering creates the Enclave account, the enclave's entry in Voynich: both keys, the operator's wallet, the endpoint where the enclave takes calls, the record's address and a copy of the record's hardware type, measurement, recorded slot and expiry slot. Its address is the PDA `["enclave", signing_key]`.
+
+An enclave reads as `live` while the current slot is before its expiry slot, and `expired` from then on.
+
+## Published measurements
+
+A 48-byte measurement digest can be bound on chain to its source code through a `Measurement` PDA (`["measurement", digest[..32], digest[32..]]`, `366` bytes). Calling `publish_measurement` records the non-zero `digest`, `source_repo` (up to 128 bytes), `commit_sha` (7 to 64 hex characters), `recipe_hash` (the 32-byte SHA-256 of `voynich/enclave-recipe/v1`), `version` (up to 32 bytes), `publisher`, `created_slot`, and `status` (`Active`). Duplicates are rejected at PDA initialization. Either `publisher` or `Config.admin` can later call `deprecate_measurement` to mark the record `Deprecated`.
+
+Across the site, every published measurement resolves to its on-chain `Measurement` record so visitors and owners see `v<version>`, short `commitSha`, `sourceRepo`, `recipeHash`, and any `Deprecated` status beside the 96-character hex digest: on `/models/[id]` (beside allowed measurements and granted enclaves), `/enclaves` and `/enclaves/[key]` (beside each enclave's measurement), `/receipts/[id]` (as a **Runtime source** row in receipt facts), and `/seal` (in the allowed measurements picker alongside registered enclaves).
+
+## Expiry and refresh
+
+A record lasts for a number of slots set by the attestation program. An enclave whose record has expired cannot be granted a model, cannot be chosen for a new call and cannot settle. Its grants stay on chain and count again once the record does.
+
+Before its record expires, the runtime attests again and sends `refresh_enclave`, which copies the renewed record into the Enclave account. A receipt keeps its meaning after the record that backed it expires: what counts is that the record was in force at the slot the call settled.
+
+Running an enclave is in [Operators](/docs/operators/hardware). The exact accounts and checks are in [Program: Instructions](/docs/program/instructions#registerenclave).

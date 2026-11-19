@@ -1,0 +1,11 @@
+[
+  { "code": "MODEL_NOT_FOUND", "status": 404 },
+  { "code": "MODEL_NOT_LIVE", "status": 409 },
+  { "code": "ENCLAVE_NOT_FOUND", "status": 404 },
+  { "code": "ENCLAVE_EXPIRED", "status": 409 },
+  { "code": "GRANT_REQUIRED", "status": 409 },
+  { "code": "CALL_NOT_FOUND", "status": 404 },
+  { "code": "CALL_DEADLINE_PASSED", "status": 409 },
+  { "code": "INPUT_HASH_MISMATCH", "status": 422 },
+  { "code": "INVALID_ENVELOPE", "status": 422 }
+]

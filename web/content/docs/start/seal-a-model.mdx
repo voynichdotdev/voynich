@@ -1,0 +1,184 @@
+---
+title: Seal a model in ten minutes
+description: From an ONNX file and a manifest to a live sealed model with an address, on the site, from the CLI and from the SDK.
+---
+
+This page ends with a model of your own on chain as ciphertext, granted to an enclave and taking paid calls.
+
+<Diagram name="seal" />
+
+## What it takes
+
+- **The weights**, as a standalone ONNX file or a compact `voynich/adapter/v1` (`.voya`) adapter paired with a public open-weight base model (`ModelBase`). One Weights account holds 10,485,704 bytes of ciphertext and a model has up to 64 (~640 MiB ceiling).
+- **A manifest**, as JSON: the model's name, its input kind (`sketch` or `tensor`), its input shape and its labels. The fields are in [Sealed models](/docs/concepts/sealed-models#the-manifest).
+- **A wallet** that holds SOL for the rent of the Model and Weights accounts, the upload's fees and a few transactions of its own. [`POST /v1/models/quote`](/docs/api/models#post-v1modelsquote) returns the amounts for a ciphertext size, the upload funding among them.
+- **A measurement to allow and an enclave to grant.** [/enclaves](/enclaves) lists every registered enclave with its measurement. The model lists the measurements that may open it, and the first grant goes to one enclave with a listed measurement.
+- **A price** per call, the mint it is paid in, and the operator share. See [Fees and the token](/docs/concepts/fees-and-the-token).
+
+## The steps
+
+Sealing is the same six steps every way it is done.
+
+| Step | What happens | The owner signs |
+| --- | --- | --- |
+| Prepare | The weights file and the manifest are read on the device. Nothing is sent. | |
+| Encrypt | The wallet signs one canonical derivation message (`voynich/seal/v1`), deterministically deriving the model key, cipher nonce prefix, upload keys and Weights keys via HKDF-SHA256, and encrypts the weights locally. | once (`signMessage`) |
+| Create | The model's metadata is quoted to check it fits the `create_model` transaction. Then the Weights accounts and the Model are created (initial batch up to 8 Weights accounts in `create_model`, any further accounts attached via upload-key-signed `attach_weights` batches of 16) and up to 8 one-time upload keys are funded. | once per Weights account, once for the Model |
+| Write | The upload keys write disjoint ciphertext ranges to chain in parallel, up to 888 bytes per transaction, with no wallet prompt. | |
+| Seal | For models over 8 chunks (~512 KiB), the upload key folds 65,552-byte ciphertext chunks into the on-chain Merkle frontier in 8-chunk `seal_range` batches and extra keys sweep their unused reserves back to the owner with no wallet prompt. Then the owner signs `seal_model` once to finalize the 64 KiB chunk Merkle root. The bytes can no longer change. | once |
+| Grant | The model key is wrapped to the first enclave. The model is `live`. | once |
+
+<Ways>
+<Way label="Site">
+
+Go to [/seal](/seal) with a connected wallet.
+
+1. **Prepare.** Choose **Full model** or **Sealed adapter**, then pick the weights or `.voya` adapter file and provide the manifest (`sketch`, `tensor` or `text`). In **Sealed adapter** mode, the browser decodes the `.voya` file with `decodeAdapter()` to show tensor count/ops and auto-fill `baseSha256`, accepts the base model's `source`, `format`, `sizeBytes` and `sha256`, and offers an optional local base-file checker running `verifyOnnxAdapterCompatibility()` before signing.
+2. Set the name, the price and its mint, the operator share and the allowed measurements. The allowed measurements picker merges published active on-chain `Measurement` records (`GET /v1/measurements?status=active`) with registered enclaves, showing `v<version>`, short `commitSha`, `sourceRepo`, and `recipeHash` so you can pick by release and commit instead of pasting 96-character hex.
+3. **Encrypt.** With a wallet supporting `signMessage`, approve one message signature to deterministically derive the model key, cipher nonce prefix, upload keys and Weights keys (no password or local key file required, and resumable from any device). Wallets without `signMessage` fall back to a password-encrypted browser vault.
+4. **Create.** Approve the transactions that create the accounts and fund the upload keys. Once creation starts, the page shows a copyable `voynich seal <file> --model <name> --resume` command (including `--base*` flags when sealing an adapter) so you can finish from any terminal.
+5. **Write.** The page shows the upload's progress in bytes and transactions. To resume an interrupted upload on another browser or device, open `/seal?resume=<model>` (or use the resume bar on `/seal`), select the same weights file and press **Derive keys with wallet**.
+6. **Seal.** Approve the transaction that fixes the hash.
+7. **Grant.** Choose the first enclave and approve the grant.
+
+The page ends on the model's address, shows the sealing summary (bytes written, transactions sent, elapsed time and fees paid), and leads to its page at `/models/<name>`.
+
+</Way>
+<Way label="CLI">
+
+Build and link `voynich` from `backend/` (see [CLI: Install](/docs/cli/install)), then set the API URL:
+
+```bash
+export VOYNICH_API_URL=https://api.voynich.dev
+```
+
+```bash
+voynich seal model.onnx \
+  --manifest manifest.json \
+  --price <base units> \
+  --operator-share-bps <basis points> \
+  --measurement <96 hex characters> \
+  --upload-funding <lamports> \
+  --enclave <enclave address> \
+  --keypair <path to a Solana keypair file>
+```
+
+To seal a `voynich/adapter/v1` adapter against a public base model, add `--base <url-or-base.json>` (and `--base-file <local-base.onnx>` to auto-hash and pre-check ONNX tensor compatibility before signing):
+
+```bash
+voynich seal adapter.voya \
+  --base <base URL or base.json> \
+  --base-file base.onnx \
+  --manifest manifest.json \
+  --price <base units> \
+  --operator-share-bps <basis points> \
+  --measurement <96 hex characters> \
+  --upload-funding <lamports> \
+  --enclave <enclave address> \
+  --keypair <path to a Solana keypair file>
+```
+
+Keys are derived deterministically from the owner keypair (`voynich/seal/v1`), so `--state` and a password are optional. To resume an interrupted sealing (including one started in the browser on `/seal`) from any terminal with only the owner keypair and weights file, run:
+
+```bash
+voynich seal model.onnx --model <name> --resume --enclave <enclave address> --keypair <path to a Solana keypair file>
+```
+
+Progress and a final sealing summary (bytes, transactions, tx/MiB, elapsed seconds, s/MiB and lamports fees) go to stderr. The live model and those measurements are printed as JSON on stdout. Every flag is in [CLI: seal](/docs/cli/seal).
+
+</Way>
+<Way label="SDK">
+
+```ts
+const price = { amount: '100000', mint: null, decimals: 9, symbol: 'SOL' }
+
+const { model, resume } = await voynich.seal({
+  weights: onnxBytes,
+  manifest,
+  price,
+  operatorShareBps: 2500,
+  allowedMeasurements: [measurement],
+  uploadFundingLamports: '5000000',
+  grantEnclave: enclave,
+  onPrepared: state => save(state),
+  onProgress: progress => console.log(progress.step, progress.bytesWritten, progress.totalBytes),
+})
+```
+
+The figures in this sample are sample inputs. Every option, the saved state and resuming are in [SDK: seal](/docs/sdk/seal).
+
+</Way>
+</Ways>
+
+<Callout kind="important">
+For wallet-derived sealings (`signMessage` / keypair), the owner wallet re-derives the exact same model key and upload keys on any device with no local state file. For legacy random-key sealings (or wallets without `signMessage`), keep the encrypted key file (`<name>.voynich-key.json` from `/seal`, `--state` from the CLI, or `resume.modelKey` from the SDK).
+</Callout>
+
+## Measured sealing speed
+
+Localnet sealing measurements comparing the initial 512-byte single-key baseline, full 888-byte writes (`WRITE_CHUNK_BYTES = 888`), concurrent multi-key uploads (up to 8 upload keys with self-sweeps), and range sealing (`hash_version = 1` 64 KiB chunk Merkle root via `seal_range` + `seal_model`, supporting up to 64 Weights accounts / ~640 MiB):
+
+| Model | Config | Transactions | tx / MiB | Elapsed | s / MiB | Fees | Grant to first answer |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `sketch-32` (`252,081` plaintext / `252,145` ciphertext bytes, with grant) | 512 B/tx, 1 key | 497 (1 alloc + 1 create + 493 writes + 1 seal + 1 grant) | 2,066.84 | 162.249 s | 674.73 | 2,500,000 lamports (0.002500 SOL) | 0.786 s (4.198 s wall) |
+| `sketch-32` (`252,081` plaintext / `252,145` ciphertext bytes, with grant) | 888 B/tx, 1 key | 288 (1 alloc + 1 create + 284 writes + 1 seal + 1 grant) | 1,197.68 (-42.1%) | 95.090 s (1.71x vs 512 B) | 395.44 (-41.4%) | 1,455,000 lamports (0.001455 SOL, -41.8%) | 3.995 s (4.337 s wall) |
+| `sketch-32` (`252,081` plaintext / `252,145` ciphertext bytes, with grant) | 888 B/tx, 6 keys | 293 (incl. 5 self-sweeps) | 1,218.48 | 69.861 s (2.32x vs 512 B, 1.36x vs 1 key) | 290.53 (-56.9% vs 512 B, -26.5% vs 1 key) | 1,480,000 lamports (0.001480 SOL, 0 stranded) | 0.792 s (4.437 s wall) |
+| `sketch-32` (`252,081` plaintext / `252,145` ciphertext bytes, with grant) | 888 B/tx, 5 keys, Merkle v1 (4 chunks, 0 `seal_range`) | 292 | 1,214.32 | 71.361 s | 296.76 | 1,475,000 lamports (0.001475 SOL) | 3.534 s |
+| 1 MiB ciphertext (`1,048,320` plaintext / `1,048,576` ciphertext bytes, seal only) | 512 B/tx, 1 key | 2,051 (1 alloc + 1 create + 2,048 writes + 1 seal) | 2,051.00 | 659.212 s | 659.21 | 10,270,000 lamports (0.010270 SOL) | |
+| 1 MiB ciphertext (`1,048,320` plaintext / `1,048,576` ciphertext bytes, seal only) | 888 B/tx, 1 key | 1,184 (1 alloc + 1 create + 1,181 writes + 1 seal) | 1,184.00 (-42.3%) | 377.236 s (1.75x vs 512 B) | 377.24 (-42.8%) | 5,935,000 lamports (0.005935 SOL, -42.2%) | |
+| 1 MiB ciphertext (`1,048,320` plaintext / `1,048,576` ciphertext bytes, seal only) | 888 B/tx, 8 keys | 1,191 (incl. 7 self-sweeps) | 1,191.00 | 264.954 s (2.49x vs 512 B, 1.42x vs 1 key) | 264.95 (-59.8% vs 512 B, -29.8% vs 1 key) | 5,970,000 lamports (0.005970 SOL, 0 stranded) | |
+| 1 MiB ciphertext (`1,048,320` plaintext / `1,048,576` ciphertext bytes, seal only) | 888 B/tx, 8 keys, Merkle v1 (16 chunks, 1 `seal_range` + 8 inline) | 1,192 | 1,192.00 | 265.484 s | 265.48 | 5,975,000 lamports (0.005975 SOL) | |
+| 2.5 MiB real ONNX (`2,621,440` ciphertext bytes, with grant + verified call) | 888 B/tx, 5 keys, Merkle v1 (40 chunks, 4 `seal_range` + 8 inline) | 2,965 | 1,186.00 | 675.278 s | 270.11 | 14,840,000 lamports (0.014840 SOL) | 3.799 s |
+
+`/seal`, `voynich seal` and `voynich.seal()` report these sealing metrics on every run, and `voynich enclave status` (plus enclave `GET /health`) reports `openWeightsSeconds` and `grantToFirstAnswerSeconds` per granted model.
+
+### Opening by range
+
+When an enclave opens a granted model, it validates all 56-byte `Weights` headers in one batched RPC call, fetches ciphertext in concurrent 8-chunk (~512 KiB) `dataSlice` ranges (splicing cleanly across `Weights` account boundaries), decrypts and authenticates each 64 KiB chunk in place via `openWeightsChunk`, and verifies the complete `merkleRootFromLeaves` (or legacy `hash_version = 0` SHA-256) before loading the model into ONNX Runtime. Incoming call inputs for a newly granted model trigger an immediate on-demand grant load.
+
+| Model | Layout | `openWeightsSeconds` | `grantToFirstAnswerSeconds` | Immediate call wall time |
+| --- | --- | --- | --- | --- |
+| `sketch-32` (`252,145` B) | 4 chunks, 1 account | 0.060 s (boot) / 0.072 s (fresh grant) | 0.837 s | 4.316 s |
+| `sketch-32` (`252,145` B) | 4 chunks, 3 non-chunk-aligned accounts (`80k + 100k + 72,145` B) | 0.076 s | 0.771 s | 4.232 s |
+| 2.5 MiB real ONNX (`2,621,440` B) | 40 chunks (5 concurrent 8-chunk slices) | 0.120 s | 3.668 s | 4.440 s |
+
+### Cross-device resume (zero state file)
+
+Localnet end-to-end proof interrupting a browser-style `{ signTransaction, signMessage }` upload midway (zero state file written) and finishing from a separate CLI process holding only the owner keypair and weights file (`voynich seal models/sketch-32/sketch-32.onnx --model bench-s6-resume --resume --enclave <enclave>`):
+
+| Phase | Context | Result |
+| --- | --- | --- |
+| Phase 1 (interrupted) | Simulated browser wallet (`signMessage`), zero state file | Created model, stopped after 100 writes (`91,464 / 252,145` B indexed), 5 deterministic upload keys holding `5,404,400` lamports, `26.204` s, status `uploading` |
+| Phase 2 (CLI resume) | Separate CLI (`--model bench-s6-resume --resume`), zero state file, zero manifest file, zero password | Inspected on-chain Weights via `findUnwrittenRangesFromChain`, skipped landed writes, sent `186` txs (`935,000` lamports fees) in `45.978` s, sealed (`hashVersion: 1`, `sealedChunks: 4`) and granted (`status: "live"`) |
+| Post-seal cleanup & call | All 8 deterministic upload keys + enclave | `0` lamports stranded across all 8 keys; enclave opened in `0.056` s (`openWeightsSeconds`) and settled a `4/4` verified call in `0.907` s (`grantToFirstAnswerSeconds`, `4.010` s wall time) |
+
+### Sealing and resuming an adapter (CLI E2E)
+
+Localnet CLI end-to-end proof sealing and resuming a `1,233`-byte `voynich/adapter/v1` adapter pinned to the `252,081`-byte `sketch-32.onnx` base:
+
+| Flow | Command | Result |
+| --- | --- | --- |
+| Fresh CLI seal | `voynich seal adapter.voya --base <url> --base-file sketch-32.onnx --manifest manifest.json ... --enclave <enclave>` | Sealed `b3s4-cli-3` in `6` txs / `8.641` s; enclave loaded base (`openBaseSeconds: 0.005` s, `1` HTTP download) and adapter (`openWeightsSeconds: 0.04` s); live call settled `"airplane"` (`4/4` verified) |
+| Zero-state-file CLI resume | `voynich seal adapter.voya --model b3s4-resume-3 --resume --enclave <enclave>` (no `--base*`, no `--manifest`, no `--state`) | Inherited `base` from chain automatically, finished in `2` remaining txs / `3.706` s, reused verified base cache (`openBaseSeconds: 0.001` s, `0` new HTTP downloads), and settled `"airplane"` (`4/4` verified) |
+| Full `text-1m` language adapter (`214,673` B over `6,143,522` B base, `28.62x` smaller) | `voynich seal text-1m.voya --base <url> --base-file text-1m-base.onnx --manifest manifest.json --upload-keys 8 --enclave <enclave>` | Sealed in `251` txs / `62.998` s / `1,270,000` lamports fees; enclave loaded base (`openBaseSeconds: 0.021` s) and adapter (`openWeightsSeconds: 0.035` s, `grantToFirstAnswerSeconds: 4.31` s); sealed and `--open` `voynich call text-1m --text` calls returned coherent EOS completions (`4/4` verified) alongside `sketch-32` |
+
+## What exists now
+
+- A Model at the address derived from its name, with status `live`, listed on [/models](/models).
+- Its ciphertext in Weights accounts, readable by anyone, with its SHA-256 fixed in the Model.
+- A Grant to the first enclave, which fetches the ciphertext, checks the hash, unwraps the key and starts answering.
+- A call panel on the model's page. Each settled call pays the owner's part to the owner's wallet.
+
+## Next
+
+<Cards>
+<Card href="/docs/guides/manage-a-model" title="Manage a model">
+Change the price, grant further enclaves, revoke a grant, retire.
+</Card>
+<Card href="/docs/concepts/grants" title="Grants">
+How the key reaches enclaves, with and without the owner.
+</Card>
+<Card href="/docs/start/call-a-model" title="Call it">
+Call the model you sealed.
+</Card>
+</Cards>
