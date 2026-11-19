@@ -1,0 +1,32 @@
+/* The ciphertext view. */
+
+.view { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.accountGroup { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.accounts { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-height: 220px; overflow-y: auto; }
+.accounts li { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; min-width: 0; }
+.rangeJump { text-align: left; }
+.rangeJump:hover { color: var(--text); }
+.moreAccounts { align-self: flex-start; }
+.total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+
+.dump { min-width: 0; overflow: hidden; }
+.dump canvas { max-width: none; }
+
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.of { color: var(--text-3); }
+.pager { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.jump { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
+.jump :global(.input) { width: 116px; height: 32px; padding: 0 10px; }
+.jumpErr { margin-top: -8px; text-align: right; }
+
+.view[data-compact] { gap: var(--s3); }
+
+@media (max-width: 639px) {
+  .jump { flex-basis: 100%; margin-right: 0; }
+  .jump :global(.input) { flex: 1; width: auto; }
+  .pager { width: 100%; }
+  .pager > :global(.btn) { flex: 1; }
+  .jumpErr { text-align: left; margin-top: 0; }
+}

@@ -1,0 +1,112 @@
+/* The call panel, the drawing surface and what stands beside them. */
+
+.panel { container-type: inline-size; display: flex; flex-direction: column; }
+
+.head { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; padding: 0 16px; border-bottom: 1px solid var(--line); }
+.head h2 { font-size: 13px; font-weight: 600; letter-spacing: 0; }
+.path { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.path ol { display: flex; gap: 2px; align-items: center; }
+.path li { width: 18px; height: 8px; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--line-2); }
+.path li[data-at='done'] { background: var(--slate-4); box-shadow: none; }
+.path li[data-at='now'] { background: var(--cap); box-shadow: none; }
+.path li[data-at='warm'] { background: var(--ochre); box-shadow: none; }
+.path li[data-at='bad'] { background: var(--crimson); box-shadow: none; }
+.now { display: inline-flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.now :global(.mono) { font-size: 12px; color: var(--text-3); }
+.now[data-tone='warm'] { color: var(--ochre); }
+.now[data-tone='bad'] { color: var(--crimson-text); }
+
+.body { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); gap: var(--s5); padding: var(--s4); flex: 1; }
+.input { min-width: 0; }
+
+.pad { width: 100%; aspect-ratio: 1; border: 1px solid var(--ochre-2); border-radius: var(--r-tile); background: var(--ground); cursor: crosshair; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pad[data-locked] { cursor: default; border-color: var(--line-2); }
+.tools { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.toolNote { margin-left: auto; text-align: right; }
+.tensor { min-height: 300px; }
+.promptWrap { display: flex; flex-direction: column; gap: 12px; }
+.prompt { min-height: 240px; line-height: 1.5; }
+.promptTools { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.maxTokensField { width: 120px; }
+
+.side { display: flex; flex-direction: column; gap: var(--s5); min-width: 0; }
+.receives { display: flex; align-items: center; gap: 12px; }
+.receives > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inputGrid { flex: none; border: 1px solid var(--line); border-radius: var(--r-tile); }
+
+.status { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; }
+.things { columns: 3; column-gap: 16px; font-size: 13px; line-height: 1.62; color: var(--text-2); }
+.things li { break-inside: avoid; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lead { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 500; line-height: 1.15; letter-spacing: -0.02em; color: var(--text); text-wrap: balance; }
+.lead[data-tone='bad'] { color: var(--crimson-text); }
+.flight { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.facts { display: flex; flex-direction: column; min-width: 0; font-size: 13px; }
+.facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; min-height: 36px; padding: 8px 0; border-top: 1px solid var(--line); }
+.flight .facts { margin-top: 8px; }
+.facts dt { font-size: 12px; font-weight: 500; color: var(--text-3); white-space: nowrap; }
+.facts dd { min-width: 0; text-align: right; color: var(--text); }
+.back { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0 2px; }
+
+.answer { display: flex; flex-direction: column; gap: var(--s4); }
+.answerHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.topAnswer { margin: 3px; padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+.topLine { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.topLabel { font-size: clamp(40px, 9cqi, 64px); font-weight: 450; line-height: 0.95; letter-spacing: -0.04em; color: var(--text); overflow-wrap: anywhere; }
+.textAnswerWrap { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.textAnswer { margin: 0; font-size: 16px; line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; }
+.textMeta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-3); }
+.streamMeter { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.meterRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); }
+.raw { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; }
+.rest { display: flex; flex-direction: column; gap: 8px; }
+.rest li { display: grid; grid-template-columns: 84px minmax(0, 1fr) 44px; align-items: center; gap: 12px; }
+.rest li > :last-child { text-align: right; font-size: 12px; }
+.rest li > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.checks { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 12px; border-top: 1px solid var(--line); }
+.checks li { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+
+.ceilingBox { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+.modeRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--line); }
+.modeLabel { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.act { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: auto; }
+.receipt { order: 2; font-size: 14px; margin-left: 4px; }
+
+/* A model that takes no calls: one band, composed per cause. Its left edge is the grammar's line for the cause. */
+.closed { position: relative; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) auto; align-items: center; gap: var(--s4) var(--s6); padding: var(--s5) var(--s5) var(--s5) calc(var(--s5) + 12px); }
+.closed::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 12px; border-right: 1px solid var(--line); }
+.closed[data-cause='retired']::before { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--slate-3) 4px 5px); }
+.closed[data-cause='sealed']::before { background: repeating-linear-gradient(180deg, var(--slate-4) 0 2px, transparent 2px 4px) 5px 0 / 1px 100% no-repeat; }
+.closed[data-cause='uploading']::before { background: var(--slate-2); }
+.closedLead { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.closedLead p { max-width: 46ch; text-wrap: pretty; }
+.closedAct { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+.closedAct > span { max-width: 20ch; text-align: right; }
+.progress { display: flex; flex-direction: column; gap: 10px; min-width: 0; font-size: 13px; }
+
+.connect { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.wallets { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 5; min-width: 240px; padding: 4px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-panel); }
+.wallets p { padding: 8px 10px; }
+.wallets button { display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 10px; font-size: 14px; border-radius: var(--r-tile); text-align: left; }
+.wallets button:focus-visible { background: var(--slate-2); }
+@media (hover: hover) and (pointer: fine) { .wallets button:hover { background: var(--slate-2); } }
+
+.panel[data-compact] .body { gap: var(--s4); }
+
+@container (max-width: 760px) {
+  .closed { grid-template-columns: minmax(0, 1fr); padding: var(--s4) var(--s4) var(--s4) calc(var(--s4) + 12px); }
+  .closedAct { justify-content: flex-start; }
+  .closedAct > span { max-width: none; text-align: left; }
+  .closedAct > :global(.btn) { width: 100%; }
+}
+@container (max-width: 600px) {
+  .path li { width: 12px; }
+  .body { grid-template-columns: minmax(0, 1fr); gap: var(--s4); padding: var(--s3); }
+  .head { padding: 0 12px; }
+  .side { gap: var(--s4); }
+  .act > :global(.btn), .connect, .connect > :global(.btn) { width: 100%; }
+  .act { margin-top: 4px; }
+  .receipt { order: 0; flex-basis: 100%; margin-left: 0; }
+}
