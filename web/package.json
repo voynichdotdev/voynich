@@ -1,0 +1,40 @@
+{
+  "name": "voynich-web",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "next dev -H 127.0.0.1",
+    "build": "next build",
+    "start": "node scripts/start.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "@solana-mobile/wallet-standard-mobile": "^0.7.1",
+    "@solana/web3.js": "^1.99.0",
+    "@voynich/contract": "file:vendor/voynich-contract-0.1.26.tgz",
+    "@wallet-standard/app": "^1.1.1",
+    "@wallet-standard/base": "^1.1.1",
+    "gsap": "^3.15.1",
+    "next": "^16.4.6",
+    "next-mdx-remote": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remark-gfm": "^4.0.1",
+    "shiki": "^4.6.0",
+    "voynich": "file:vendor/voynich-0.2.30.tgz",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3"
+  }
+}
