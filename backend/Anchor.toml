@@ -6,13 +6,14 @@ resolution = true
 skip-lint = false
 
 [workspace]
-members = ["programs/attest", "programs/voynich", "programs/cpi-caller"]
+members = ["programs/attest", "programs/voynich", "programs/cpi-caller", "programs/bounty"]
 exclude = ["programs/shared", "programs/artifacts"]
 
 [programs.localnet]
 voynich = "65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS"
 attest = "9nt8ErJoyTnn79Hd79tEzViQGavTF2HLiJ4fjoN7U64g"
 cpi_caller = "5niikRYqdGcR4KJd9aXfQaYdoQHzdrF1sDyiwrTvbEoa"
+bounty = "8Sm13coiVCjiHAp6NNvuJv36xcFqLN84ykZgqYBmX2ws"
 
 [provider]
 cluster = "http://127.0.0.1:9704"
