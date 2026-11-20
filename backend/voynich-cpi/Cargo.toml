@@ -1,0 +1,9 @@
+[package]
+name = "voynich-cpi"
+version = "0.1.0"
+edition = "2021"
+description = "CPI helpers and on-chain Receipt verification for calling Voynich models from Solana Anchor programs."
+
+[dependencies]
+anchor-lang = { version = "=0.31.1" }
+voynich = { path = "../programs/voynich", features = ["cpi"] }
