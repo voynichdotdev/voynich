@@ -1,0 +1,3092 @@
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/bounty.json`.
+ */
+export type Bounty = {
+  "address": "8Sm13coiVCjiHAp6NNvuJv36xcFqLN84ykZgqYBmX2ws",
+  "metadata": {
+    "name": "bounty",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "cancel",
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bounty"
+          ]
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bountyTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "creatorTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "collect",
+      "discriminator": [
+        208,
+        47,
+        194,
+        155,
+        17,
+        98,
+        82,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attempt",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  109,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call"
+        },
+        {
+          "name": "receipt"
+        },
+        {
+          "name": "drawer",
+          "writable": true
+        },
+        {
+          "name": "bountyTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "drawerTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "draw",
+      "discriminator": [
+        61,
+        40,
+        62,
+        184,
+        31,
+        176,
+        24,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "drawer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attempt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  109,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "model"
+        },
+        {
+          "name": "enclave"
+        },
+        {
+          "name": "attestationRecord"
+        },
+        {
+          "name": "grant"
+        },
+        {
+          "name": "call",
+          "writable": true
+        },
+        {
+          "name": "priceMint",
+          "optional": true
+        },
+        {
+          "name": "drawerTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "callerTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "escrowTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "bountyMint",
+          "optional": true
+        },
+        {
+          "name": "bountyTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "drawerRewardTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "voynichEventAuthority"
+        },
+        {
+          "name": "voynichProgram",
+          "address": "65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "callNonce",
+          "type": "u64"
+        },
+        {
+          "name": "inputHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "onReceipt",
+      "docs": [
+        "Invoked by `voynich::settle_call` immediately after writing the Receipt.",
+        "Returns `Ok(())` without reverting settlement when the bounty is already closed or the label does not match."
+      ],
+      "discriminator": [
+        147,
+        219,
+        81,
+        58,
+        69,
+        119,
+        225,
+        93
+      ],
+      "accounts": [
+        {
+          "name": "receipt"
+        },
+        {
+          "name": "call"
+        },
+        {
+          "name": "model"
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "post",
+      "discriminator": [
+        223,
+        96,
+        234,
+        236,
+        158,
+        106,
+        145,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model"
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "creatorTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "bountyTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "targetLabel",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "refundAttempt",
+      "discriminator": [
+        109,
+        117,
+        124,
+        239,
+        245,
+        90,
+        194,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "bounty",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attempt",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  109,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call",
+          "writable": true
+        },
+        {
+          "name": "drawer",
+          "writable": true
+        },
+        {
+          "name": "escrowTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "callerTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "drawerTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "voynichEventAuthority"
+        },
+        {
+          "name": "voynichProgram",
+          "address": "65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "attempt",
+      "discriminator": [
+        212,
+        114,
+        138,
+        164,
+        170,
+        4,
+        203,
+        99
+      ]
+    },
+    {
+      "name": "bounty",
+      "discriminator": [
+        237,
+        16,
+        105,
+        198,
+        19,
+        69,
+        242,
+        234
+      ]
+    },
+    {
+      "name": "model",
+      "discriminator": [
+        152,
+        221,
+        247,
+        122,
+        185,
+        125,
+        223,
+        151
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "attemptRefunded",
+      "discriminator": [
+        64,
+        176,
+        73,
+        144,
+        110,
+        178,
+        17,
+        117
+      ]
+    },
+    {
+      "name": "bountyCancelled",
+      "discriminator": [
+        234,
+        186,
+        248,
+        214,
+        198,
+        69,
+        152,
+        23
+      ]
+    },
+    {
+      "name": "bountyCollected",
+      "discriminator": [
+        145,
+        54,
+        11,
+        42,
+        97,
+        18,
+        17,
+        157
+      ]
+    },
+    {
+      "name": "bountyDrawn",
+      "discriminator": [
+        63,
+        51,
+        28,
+        108,
+        146,
+        46,
+        104,
+        138
+      ]
+    },
+    {
+      "name": "bountyPosted",
+      "discriminator": [
+        61,
+        61,
+        26,
+        239,
+        184,
+        44,
+        139,
+        232
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "invalidLabel",
+      "msg": "Target label must be 1 to 32 UTF-8 bytes."
+    },
+    {
+      "code": 6001,
+      "name": "invalidAmount",
+      "msg": "Bounty amount must be greater than zero."
+    },
+    {
+      "code": 6002,
+      "name": "invalidModel",
+      "msg": "Model account is not owned by the Voynich program or has invalid data."
+    },
+    {
+      "code": 6003,
+      "name": "bountyNotOpen",
+      "msg": "Bounty is no longer open."
+    },
+    {
+      "code": 6004,
+      "name": "unauthorized",
+      "msg": "Only the bounty creator can perform this action."
+    },
+    {
+      "code": 6005,
+      "name": "invalidTokenAccount",
+      "msg": "Provided token account or mint does not match the bounty or model."
+    },
+    {
+      "code": 6006,
+      "name": "invalidOpenAnswer",
+      "msg": "Receipt is not an open answer or does not carry a valid top-level label."
+    },
+    {
+      "code": 6007,
+      "name": "labelMismatch",
+      "msg": "Receipt label does not match the bounty target label."
+    },
+    {
+      "code": 6008,
+      "name": "insufficientEscrow",
+      "msg": "Bounty escrow balance is insufficient."
+    },
+    {
+      "code": 6009,
+      "name": "invalidCall",
+      "msg": "Call account does not match the attempt or Voynich program."
+    },
+    {
+      "code": 6010,
+      "name": "arithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "attempt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "drawer",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "createdSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "attemptRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "attempt",
+            "type": "pubkey"
+          },
+          {
+            "name": "drawer",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "priceMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bounty",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "targetLabel",
+            "type": "string"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "Pubkey::default() denotes native SOL."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "bountyStatus"
+              }
+            }
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "winningCall",
+            "type": "pubkey"
+          },
+          {
+            "name": "winningReceipt",
+            "type": "pubkey"
+          },
+          {
+            "name": "createdSlot",
+            "type": "u64"
+          },
+          {
+            "name": "claimedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "attempts",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bountyCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bountyCollected",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "attempt",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "receipt",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "label",
+            "type": "string"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bountyDrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "attempt",
+            "type": "pubkey"
+          },
+          {
+            "name": "drawer",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "enclave",
+            "type": "pubkey"
+          },
+          {
+            "name": "inputHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bountyPosted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "targetLabel",
+            "type": "string"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bountyStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "open"
+          },
+          {
+            "name": "claimed"
+          },
+          {
+            "name": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "model",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "sizeBytes",
+            "type": "u64"
+          },
+          {
+            "name": "cipher",
+            "type": "string"
+          },
+          {
+            "name": "noncePrefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "ciphertextSha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "allowedMeasurements",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  48
+                ]
+              }
+            }
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "priceMint",
+            "docs": [
+              "Pubkey::default() denotes native SOL."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "operatorShareBps",
+            "type": "u16"
+          },
+          {
+            "name": "uploadKey",
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "modelStatus"
+              }
+            }
+          },
+          {
+            "name": "createdSlot",
+            "type": "u64"
+          },
+          {
+            "name": "sealedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "callsSettled",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "uploadKeys",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "hashVersion",
+            "type": "u8"
+          },
+          {
+            "name": "sealedChunks",
+            "type": "u32"
+          },
+          {
+            "name": "merkleFrontier",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "merkleFrontierMask",
+            "type": "u32"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "modelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "priceUnit",
+            "type": {
+              "defined": {
+                "name": "priceUnit"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelBase",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sizeBytes",
+            "type": "u64"
+          },
+          {
+            "name": "format",
+            "type": "string"
+          },
+          {
+            "name": "source",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "uploading"
+          },
+          {
+            "name": "sealed"
+          },
+          {
+            "name": "live"
+          },
+          {
+            "name": "retired"
+          }
+        ]
+      }
+    },
+    {
+      "name": "priceUnit",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "call"
+          },
+          {
+            "name": "token"
+          }
+        ]
+      }
+    }
+  ]
+};
+
+// Generated by npm run build:programs. Anchor converts the runtime IDL names to camelCase.
+export const IDL: Bounty = {
+  "address": "8Sm13coiVCjiHAp6NNvuJv36xcFqLN84ykZgqYBmX2ws",
+  "metadata": {
+    "name": "bounty",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "cancel",
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bounty"
+          ]
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "Bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "Bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "creator_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "collect",
+      "discriminator": [
+        208,
+        47,
+        194,
+        155,
+        17,
+        98,
+        82,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "Bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "Bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attempt",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  109,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call"
+        },
+        {
+          "name": "receipt"
+        },
+        {
+          "name": "drawer",
+          "writable": true
+        },
+        {
+          "name": "bounty_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "drawer_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "draw",
+      "discriminator": [
+        61,
+        40,
+        62,
+        184,
+        31,
+        176,
+        24,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "drawer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "Bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "Bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attempt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  109,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "model"
+        },
+        {
+          "name": "enclave"
+        },
+        {
+          "name": "attestation_record"
+        },
+        {
+          "name": "grant"
+        },
+        {
+          "name": "call",
+          "writable": true
+        },
+        {
+          "name": "price_mint",
+          "optional": true
+        },
+        {
+          "name": "drawer_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "caller_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "escrow_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "bounty_mint",
+          "optional": true
+        },
+        {
+          "name": "bounty_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "drawer_reward_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "voynich_event_authority"
+        },
+        {
+          "name": "voynich_program",
+          "address": "65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "call_nonce",
+          "type": "u64"
+        },
+        {
+          "name": "input_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "on_receipt",
+      "docs": [
+        "Invoked by `voynich::settle_call` immediately after writing the Receipt.",
+        "Returns `Ok(())` without reverting settlement when the bounty is already closed or the label does not match."
+      ],
+      "discriminator": [
+        147,
+        219,
+        81,
+        58,
+        69,
+        119,
+        225,
+        93
+      ],
+      "accounts": [
+        {
+          "name": "receipt"
+        },
+        {
+          "name": "call"
+        },
+        {
+          "name": "model"
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "Bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "Bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "post",
+      "discriminator": [
+        223,
+        96,
+        234,
+        236,
+        158,
+        106,
+        145,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model"
+        },
+        {
+          "name": "bounty",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "creator_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "bounty_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "target_label",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "refund_attempt",
+      "discriminator": [
+        109,
+        117,
+        124,
+        239,
+        245,
+        90,
+        194,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "bounty",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty.creator",
+                "account": "Bounty"
+              },
+              {
+                "kind": "account",
+                "path": "bounty.nonce",
+                "account": "Bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attempt",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  116,
+                  116,
+                  101,
+                  109,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bounty"
+              },
+              {
+                "kind": "account",
+                "path": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call",
+          "writable": true
+        },
+        {
+          "name": "drawer",
+          "writable": true
+        },
+        {
+          "name": "escrow_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "caller_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "drawer_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "voynich_event_authority"
+        },
+        {
+          "name": "voynich_program",
+          "address": "65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Attempt",
+      "discriminator": [
+        212,
+        114,
+        138,
+        164,
+        170,
+        4,
+        203,
+        99
+      ]
+    },
+    {
+      "name": "Bounty",
+      "discriminator": [
+        237,
+        16,
+        105,
+        198,
+        19,
+        69,
+        242,
+        234
+      ]
+    },
+    {
+      "name": "Model",
+      "discriminator": [
+        152,
+        221,
+        247,
+        122,
+        185,
+        125,
+        223,
+        151
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AttemptRefunded",
+      "discriminator": [
+        64,
+        176,
+        73,
+        144,
+        110,
+        178,
+        17,
+        117
+      ]
+    },
+    {
+      "name": "BountyCancelled",
+      "discriminator": [
+        234,
+        186,
+        248,
+        214,
+        198,
+        69,
+        152,
+        23
+      ]
+    },
+    {
+      "name": "BountyCollected",
+      "discriminator": [
+        145,
+        54,
+        11,
+        42,
+        97,
+        18,
+        17,
+        157
+      ]
+    },
+    {
+      "name": "BountyDrawn",
+      "discriminator": [
+        63,
+        51,
+        28,
+        108,
+        146,
+        46,
+        104,
+        138
+      ]
+    },
+    {
+      "name": "BountyPosted",
+      "discriminator": [
+        61,
+        61,
+        26,
+        239,
+        184,
+        44,
+        139,
+        232
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidLabel",
+      "msg": "Target label must be 1 to 32 UTF-8 bytes."
+    },
+    {
+      "code": 6001,
+      "name": "InvalidAmount",
+      "msg": "Bounty amount must be greater than zero."
+    },
+    {
+      "code": 6002,
+      "name": "InvalidModel",
+      "msg": "Model account is not owned by the Voynich program or has invalid data."
+    },
+    {
+      "code": 6003,
+      "name": "BountyNotOpen",
+      "msg": "Bounty is no longer open."
+    },
+    {
+      "code": 6004,
+      "name": "Unauthorized",
+      "msg": "Only the bounty creator can perform this action."
+    },
+    {
+      "code": 6005,
+      "name": "InvalidTokenAccount",
+      "msg": "Provided token account or mint does not match the bounty or model."
+    },
+    {
+      "code": 6006,
+      "name": "InvalidOpenAnswer",
+      "msg": "Receipt is not an open answer or does not carry a valid top-level label."
+    },
+    {
+      "code": 6007,
+      "name": "LabelMismatch",
+      "msg": "Receipt label does not match the bounty target label."
+    },
+    {
+      "code": 6008,
+      "name": "InsufficientEscrow",
+      "msg": "Bounty escrow balance is insufficient."
+    },
+    {
+      "code": 6009,
+      "name": "InvalidCall",
+      "msg": "Call account does not match the attempt or Voynich program."
+    },
+    {
+      "code": 6010,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "Attempt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "drawer",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AttemptRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "attempt",
+            "type": "pubkey"
+          },
+          {
+            "name": "drawer",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Bounty",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_label",
+            "type": "string"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "Pubkey::default() denotes native SOL."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "BountyStatus"
+              }
+            }
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "winning_call",
+            "type": "pubkey"
+          },
+          {
+            "name": "winning_receipt",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_slot",
+            "type": "u64"
+          },
+          {
+            "name": "attempts",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyCollected",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "attempt",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "receipt",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "label",
+            "type": "string"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyDrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "attempt",
+            "type": "pubkey"
+          },
+          {
+            "name": "drawer",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "enclave",
+            "type": "pubkey"
+          },
+          {
+            "name": "input_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyPosted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_label",
+            "type": "string"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Open"
+          },
+          {
+            "name": "Claimed"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Model",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "cipher",
+            "type": "string"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "ciphertext_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "allowed_measurements",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  48
+                ]
+              }
+            }
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "price_mint",
+            "docs": [
+              "Pubkey::default() denotes native SOL."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "operator_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "upload_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "ModelStatus"
+              }
+            }
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          },
+          {
+            "name": "sealed_slot",
+            "type": "u64"
+          },
+          {
+            "name": "calls_settled",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "upload_keys",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "hash_version",
+            "type": "u8"
+          },
+          {
+            "name": "sealed_chunks",
+            "type": "u32"
+          },
+          {
+            "name": "merkle_frontier",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "merkle_frontier_mask",
+            "type": "u32"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "price_unit",
+            "type": {
+              "defined": {
+                "name": "PriceUnit"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModelBase",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "format",
+            "type": "string"
+          },
+          {
+            "name": "source",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModelStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Uploading"
+          },
+          {
+            "name": "Sealed"
+          },
+          {
+            "name": "Live"
+          },
+          {
+            "name": "Retired"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceUnit",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Call"
+          },
+          {
+            "name": "Token"
+          }
+        ]
+      }
+    }
+  ]
+} as unknown as Bounty
