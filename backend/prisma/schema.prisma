@@ -358,6 +358,22 @@ model Buyback {
   updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 }
 
+model TradingFeeClaim {
+  key           String   @id
+  pool          String   @db.VarChar(44)
+  venue         String
+  claimKey      String   @unique
+  mint          String?  @db.VarChar(44)
+  claimedAmount Decimal? @db.Decimal(20, 0)
+  buybackAmount Decimal? @db.Decimal(20, 0)
+  buybackBps    Int
+  state         String
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([state, createdAt])
+  @@map("trading_fee_claims")
+}
 
 model Bounty {
   address        String          @id @db.VarChar(44)

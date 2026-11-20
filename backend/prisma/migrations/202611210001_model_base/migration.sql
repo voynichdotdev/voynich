@@ -1,0 +1,4 @@
+ALTER TABLE "models" ADD COLUMN "baseSha256" CHAR(64);
+ALTER TABLE "models" ADD COLUMN "baseSizeBytes" BIGINT;
+ALTER TABLE "models" ADD COLUMN "baseFormat" VARCHAR(32);
+ALTER TABLE "models" ADD COLUMN "baseSource" VARCHAR(256);

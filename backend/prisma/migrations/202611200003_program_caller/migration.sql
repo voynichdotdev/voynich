@@ -1,0 +1,3 @@
+ALTER TABLE "calls" ADD COLUMN "callerIsProgram" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "receipts" ADD COLUMN "callerIsProgram" BOOLEAN NOT NULL DEFAULT false;

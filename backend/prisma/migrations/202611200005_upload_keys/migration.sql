@@ -1,0 +1,1 @@
+ALTER TABLE "models" ADD COLUMN "uploadKeys" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
