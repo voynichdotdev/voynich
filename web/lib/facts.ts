@@ -150,10 +150,10 @@ export const TOKEN = {
   allocation: "the developer's own first buy at launch",
   does: 'The protocol share of every settled call is paid to the launch wallet in the settling instruction; a crank buys VOYNICH on the market with it and burns what it bought. 25% of VOYNICH trading fees also route through the same buyback-and-burn crank.',
   home: '/docs/concepts/fees-and-the-token',
-  mint: process.env.NEXT_PUBLIC_VOYNICH_MINT ?? '',
+  mint: process.env.NEXT_PUBLIC_VOYNICH_MINT || 'baQxEuzMJ69RExbkCGLSrdSueWXCfp4tbi4nKZQpvoy',
   protocolShareBps: 500 as number | null,
   developerAllocation: '10% of supply (99,999,999.999999 VOYNICH locked on Streamflow until 2028-12-30 15:00 UTC)' as string | null,
-  lockUrl: '',
+  lockUrl: 'https://app.streamflow.finance/contract/solana/mainnet/6NdXwbDL82vtnFg8S66yukD7ECT57ecNHHM1VFFSowsk',
 } as const
 
 export const PLACES = [

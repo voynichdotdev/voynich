@@ -1,0 +1,93 @@
+---
+title: Refund a call
+description: Take back the full escrow of a call that did not settle by its deadline, on the site, from the CLI and from the SDK.
+---
+
+A call's price waits in escrow from the moment the call opens. When the enclave has not settled the call by its deadline, the whole price goes back to the caller. Nothing is charged for a call that was not answered.
+
+## When a call can be refunded
+
+A call has a deadline slot, set when it opens: the opening slot plus the protocol's call deadline (`callDeadlineSlots` in `GET /v1/config`). Until that slot the enclave can still settle it. After it, the call is `refundable`.
+
+| The call reads | Meaning |
+| --- | --- |
+| `open`, refund state `pending-deadline` | The deadline has not passed. The enclave can still answer. |
+| `refundable` | The deadline has passed with no receipt. The escrow can be taken back. |
+| `refunded` | The escrow is back with the caller. |
+| `settled` | The call was answered and paid out. There is nothing to refund. |
+
+## Take the refund
+
+<Ways>
+<Way label="Site">
+
+Open [/account](/account) with the wallet that made the call. Calls are listed with their state. Press **Refund** on a refundable call and approve the transaction. The call panel on the model's page offers the same button when the call it just made becomes refundable.
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich refund <call address>
+```
+
+</Way>
+<Way label="SDK">
+
+```ts
+const mine = await voynich.account()
+const refunded = await voynich.refund(mine.calls.find(call => call.status === 'refundable')!.address)
+console.log(refunded.status, refunded.signature)
+```
+
+</Way>
+</Ways>
+
+The transaction is `refund_call`. The escrow returns to the wallet that opened the call, whoever sends the transaction. For a price in a mint, the escrow's token account is closed and its rent returns to the caller as well.
+
+## Settling a cut-short metered stream before the deadline
+
+For a per-token (`priceUnit: "token"`) stream that stopped or stalled mid-answer while `currentSlot <= deadlineSlot`, you do not have to wait for the deadline or the enclave to settle. Holding the last signed piece (`{ count, runningHash, signature }`), the caller can self-settle immediately via `settle_metered_call`: the operator, owner, and protocol are paid for `count` delivered tokens and the unspent ceiling (`ceiling - total`) returns to the caller in the same transaction.
+
+<Ways>
+<Way label="Site">
+
+On the model page's call panel, press **Settle at `<count>` tokens** when a stream stops or stalls before `deadlineSlot`. The browser also persists the public proof fields (`call`, `count`, `runningHash`, `signature`, never secrets or plaintext) in `localStorage`, so on [/account](/account) you can press **Settle (`<count>` tok)** on any open metered call (or **Load last piece** to fetch and verify the piece chain from `GET /v1/calls/{id}/pieces` on another device). Once `deadlineSlot` passes, the row switches to **Refund** (100% ceiling return).
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich settle <call address> --from-pieces
+```
+
+</Way>
+<Way label="SDK">
+
+```ts
+// From an active VoynichStream handle:
+const settled = await stream.settle()
+
+// Or from saved piece proof fields:
+const { receipt, verification } = await voynich.settle(callAddress, {
+  count,
+  runningHash,
+  signature,
+})
+```
+
+</Way>
+</Ways>
+
+## Refunds nobody takes
+
+The protocol's crank sends `refund_call` for calls that pass their deadline, so an expired call is refunded without the caller doing anything. Taking the refund by hand is for a caller who wants it at once.
+
+## Failures
+
+| Error | Meaning |
+| --- | --- |
+| `CALL_NOT_REFUNDABLE` | The deadline has not passed. |
+| `CALL_NOT_OPEN` | The call settled or was refunded already. |
+| `CALL_NOT_FOUND` | No call has this address. |
+
+The mechanism is in [Calls and receipts](/docs/concepts/calls-and-receipts#refunds), the instruction in [Program: Instructions](/docs/program/instructions#refundcall).

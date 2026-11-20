@@ -1,0 +1,317 @@
+---
+title: Run the enclave runtime
+description: Install or build the enclave runtime and start it, every environment variable, what it does on boot, where its keys and state live, the endpoints it serves, its status and how it refreshes.
+---
+
+The enclave runtime is the package `voynich-enclave`. It is one Node.js process that attests, registers, loads the models it is granted, answers calls over HTTP and settles them on chain. What it needs from the machine is in [Hardware](/docs/operators/hardware).
+
+## Build and install
+
+Build the runtime from the repository's `backend/` folder with Node.js 22 or later, after the contract and the SDK it bundles:
+
+```bash
+cd backend
+npm ci --include=dev
+npm run build --workspace @voynich/contract
+npm run build --workspace voynich
+npm run build --workspace voynich-enclave
+```
+
+The result is one bundle, `enclave/dist/runtime.js`, and a build receipt beside it, `enclave/dist/recipe.json`. The SHA-384 of `enclave/dist/runtime.js` is the enclave's [measurement](/docs/operators/hardware#the-measurement).
+
+To expose the `voynich` and `voynich-enclave` binaries on your `PATH`, link both workspace packages:
+
+```bash
+npm link --workspace voynich --workspace voynich-enclave
+```
+
+### Reproducible build and recipe
+
+`enclave/build.mjs` produces a byte-identical, platform-independent `enclave/dist/runtime.js` (fixed `absWorkingDir`, UTF-8 charset, `legalComments: 'none'`, `sourcemap: false`, LF-normalized output, and a check refusing any host or home-folder paths). `enclave/Dockerfile` pins the base image digest (`node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee`), sets `SOURCE_DATE_EPOCH=1795219200`, and installs dependencies with `npm ci --include=dev`.
+
+Every build writes `enclave/dist/recipe.json`:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | The `voynich-enclave` package version. |
+| `nodeVersion` | The Node.js version that ran the build. |
+| `esbuildVersion` | The esbuild version used to bundle `runtime.js`. |
+| `lockfileSha256` | SHA-256 of the LF-normalized `backend/package-lock.json`. |
+| `runtimeBytes` | Exact byte length of `enclave/dist/runtime.js`. |
+| `measurement` | 96-character hex SHA-384 of `enclave/dist/runtime.js`. |
+| `recipeHash` | 64-character hex SHA-256 of the LF-normalized `voynich/enclave-recipe/v1` manifest listing the SHA-256 digests of `enclave/Dockerfile`, `enclave/build.mjs`, `enclave/package.json`, and `package-lock.json`. |
+
+Verify reproducibility locally from `backend/`:
+
+```bash
+npm run verify:build --workspace voynich-enclave
+```
+
+`enclave/verify-build.mjs` runs clean builds from separate working directories (`enclave/` and `backend/`), confirms byte-for-byte identical `runtime.js`, LF-only endings, zero host paths, identical `recipe.json` and `recipeHash`, and parity with `node enclave/dist/runtime.js --measurement`, then prints `{ "reproducible": true, "measurement": "...", "recipeHash": "...", "bytes": ... }`.
+
+To publish the resulting measurement and `recipeHash` on chain or verify a published digest against a fresh clean rebuild, use [`voynich measurement publish` and `voynich measurement verify`](/docs/cli/measurement).
+
+## Start
+
+<Ways>
+<Way label="CLI">
+
+```bash
+voynich enclave run --keypair <operator keypair file>
+```
+
+</Way>
+<Way label="Binary">
+
+```bash
+OPERATOR_KEYPAIR=<operator keypair file> voynich-enclave
+```
+
+</Way>
+<Way label="Node">
+
+```bash
+node enclave/dist/runtime.js
+```
+
+</Way>
+<Way label="Container">
+
+```bash
+docker build -f enclave/Dockerfile -t voynich-enclave .
+docker run \
+  -e SOLANA_RPC_URL=<rpc url> \
+  -e ENCLAVE_RPC_RPS=<requests per second> \
+  -e ENCLAVE_SCAN_INTERVAL_MS=<milliseconds> \
+  -e OPERATOR_KEYPAIR=<keypair file path in the container, or the JSON array> \
+  -e DEV_ATTESTATION_ROOT_KEYPAIR=<keypair file path in the container, or the JSON array> \
+  -e DEV_SEALING_KEY=<64 hexadecimal characters> \
+  -e ENCLAVE_ENDPOINT=<https://your-enclave-host> \
+  -v <state directory>:/app/.local \
+  -p 9707:9707 \
+  voynich-enclave
+```
+
+</Way>
+</Ways>
+
+The container image is built from `enclave/Dockerfile` with the `backend` folder as its context. It runs `node enclave/dist/runtime.js` in `/app`, sets `ENCLAVE_HOST` to `0.0.0.0` and exposes port 9707.
+
+The CLI's `voynich enclave run`, `voynich enclave register` and `voynich enclave status` call the installed runtime and read the same environment. The `voynich-enclave` binary is the installed runtime started on its own: it runs as `voynich enclave run` does, with `OPERATOR_KEYPAIR` taken from the environment alone, and `voynich-enclave --measurement` prints the runtime's measurement and exits. The Node and Container ways run a bundle built from the repository. The command reference is in [CLI: enclave](/docs/cli/enclave).
+
+## Configuration
+
+The runtime reads its configuration from environment variables. It also loads a `.env` file from the working directory when one exists. A variable set to an empty value counts as unset.
+
+<Fields>
+<Field name="SOLANA_RPC_URL" type="URL" required>
+The Solana RPC endpoint the runtime reads from and sends its transactions through.
+</Field>
+<Field name="ENCLAVE_RPC_RPS" type="integer">
+The runtime's request budget on the RPC, in requests per second. Every RPC request waits for its turn under this rate.
+</Field>
+<Field name="ENCLAVE_SCAN_INTERVAL_MS" type="integer">
+The minimum gap in milliseconds between two program account scans. The runtime scans for its grants and for registered enclaves. Both budgets are required when `SOLANA_RPC_URL` is not a local address. With an RPC on `localhost` or `127.0.0.1` they may be omitted: the rate is then 50 and the gap 0.
+</Field>
+<Field name="OPERATOR_KEYPAIR" type="file path or JSON array" required>
+The operator wallet: a Solana keypair file, or the 64-byte secret as a JSON array. It pays the runtime's fees and rent and receives the operator share. With `voynich enclave run` and `voynich enclave register`, `--keypair` sets it. When neither is given, the CLI uses the keypair of the Solana CLI configuration, then `~/.config/solana/id.json`.
+</Field>
+<Field name="DEV_ATTESTATION_ROOT_KEYPAIR" type="file path or JSON array" required>
+The keypair of the `attest` program's configured root (`dev_root`) when `Config.attestation_program` points to `attest` (used at mainnet launch for standard-server `dev` enclaves as well as on local clusters, until `set_config` switches to Solana Confidential Compute). The runtime's hardware type `dev` report is signed with it.
+</Field>
+<Field name="DEV_SEALING_KEY" type="64 hexadecimal characters" required>
+The 32-byte key that encrypts the state file.
+</Field>
+<Field name="ENCLAVE_STATE_PATH" type="file path">
+Where the encrypted state file is kept. `.local/enclave.sealed.json` under the working directory when omitted.
+</Field>
+<Field name="ENCLAVE_ENDPOINT" type="URL">
+The endpoint registered on chain, where the Voynich API reaches the runtime. It starts with `http://` or `https://`. `http://127.0.0.1:` followed by the port when omitted.
+</Field>
+<Field name="ENCLAVE_HOST" type="host">
+The address the HTTP server binds. `127.0.0.1` when omitted. The container image sets `0.0.0.0`.
+</Field>
+<Field name="ENCLAVE_PORT" type="integer">
+The port the HTTP server listens on. 9707 when omitted.
+</Field>
+<Field name="ENCLAVE_POLL_MS" type="integer">
+The interval in milliseconds between two passes of the runtime's loop: refresh, grants, granting on. 5000 when omitted.
+</Field>
+<Field name="PROGRAM_ID" type="address">
+The Voynich program. The program id bundled with the runtime when omitted.
+</Field>
+<Field name="ATTESTATION_PROGRAM_ID" type="address">
+The attestation program. The program id bundled with the runtime when omitted.
+</Field>
+<Field name="LOOKUP_TABLE" type="address">
+An address lookup table the runtime's transactions use.
+</Field>
+</Fields>
+
+## What it does on boot
+
+<Steps>
+<Step title="Keys">
+
+The runtime opens the state file. When there is none it makes the enclave's two keys, an Ed25519 signing key and an X25519 encryption key, and writes the file. The Enclave account's address and the attestation record's address both derive from the signing key.
+
+</Step>
+<Step title="Chain">
+
+It binds the state file to the cluster's genesis hash and the two program ids, and stops when the file belongs to another chain. It sends again any transaction it had signed and saved before the last stop.
+
+</Step>
+<Step title="Signing key balance">
+
+It transfers the rent-exempt minimum for an account with no data from the operator wallet to the signing key, when the signing key holds less.
+
+</Step>
+<Step title="Attestation">
+
+It submits its report to the configured attestation program: the signing key, the hardware type, the measurement, and a recent slot with its hash. When `Config.attestation_program` points to `attest` (the initial mainnet deployment and local clusters), the runtime signs the hardware type `dev` report with `DEV_ATTESTATION_ROOT_KEYPAIR`. The program writes the attestation record with its expiry slot. The runtime skips this step while its record states its measurement and is further than a third of a record lifetime from expiry.
+
+</Step>
+<Step title="Registration">
+
+When no Enclave account exists it sends [`register_enclave`](/docs/program/instructions#registerenclave) with its encryption key and endpoint, signed by the operator wallet and the signing key. When one exists and its expiry slot, endpoint or measurement differs from the record and the configuration, it sends [`refresh_enclave`](/docs/program/instructions#refreshenclave).
+
+</Step>
+<Step title="Grants and models">
+
+It reads every Grant made to its Enclave account and loads each granted model in memory. It then grants the models it holds to other registered enclaves. Both are told in [Register and get granted](/docs/operators/register-and-get-granted).
+
+</Step>
+<Step title="Calls left open">
+
+It resumes every call it had accepted and had not finished: it answers, or settles the answer it had already signed.
+
+</Step>
+<Step title="Serve">
+
+It starts the HTTP server, then repeats attestation, registration, grants and resuming every `ENCLAVE_POLL_MS`. A pass that fails is logged as `enclave.sync.failed` and the next pass runs after the same interval, while the HTTP server keeps answering.
+
+</Step>
+</Steps>
+
+On a stop signal the runtime stops its loop, finishes the calls it is answering and releases its models.
+
+## Keys and state
+
+Everything the runtime keeps is in one file at `ENCLAVE_STATE_PATH`, encrypted with AES-256-GCM under `DEV_SEALING_KEY`. Each write uses a fresh nonce, goes to a temporary file and is renamed into place.
+
+| In the state file | Used for |
+| --- | --- |
+| The signing key's seed | The enclave's identity: its Enclave account, its attestation record, its receipts. |
+| The encryption key's secret | Unwrapping grants and decrypting call inputs. |
+| The chain it belongs to | The genesis hash and the two program ids. |
+| The grants it has loaded | Each Grant's address, model and wrapped key. |
+| Accepted calls | Each call's encrypted input envelope, its hash, its answer, its persisted stream pieces, and its optional 16-byte `stopToken`. |
+| Signed transactions | Every transaction is saved signed before its first broadcast, and the same bytes are sent again after a restart. |
+
+Model keys and decrypted weights are held in memory only.
+
+<Callout kind="important">
+Keep the state file and the same `DEV_SEALING_KEY` across restarts, and start with the same `OPERATOR_KEYPAIR`. The Enclave account and every grant made to it belong to the signing key in that file. A runtime started without the file makes new keys and is a new enclave.
+</Callout>
+
+Two enclaves on one machine each take their own `ENCLAVE_STATE_PATH` and port.
+
+## Endpoints
+
+The runtime serves six routes. The Voynich API carries callers' requests to the call routes at the registered endpoint, as told in [HTTP API: Relay](/docs/api/relay) and [Calls and receipts](/docs/api/calls-and-receipts). Failed requests answer in the error envelope of [HTTP API: Overview](/docs/api/overview).
+
+### GET /health
+
+Returns:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `ready`. |
+| `enclave` | The Enclave account's address. |
+| `measurement` | The runtime's measurement, 96 hexadecimal characters. |
+| `models` | The addresses of the models loaded in memory. |
+
+The Voynich API requests this route at the registered endpoint every 15 seconds. While it answers with the enclave's address and the measurement of its attestation record, the enclave is reachable. The site, the SDK and the CLI send calls only to live, reachable enclaves. The rule is in [HTTP API: Reachability](/docs/api/enclaves#reachability).
+
+### POST /v1/calls/:call/input
+
+Takes the encrypted input of an open call. `:call` is the Call account's address. The body is JSON:
+
+<Fields>
+<Field name="envelope" type="base64" required>
+The input envelope, as described in [Calls and receipts](/docs/concepts/calls-and-receipts#what-is-encrypted).
+</Field>
+</Fields>
+
+The runtime reads the Call from chain and accepts the input when the call names this enclave, the SHA-256 of the envelope equals the call's input hash, the call is open and its deadline has not passed. It returns `call`, the call's address, and `status`, `accepted`, then answers in the background. Sending the same envelope again returns the same response.
+
+| Refusal | Code |
+| --- | --- |
+| No such call | `CALL_NOT_FOUND` |
+| The call names another enclave | `INVALID_ENVELOPE` |
+| The envelope's hash differs from the call's input hash | `INPUT_HASH_MISMATCH` |
+| The call is settled or refunded | `CALL_NOT_OPEN` |
+| The deadline has passed | `CALL_DEADLINE_PASSED` |
+
+### GET /v1/calls/:call/answer
+
+Returns the state of the answer:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `waiting`, `answered` once the settling transaction is confirmed, or `failed`. |
+| `outputEnvelope` | The encrypted output, base64. |
+| `outputHash` | The SHA-256 of the output envelope, hexadecimal. |
+| `signature` | The enclave's signature over the receipt message, base64. |
+| `settleTransaction` | The signature of the settling transaction. |
+| `receiptAddress` | The Receipt account's address. |
+| `failure` | For a failed call: `code`, `message` and `refundState`. |
+
+Every field but `status` is null until it exists.
+
+### GET /v1/calls/:call/pieces and GET /v1/calls/:call/stream
+
+For per-token metered streams, `GET /v1/calls/:call/pieces` returns the persisted `CallPieces` snapshot (`call`, `status`, `pieces`, `failure`), and `GET /v1/calls/:call/stream?after=<index>` streams live `call.piece` and `call.stream.done` Server-Sent Events after replaying any persisted pieces with `index > after`.
+
+### POST /v1/calls/:call/stop
+
+Takes `{ "stopToken": "<base64>" }` and compares it in constant time against the 16-byte `stopToken` sealed inside the call's encrypted input envelope (persisted in `SealedState.stopTokens` before `POST /v1/calls/:call/input` answers `accepted`). Returns `{ call, status: "stopping" }` for an active stream, `{ call, status: "already-finished" }` after completion, or HTTP `403 UNAUTHORIZED` when the token is missing or does not match. On an active stream, the enclave halts generation, emits a terminal `finishReason: "stopped"` piece, and settles immediately via `settle_metered_call`.
+
+## Logs
+
+The runtime writes one JSON line per event. Each line carries `event`:
+
+| Event | Written when | Stream |
+| --- | --- | --- |
+| `rpc` | An RPC request returns: the method, the HTTP status and the milliseconds. | standard error |
+| `http` | An HTTP request is answered: the method, the route, the status and the milliseconds. | standard output |
+| `listening` | The HTTP server is bound: the host and the port. | standard output |
+| `model.loaded` | A granted model is loaded: its address and name. | standard output |
+| `call.failed` | A call could not be answered or settled: the call's address. | standard error |
+| `enclave.sync.failed` | A pass of the loop failed: the error's name and its message. | standard error |
+
+Started with `voynich enclave run`, every line goes to standard error.
+
+## Status
+
+```bash
+voynich enclave status
+```
+
+It reads the state file and the Enclave account with the same environment as the runtime. It sends no transaction, creates no keys, writes no file and takes no keypair. It prints:
+
+| Field | Meaning |
+| --- | --- |
+| `enclave` | The Enclave account's address, or null when no state file exists. |
+| `signingKey` | The enclave's signing key, or null when no state file exists. |
+| `measurement` | The measurement of the runtime bundle. |
+| `registered` | Whether the Enclave account exists. |
+| `expiresAtSlot` | The expiry slot the Enclave account holds, or null before registration. |
+
+`GET /health` on a running runtime adds the models it has loaded. The enclave's page on the site, `/enclaves/<key>`, shows its record, grants, receipts and earnings.
+
+## Refresh
+
+A running runtime refreshes by itself. On every pass of its loop it compares the current slot with its record's expiry slot. Once the record is within a third of a record lifetime of expiry, it submits a new report bound to a fresh slot, which renews the record in place, and sends `refresh_enclave`, which copies the new expiry slot into the Enclave account.
+
+What expiry means for grants and calls is in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation#expiry-and-refresh).

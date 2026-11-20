@@ -1,0 +1,96 @@
+---
+title: Verify a receipt
+description: Check any answer from a receipt address, a call address or a transaction signature, on the site, from the CLI, from the SDK and by hand.
+---
+
+A receipt can be checked by anyone, at any time, without trusting the caller, the owner, the operator or the API. All it takes is the receipt's address, its call's address or the signature of the transaction that settled it.
+
+## The checks
+
+| Check | Passes when |
+| --- | --- |
+| Signature | The enclave's signing key signed this call, this input hash and this output hash (`voynich/receipt/v1\|v2` for per-call receipts, or `voynich/piece/v1\|v2` over `deliveredCount` and the `runningHash` stored in `outputHash` for metered streams, plus `base.sha256` on `v2` adapter models). |
+| Attestation record | The chain recorded that key in an attestation record under the configured attestation program, running software the model's owner allowed. |
+| Expiry | The record was in force at the slot the call settled. |
+| Open answer | For an `open` receipt, the SHA-256 of the `open_answer` bytes stored on chain equals `output_hash`. For a 423-byte metered stream receipt, on-chain `delivered_count`, `returned_amount` and `total` match the receipt view. For a flat `sealed` receipt, no open bytes are stored and the check passes. |
+| Base model | For a model with `Model.base`, the on-chain Model's `base.sha256` matches `ReceiptView.modelBase.sha256` and is committed inside the enclave's `voynich/receipt/v2` (per-call) or `voynich/piece/v2` (metered) signature. Passes for standalone models where `Model.base` is `None`. |
+
+What each one proves is in [Calls and receipts](/docs/concepts/calls-and-receipts#what-the-checks-prove).
+
+## Run them
+
+<Ways>
+<Way label="Site">
+
+Open [/receipts](/receipts), paste a receipt address, a call address or a transaction signature and press **Verify**. The receipt's page at `/receipts/<id>` shows the receipt and runs all five checks in the browser:
+
+- For an `open` per-call receipt, it renders the decoded on-chain answer.
+- For a metered stream receipt (`deliveredCount !== null`), it labels the digest **Running hash**, shows **Delivered** (`<count> tokens`) and **Returned to caller**, and breaks down **Payments** into the escrowed **Ceiling** (`total + returnedAmount`), the 3-way split (owner, operator, protocol), and the remainder returned in the same transaction.
+- When the enclave's measurement matches a published on-chain `Measurement` PDA (`GET /v1/measurements`), the receipt facts include a **Runtime source** row with its `v<version>`, short `commitSha`, `sourceRepo`, `recipeHash`, and any `Deprecated` status.
+
+Each check is a row that turns from pending to passed or failed, and the page ends on **Verified** or **Not verified**. **Verify again** runs them once more.
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich verify <receipt address | call address | transaction signature>
+```
+
+It needs no wallet. It prints `verified`, the five checks (`signature`, `record`, `expiry`, `answer`, `base`), the receipt and, when the receipt does not hold, the reason. Its exit code is `0` for a verified receipt and `1` otherwise. See [CLI: verify](/docs/cli/verify).
+
+</Way>
+<Way label="SDK">
+
+```ts
+import voynich from 'voynich'
+
+const check = await voynich.verify(id)
+console.log(check.verified, check.signature, check.record, check.expiry, check.answer, check.base, check.reason)
+```
+
+See [SDK: verify](/docs/sdk/verify).
+
+</Way>
+</Ways>
+
+To verify without relying on the API's own RPC, give the SDK a connection to an RPC you trust: `createVoynich({ apiUrl, connection })`.
+
+## By hand
+
+The checks need only chain accounts and an Ed25519 verification. With any Solana RPC:
+
+<Steps>
+<Step title="Read the Receipt">
+
+The Receipt of a call is the account at the PDA `["receipt", call]` of the `voynich` program. Confirm it is owned by the program, then decode its fields at the offsets in [Accounts: Receipt](/docs/program/accounts#receipt): the fixed 401-byte prefix holds the call, model, enclave, both hashes, signature, slot, payments and bump. Legacy sealed receipts end at 401 bytes; upgraded per-call receipts append `answer_mode` (1 byte), `open_answer` (4-byte length prefix plus bytes), and `caller_is_program` (1 byte, `407 + N` bytes); metered stream receipts (`settle_metered_call`) are 423 bytes, appending `delivered_count` (8 bytes, little-endian `u64`) and `returned_amount` (8 bytes, little-endian `u64`) after the 407-byte prefix.
+
+</Step>
+<Step title="Check the signature and base commitment">
+
+Read the Enclave account the receipt names and take its `signing_key`, and read the Model account to check whether `Model.base` is set (`decodeModelBaseBytes`).
+
+- **Per-call receipt:** for a standalone model (`base` is `None`), build the 114-byte `voynich/receipt/v1` message (`"voynich/receipt/v1" || call || input_hash || output_hash`). For an adapter model (`base` is `Some`), build the 146-byte `voynich/receipt/v2` message appending the 32-byte `base.sha256`.
+- **Metered stream receipt (423 bytes):** build the 120-byte `voynich/piece/v1` message (`"voynich/piece/v1" || call || input_hash || u64_le(delivered_count) || output_hash`) for a standalone model, or the 152-byte `voynich/piece/v2` message appending `base.sha256` for an adapter model.
+
+Verify the receipt's 64-byte signature over that message with `signing_key`.
+
+</Step>
+<Step title="Check the record">
+
+Read the Config at PDA `["config"]` for the attestation program and the layout version. Derive the record's address, the PDA `["record", signing_key]` of that attestation program, and confirm the Enclave names it and that the record is owned by that program. Decode it with the layout in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation#layout-version-1). Confirm it names the same signing key and that its measurement is in the Model's `allowed_measurements`.
+
+</Step>
+<Step title="Check the expiry">
+
+Confirm the record's recorded slot is at or before the receipt's slot and its expiry slot is after it. When the record's recorded slot is later than the receipt's slot, the enclave has attested again since: read the record as it was at the receipt's slot from the attestation program's events in the transaction history of the record's address.
+
+</Step>
+<Step title="Check the open answer, stream totals, or envelopes">
+
+For an `open` receipt, take the `open_answer` bytes from the Receipt account, hash them with SHA-256 and confirm the digest equals `output_hash`. For a 423-byte metered stream receipt, confirm `delivered_count`, `returned_amount`, and `total` (`owner_amount + operator_amount + protocol_amount`) match the piece stream's final count and running hash (`output_hash`), and confirm the escrowed ceiling equals `total + returned_amount`. For a flat `sealed` receipt, a caller who kept the input envelope it sent and the output envelope it received hashes each with SHA-256 and compares them with the receipt's `input_hash` and `output_hash`.
+
+</Step>
+</Steps>
+
+A program can open a call via CPI and verify its Receipt on chain in the same transaction that acts on the answer: see [Calling a model from a program](/docs/program/calling-a-model).

@@ -1,0 +1,77 @@
+---
+title: Hardware
+description: What an operator runs, the hardware types an attestation record carries, what the runtime needs from the machine and what a measurement means for an operator.
+---
+
+An operator runs one program, the enclave runtime. On mainnet at launch, the initial runtime runs on a standard server (such as Railway or a VM) under hardware type `dev` against the `attest` program, without TDX or SEV-SNP hardware. Once Solana Confidential Compute's mainnet verifier opens and `Config.attestation_program` switches via `set_config`, operators run inside Intel TDX or AMD SEV-SNP confidential virtual machines. In both modes, the runtime holds the enclave's two keys, receives grants, opens sealed models in memory, answers calls and settles them. Each settled call pays the operator share to the operator's wallet, as told in [Earnings](/docs/operators/earnings).
+
+## Standard servers and confidential VMs
+
+- **Standard server (`attest`, mainnet launch).** The runtime runs as a Node.js 22 process or container on any Linux host or platform such as Railway. It encrypts its state file under `DEV_SEALING_KEY` and signs its hardware type `dev` report with `DEV_ATTESTATION_ROOT_KEYPAIR` against the `attest` program deployed alongside `voynich`.
+- **Confidential VM (Solana Confidential Compute).** Inside an Intel TDX or AMD SEV-SNP confidential VM, memory is isolated from the host operator and the VM generates a hardware report binding the enclave's signing key and measurement to a recent Solana slot.
+
+In either environment, the report becomes an attestation record on chain. The record is what owners, callers and the program read. What it holds and how the program checks it is in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+
+## Hardware types
+
+An attestation record carries one hardware type. At mainnet launch, `attest` records standard-server enclaves under `dev` (`0`). Once `Config.attestation_program` switches via `set_config`, Solana Confidential Compute attests Intel TDX (`1`) and AMD SEV-SNP (`2`).
+
+| Mode | In the record | In the API |
+| --- | --- | --- |
+| Standard server (`attest`) | 0 | `dev` |
+| Intel TDX | 1 | `tdx` |
+| AMD SEV-SNP | 2 | `sev-snp` |
+
+The type is copied into the Enclave account at registration and at every refresh, and it is shown with the enclave on [/enclaves](/enclaves).
+
+## What the runtime needs
+
+| Need | Detail |
+| --- | --- |
+| Node.js | Version 22. The container image is built on `node:22-bookworm-slim`. |
+| CPU inference | Models are ONNX and run with `onnxruntime-node` on the `cpu` execution provider. |
+| Memory | Every model the enclave holds is decrypted and loaded in memory. The ciphertext is fetched from chain at each start. |
+| A disk path that persists | One encrypted state file holds the enclave's keys. See [Keys and state](/docs/operators/run-the-runtime#keys-and-state). |
+| A Solana RPC | The runtime reads accounts and sends its transactions through one RPC endpoint, paced by a budget you set. |
+| A reachable endpoint | The runtime serves HTTP on a host and port you choose. The endpoint you register is the URL where the Voynich API reaches it. It starts with `http://` or `https://` and is 1 to 256 bytes. |
+| A funded operator wallet | It pays rent and transaction fees, and it receives the earnings. |
+
+## What the operator wallet pays for
+
+The operator wallet is the fee payer of every transaction the runtime sends.
+
+| Transaction | When | Rent it also pays |
+| --- | --- | --- |
+| A transfer to the enclave's signing key of the rent-exempt minimum for an account with no data | Once, on first boot | None |
+| The attestation report | On first boot, and again before each expiry | The attestation record, the first time |
+| `register_enclave` | Once | The Enclave account |
+| `refresh_enclave` | After each renewed record, and when the endpoint changes | None |
+| `grant_by_enclave` | Each time the enclave grants a model to another enclave | The Grant account |
+| `settle_call` | Once per answered call | The Receipt account. For a price in a mint, any missing associated token account of the owner, the operator, the fee recipient and the caller |
+
+## The measurement
+
+A measurement is the 48-byte fingerprint of the software inside the enclave. For the runtime it is the SHA-384 of its built bundle, written as 96 hexadecimal characters. `voynich enclave status` prints it as `measurement`, and a built bundle prints it without booting:
+
+```bash
+node enclave/dist/runtime.js --measurement
+```
+
+For an operator the measurement decides which models the enclave can hold:
+
+- An owner lists the measurements allowed to open a model. The list is in [Sealed models](/docs/concepts/sealed-models#allowed-measurements).
+- A grant to an enclave is written only when the enclave's measurement is on that list, whether it comes from the owner or from another enclave.
+- The runtime loads a granted model only while its own measurement is on the model's list.
+
+Two runtimes built from the same bundle have the same measurement. A different build has a different one. When the runtime starts with a bundle whose measurement differs from its attestation record, it attests again and refreshes its Enclave account with the new measurement.
+
+## Read next
+
+<Cards>
+<Card href="/docs/operators/run-the-runtime" title="Run the enclave runtime">
+Build it, configure it, start it and read its status.
+</Card>
+<Card href="/docs/operators/register-and-get-granted" title="Register and get granted">
+From a booted runtime to answering calls.
+</Card>
+</Cards>

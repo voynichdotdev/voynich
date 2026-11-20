@@ -1,0 +1,125 @@
+---
+title: Manage a model
+description: Set a sealed model's price and operator share, grant it to further enclaves, revoke a grant and retire it.
+---
+
+A sealed model has four things its owner can change: its price, which enclaves hold it, whether a grant still stands, and whether it takes calls. Each is one transaction signed by the owner's wallet.
+
+On the site, a model's page at `/models/<name>` shows an **Owner** panel when the connected wallet is the model's owner, with three actions: **Set price**, **Grant an enclave** and **Retire**. The CLI and the SDK sign with the owner's keypair and have all four.
+
+## Set the price
+
+The price, its mint and the operator share change together. New calls open on the new terms. Calls that are already open settle on the terms they opened with.
+
+<Ways>
+<Way label="Site">
+
+On the model's page, under **Set price**, enter **Price a call** in the model's unit and **Operator share** in percent, and press **Set price**. Approve the transaction. The panel reads "Price set". The price's mint stays the model's.
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich model price sketch-32 --price 100000 --operator-share-bps 3000
+```
+
+A flag left out keeps the model's value. Every flag is in [CLI: models](/docs/cli/models#voynich-model-price).
+
+</Way>
+<Way label="SDK">
+
+```ts
+const price = { amount: '100000', mint: null, decimals: 9, symbol: 'SOL' }
+
+const status = await voynich.setPrice('sketch-32', price, 3000)
+```
+
+</Way>
+</Ways>
+
+The operator share plus the protocol share is at most 10,000 basis points. See [Fees and the token](/docs/concepts/fees-and-the-token#the-split).
+
+## Grant another enclave
+
+Each grant lets one more enclave open the model and answer calls. The owner needs the model key from the sealing: the browser that sealed the model, the key file saved from it, the CLI's owner key file, or the SDK's saved state.
+
+The enclave must be registered, its attestation record in force, and its measurement on the model's list. [/enclaves](/enclaves) shows each enclave's measurement and expiry.
+
+<Ways>
+<Way label="Site">
+
+On the model's page, under **Grant an enclave**, choose an enclave from the list of registered enclaves whose measurement the model allows, press **Grant** and approve the transaction. The panel reads "Granted". When the site has been reopened since, it asks for the sealing password to unlock the saved key first. In a browser that does not hold the key, it asks for the key file and then for that file's password.
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich grant <model> <enclave> --state owner.enc.json
+```
+
+</Way>
+<Way label="SDK">
+
+```ts
+const status = await voynich.grant(model.address, enclave, resume.modelKey)
+```
+
+</Way>
+</Ways>
+
+The key is wrapped on the device to that enclave's encryption key, after the device has checked the enclave's record on chain. A granted enclave can also grant the next enclave itself, without the owner: see [Grants](/docs/concepts/grants#a-grant-from-an-enclave).
+
+## Revoke a grant
+
+Revoking stops an enclave from taking new calls for the model and from passing its key on. Calls already open with it settle or refund as usual.
+
+<Ways>
+<Way label="CLI">
+
+```bash
+voynich model revoke <model> <enclave>
+```
+
+</Way>
+<Way label="SDK">
+
+```ts
+const status = await voynich.revoke('sketch-32', enclave)
+```
+
+</Way>
+</Ways>
+
+`enclave` is the enclave's address or its signing key. The transaction is [`revoke_grant`](/docs/program/instructions#revokegrant), and the grant then reads "Revoked" on the enclave's page, `/enclaves/<key>`. Granting the same enclave again lifts the revocation.
+
+## Retire the model
+
+Retiring closes the model to new calls and new grants. Calls that are open settle until their deadline and refund after it. The ciphertext and every receipt stay on chain.
+
+<Ways>
+<Way label="Site">
+
+On the model's page, under **Retire**, press **Retire**, then **Retire `<name>`** to confirm, and approve the transaction. **Keep it** steps back. The panel reads "Retired".
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich model retire <model>
+```
+
+</Way>
+<Way label="SDK">
+
+```ts
+const status = await voynich.retire('sketch-32')
+```
+
+</Way>
+</Ways>
+
+## The owner's side
+
+[/account](/account) shows the models the connected wallet owns and what they have earned, by mint. The same is `voynich account <wallet>` in the CLI and `account()` in the SDK.
+
+Every option and failure of the four functions is in [SDK: grant and refund](/docs/sdk/grant-and-refund). What each transaction checks and changes on chain is in [Program: Instructions](/docs/program/instructions).

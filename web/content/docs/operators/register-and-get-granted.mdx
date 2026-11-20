@@ -1,0 +1,98 @@
+---
+title: Register and get granted
+description: From a booted runtime to answering calls: attest, register, receive a grant from an owner or a granted enclave, serve, refresh, come back after expiry and change the endpoint.
+---
+
+This is the path from a configured runtime to an enclave that answers calls. The runtime does every step itself once it is started. Its configuration is in [Run the enclave runtime](/docs/operators/run-the-runtime).
+
+<Diagram name="grant" />
+
+## From boot to calls
+
+<Steps>
+<Step title="Attest">
+
+The runtime submits its attestation report to the configured attestation program (`attest` with `DEV_ATTESTATION_ROOT_KEYPAIR` and hardware type `dev` at mainnet launch, or a hardware report once `Config.attestation_program` switches via `set_config` to Solana Confidential Compute). The program writes the attestation record: the enclave's signing key, the hardware type, the measurement, the recorded slot and the expiry slot. The record is at one address for the life of the signing key. Its layout is in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation#the-attestation-record).
+
+</Step>
+<Step title="Register">
+
+Registering alone, without serving:
+
+```bash
+voynich enclave register --keypair <operator keypair file>
+```
+
+It attests, sends [`register_enclave`](/docs/program/instructions#registerenclave) and prints `enclave`, `signingKey`, `measurement`, `registered` and `expiresAtSlot`. `voynich enclave run` does the same and keeps running.
+
+The Enclave account records both keys, the operator wallet, the endpoint from `ENCLAVE_ENDPOINT`, the record's address and the record's hardware type, measurement and slots. The transaction is signed by the operator wallet and by the enclave's signing key.
+
+</Step>
+<Step title="Find the enclave on /enclaves">
+
+The enclave is listed on [/enclaves](/enclaves) with its key, hardware type, measurement, expiry, operator, models held and calls settled. Its own page is `/enclaves/<key>`, by the Enclave account's address or by the signing key. The same facts are in `GET /v1/enclaves/{key}`, where `status` reads `live`. Once the runtime serves and the API's health request reaches it at the registered endpoint, `reachable` reads `true`, as told in [Reachability](/docs/api/enclaves#reachability).
+
+</Step>
+<Step title="Receive a grant">
+
+A grant reaches the enclave in one of two ways. Neither needs a transaction from the operator.
+
+- **From an owner.** The owner grants the enclave by its address, on the model's page or with `voynich grant`, as in [Manage a model](/docs/guides/manage-a-model). The enclave's measurement must be on the model's list of allowed measurements, so give the owner the address and the measurement that `voynich enclave status` prints.
+- **From a granted enclave.** Every enclave that holds a live model grants it to each registered enclave whose measurement the model allows and whose record is in force. A newly registered enclave with an allowed measurement is granted on the granting enclave's next pass, without the owner.
+
+What a grant holds and what the program checks is in [Grants](/docs/concepts/grants).
+
+</Step>
+<Step title="Load the model">
+
+The runtime looks for Grant accounts made to its Enclave account on its first pass, and again whenever the Voynich program has a new transaction. For each grant that is not revoked, and whose model allows the runtime's measurement, it:
+
+1. reads the model's Weights accounts in order and checks each one's owner, model, index and that it is fully written
+2. checks the ciphertext's length and SHA-256 against the Model
+3. unwraps the model key with its encryption secret
+4. decrypts the weights, authenticating every chunk
+5. reads the manifest and loads the ONNX model on the CPU
+
+It writes a `model.loaded` line, and the model's address appears in `models` of `GET /health`. A model whose grant is revoked, or that stops allowing the measurement, is released from memory on the next pass.
+
+</Step>
+<Step title="Serve">
+
+Callers choose a live, reachable enclave that holds a live grant. The Voynich API carries the encrypted input to the enclave's endpoint. The runtime decrypts it, runs the model, encrypts the output to the caller, signs the receipt message and sends [`settle_call`](/docs/program/instructions#settlecall). The call's path is in [Calls and receipts](/docs/concepts/calls-and-receipts), and what settling pays is in [Earnings](/docs/operators/earnings).
+
+</Step>
+<Step title="Grant on">
+
+On each pass the runtime grants every live model it holds to each other registered enclave that has an allowed measurement, a record in force that matches its Enclave account, and no Grant account for that model. It wraps the model key to the newcomer's encryption key in memory and sends [`grant_by_enclave`](/docs/program/instructions#grantbyenclave), signed by its signing key. The operator wallet pays the fee and the Grant account's rent. A grant the owner revoked is left to the owner.
+
+</Step>
+<Step title="Refresh">
+
+Before its record expires the runtime attests again and sends [`refresh_enclave`](/docs/program/instructions#refreshenclave). It does this by itself while it runs, as told in [Refresh](/docs/operators/run-the-runtime#refresh).
+
+</Step>
+</Steps>
+
+## After a record expires
+
+A record expires when the runtime is stopped past the record's expiry slot. From that slot the enclave reads as `expired` on [/enclaves](/enclaves), its grants read as `expired`, callers are no longer sent to it, and the program refuses a grant, a new call or a settlement that relies on it.
+
+Coming back is one start:
+
+```bash
+voynich enclave run --keypair <operator keypair file>
+```
+
+With the same state file, sealing key and operator wallet, the runtime attests again, which renews the record at its address, and sends `refresh_enclave`. The Enclave account and its Grant accounts are the ones it had: the grants count again from that slot, and the runtime loads their models on its first pass.
+
+## Change the endpoint
+
+Set `ENCLAVE_ENDPOINT` to the new URL and restart the runtime. On boot it sees that the Enclave account holds another endpoint and sends `refresh_enclave` with the new one. The endpoint starts with `http://` or `https://` and is 1 to 256 bytes. The enclave reads `reachable: false` until the API's next health request reaches the runtime at the new endpoint.
+
+```bash
+ENCLAVE_ENDPOINT=<https://new-enclave-host> voynich enclave run --keypair <operator keypair file>
+```
+
+## Change the runtime build
+
+A new build of the runtime has a new measurement. Started on the same state file, the runtime attests with the new measurement and refreshes its Enclave account. It holds the models whose lists allow the new measurement.

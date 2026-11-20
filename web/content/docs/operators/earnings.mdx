@@ -1,0 +1,100 @@
+---
+title: Earnings
+description: What a settled call pays the operator, where the payment lands, what the enclave spends per call and where to read earnings on the site, in the CLI and in the HTTP API.
+---
+
+An operator earns the operator share of every call their enclave settles. The share is set by each model's owner, with the price.
+
+## What a call pays
+
+A settled call pays the operator `price × operator share / 10,000`, rounded down, in the mint the model is priced in. The whole split is in [Fees and the token](/docs/concepts/fees-and-the-token#the-split).
+
+The operator and the operator share are fixed in the call when it opens: the operator is the wallet the Enclave account names, and the share is the model's at that moment. The model's page on [/models](/models) shows its price and split.
+
+## Where it lands
+
+The payment is made by [`settle_call`](/docs/program/instructions#settlecall), the instruction that writes the receipt. There is no claim step.
+
+| Price | The operator share goes to |
+| --- | --- |
+| SOL | The operator wallet, in lamports. |
+| An SPL Token mint | The operator wallet's associated token account for that mint. The settling transaction creates it when it does not exist. |
+
+The operator wallet is the one the runtime was started with, `OPERATOR_KEYPAIR`. Each receipt records the operator's amount and the wallet it went to.
+
+## What a call costs the enclave
+
+The operator wallet pays for the settling transaction:
+
+| Cost | Detail |
+| --- | --- |
+| The transaction fee of `settle_call` | One transaction per answered call. |
+| Rent for the Receipt account | 401 bytes, created by the settlement. |
+| Rent for associated token accounts | For a price in a mint only: any of the owner's, the operator's, the fee recipient's and the caller's that do not exist yet. |
+
+A call earns when it settles. A call that is not settled by its deadline returns its escrow to the caller.
+
+## Read earnings
+
+<Ways>
+<Way label="Site">
+
+`/enclaves/<key>` shows one enclave: its attestation record, its grants, its receipts and what that enclave earned, by mint. [/account](/account) shows the connected wallet's side: the enclaves it operates and its operator earnings across all of them, by mint. [/operators](/operators) shows operator earnings across the protocol.
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich account <operator wallet address>
+```
+
+It prints the fields of `GET /v1/accounts/{wallet}`. `operatorEarnings` is the wallet's total across its enclaves.
+
+</Way>
+<Way label="HTTP">
+
+```http
+GET /v1/enclaves/{key}
+GET /v1/accounts/{wallet}
+```
+
+</Way>
+</Ways>
+
+### The enclave route
+
+`GET /v1/enclaves/{key}` returns one enclave. `{key}` is the Enclave account's address or the enclave's signing key.
+
+| Field | Meaning |
+| --- | --- |
+| `enclave` | The enclave. `callsSettled` counts the calls it has settled, `modelsHeld` the models it holds, `operator` the wallet that is paid. |
+| `grants` | The grants made to the enclave. |
+| `receipts` | The enclave's 20 latest receipts. In each, `payments.operator` holds the `recipient` and the `amount` of the operator share. |
+| `earnings` | The operator share of the calls this enclave settled, one entry per mint. An operator's other enclaves are not counted in it. |
+
+### The account route
+
+`GET /v1/accounts/{wallet}` returns a wallet's side.
+
+| Field | Meaning |
+| --- | --- |
+| `wallet` | The wallet read. |
+| `enclaves` | The enclaves the wallet operates. |
+| `operatorEarnings` | The operator share paid to the wallet by every enclave it operates, one entry per mint. |
+| `models`, `ownerEarnings` | The wallet's side as an owner. |
+| `calls` | The calls the wallet made. |
+
+### An earnings entry
+
+`earnings` and `operatorEarnings` are lists with one entry per mint:
+
+| Field | Meaning |
+| --- | --- |
+| `amount` | The total in the mint's base units, as a string. Lamports for SOL. |
+| `mint` | The mint's address, or null for SOL. |
+| `decimals` | The mint's decimals. |
+| `symbol` | The mint's symbol. |
+
+`GET /v1/stats` carries `operatorEarnings` in the same form for every operator together.
+
+The routes are documented in full in [HTTP API: Enclaves](/docs/api/enclaves) and [HTTP API: Accounts and stats](/docs/api/accounts-and-stats), and the command in [CLI: account](/docs/cli/account).
