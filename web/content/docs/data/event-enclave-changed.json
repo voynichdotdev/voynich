@@ -1,0 +1,42 @@
+[
+  {
+    "field": "enclave",
+    "type": "pubkey"
+  },
+  {
+    "field": "signing_key",
+    "type": "pubkey"
+  },
+  {
+    "field": "encryption_key",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "operator",
+    "type": "pubkey"
+  },
+  {
+    "field": "endpoint",
+    "type": "string"
+  },
+  {
+    "field": "record",
+    "type": "pubkey"
+  },
+  {
+    "field": "hardware_type",
+    "type": "u8"
+  },
+  {
+    "field": "measurement",
+    "type": "[u8; 48]"
+  },
+  {
+    "field": "recorded_slot",
+    "type": "u64"
+  },
+  {
+    "field": "expires_at_slot",
+    "type": "u64"
+  }
+]

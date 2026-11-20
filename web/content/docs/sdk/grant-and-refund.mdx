@@ -1,0 +1,230 @@
+---
+title: grant and refund
+description: Grant a model to an enclave as its owner, revoke a grant, set the price, retire the model, take back the escrow of an expired call, and send any other transaction the API builds.
+---
+
+Four functions are the owner's: `grant`, `revoke`, `setPrice` and `retire`. `settle` is for a metered call's caller or operator, and `refund` is for any wallet. The owner functions and `refund` each sign one transaction with the client's signer, submit it, follow it until it confirms and resolve to its status, a [TxStatus](/docs/api/transactions#txstatus): `{ id, status, signature }`. `settle` signs `settle_metered_call`, waits for indexing, verifies the 423-byte metered Receipt, and resolves to `{ receipt, verification }`.
+
+## grant
+
+`grant` gives an enclave the key of a model the signer owns. It wraps the model key to the enclave on the device and signs `grant_by_owner`.
+
+```ts
+const status = await voynich.grant(model.address, enclave, resume.modelKey)
+```
+
+```ts
+grant(model: string, enclave: string, modelKey: Uint8Array, options?: { signal?: AbortSignal }): Promise<TxStatus>
+```
+
+<Fields>
+<Field name="model" type="string" required>
+The model's name or address.
+</Field>
+<Field name="enclave" type="string" required>
+The enclave's address or its signing key.
+</Field>
+<Field name="modelKey" type="Uint8Array" required>
+The 32-byte model key from the sealing's state.
+</Field>
+</Fields>
+
+Before the key is wrapped, the client reads the Config, the Model, the Enclave and its attestation record from the chain and requires that:
+
+- the model is `sealed` or `live` and the signer is its owner
+- the record is at the address derived from the enclave's signing key, owned by the configured attestation program, in the configured layout, and names that key
+- the record is in force at the current slot
+- its measurement is the Enclave's and is in the model's allowed measurements
+
+Only then is the key encrypted to the enclave's encryption key, read from the chain. The wrapped key, never the key itself, goes to the API.
+
+The first grant makes the model `live`.
+
+| Code | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `OWNER_REQUIRED` | The signer is not the model's owner. |
+| `MODEL_NOT_LIVE` | The model is `uploading` or `retired`. |
+| `ENCLAVE_MISMATCH` | The API answered with another enclave than the one asked for. |
+| `PROGRAM_MISMATCH`, `INVALID_CHAIN_ACCOUNT`, `MODEL_MISMATCH`, `INVALID_ATTESTATION` | As in [call](/docs/sdk/call#failures). |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction did not land. |
+| `ApiClientError` | `MODEL_NOT_FOUND`, `ENCLAVE_NOT_FOUND`, or another [API error code](/docs/api/overview#errors). |
+
+How a granted enclave passes the key on without the owner is in [Grants](/docs/concepts/grants#a-grant-from-an-enclave).
+
+## revoke
+
+`revoke` marks one enclave's grant for a model revoked. It signs `revoke_grant`. What a revoked grant stops is in [Grants](/docs/concepts/grants#revoking).
+
+```ts
+const status = await voynich.revoke('sketch-32', enclave)
+```
+
+```ts
+revoke(model: string, enclave: string, options?: { signal?: AbortSignal }): Promise<TxStatus>
+```
+
+<Fields>
+<Field name="model" type="string" required>
+The model's name or address.
+</Field>
+<Field name="enclave" type="string" required>
+The enclave's address or its signing key.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `ApiClientError` with `ENCLAVE_NOT_FOUND` | No enclave has this address or signing key. |
+| `ApiClientError` with `MODEL_NOT_FOUND` | No model has this name or address. |
+| `ApiClientError` with `GRANT_REQUIRED` | The enclave holds no grant for the model. |
+| `ApiClientError` with `SIMULATION_FAILED` | The signer is not the model's owner. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction did not land. |
+
+## setPrice
+
+`setPrice` sets a model's price, its mint, the operator share and optionally its `priceUnit` together. It signs `set_price`. Calls that open after it pay the new price and unit.
+
+```ts
+const price = { amount: '100000', mint: null, decimals: 9, symbol: 'SOL' }
+
+const status = await voynich.setPrice('sketch-32', price, 3000)
+const metered = await voynich.setPrice('text-1m', { amount: '1000', mint: null, decimals: 9, symbol: 'SOL' }, 3000, { priceUnit: 'token' })
+```
+
+```ts
+setPrice(model: string, price: Money, operatorShareBps: number, options?: { priceUnit?: PriceUnit; signal?: AbortSignal }): Promise<TxStatus>
+```
+
+<Fields>
+<Field name="model" type="string" required>
+The model's name or address.
+</Field>
+<Field name="price" type="Money" required>
+The unit price (per call or per output token): `amount` in base units as a decimal string, `mint` (an SPL Token mint address, or `null` for SOL), and the mint's `decimals` and `symbol`.
+</Field>
+<Field name="operatorShareBps" type="number" required>
+The operator's share of the price, in basis points, 0 to 10,000. With the protocol share it is at most 10,000.
+</Field>
+<Field name="options.priceUnit" type="PriceUnit">
+Optional `'call'` or `'token'`. When omitted, the model keeps its current `priceUnit`.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `ApiClientError` with `MODEL_NOT_FOUND` | No model has this name or address. |
+| `ApiClientError` with `VALIDATION_ERROR` | The price or the share does not have the shape above. |
+| `ApiClientError` with `SIMULATION_FAILED` | The signer is not the model's owner, or the operator share plus the protocol share is above 10,000. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction did not land. |
+
+## retire
+
+`retire` closes a model to new calls and new grants. It signs `retire_model`.
+
+```ts
+const status = await voynich.retire('sketch-32')
+```
+
+```ts
+retire(model: string, options?: { signal?: AbortSignal }): Promise<TxStatus>
+```
+
+| Code | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `ApiClientError` with `MODEL_NOT_FOUND` | No model has this name or address. |
+| `ApiClientError` with `SIMULATION_FAILED` | The signer is not the model's owner. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction did not land. |
+
+## settle
+
+`settle` lets a caller (or operator) holding a signed stream piece settle an open per-token call directly before `deadlineSlot` via [`POST /v1/calls/{id}/settle/build`](/docs/api/calls-and-receipts#post-v1callsidsettlebuild) and `settle_metered_call`. It pays `count * unitPrice` across owner, operator, and protocol, returns `ceiling - total` to the caller in the same transaction, and verifies all five checks on the resulting 423-byte metered Receipt.
+
+```ts
+const { receipt, verification } = await voynich.settle(callAddress, {
+  count: lastPiece.count,
+  runningHash: lastPiece.runningHash,
+  signature: lastPiece.piece.signature,
+})
+console.log(receipt.address, receipt.payments.total, receipt.returnedAmount, verification.verified)
+```
+
+```ts
+settle(call: string, piece: SettlePieceInput, options?: { signal?: AbortSignal }): Promise<SettleResult>
+```
+
+<Fields>
+<Field name="call" type="string" required>
+The open per-token Call account's address.
+</Field>
+<Field name="piece.count" type="number | bigint | string" required>
+Cumulative output token count of the signed piece (`count * unitPrice <= ceiling`).
+</Field>
+<Field name="piece.runningHash" type="string" required>
+64-character hex `runningHash` of the signed piece.
+</Field>
+<Field name="piece.signature" type="string" required>
+64-byte base64 Ed25519 signature over `voynich/piece/v1` or `voynich/piece/v2`.
+</Field>
+</Fields>
+
+Returns `SettleResult`: `{ receipt: Receipt, verification: Verification }`. Throws `VERIFICATION_FAILED` if the settled receipt does not pass verification.
+
+| Code | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `ApiClientError` with `UNAUTHORIZED` | The signer is neither `call.caller` nor `call.operator` (HTTP `403`). |
+| `ApiClientError` with `CALL_NOT_FOUND`, `CALL_NOT_OPEN` | The call does not exist or is already settled or refunded. |
+| `ApiClientError` with `CALL_DEADLINE_PASSED` | The call's deadline has passed; call [`refund`](#refund) instead to recover 100% of `ceiling`. |
+| `ApiClientError` with `INVALID_ENVELOPE` | Pre-flight `verifyPiece` failed against the enclave's on-chain signing key. |
+| `VERIFICATION_FAILED` | Post-settlement verification of the 423-byte Receipt failed. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction did not land. |
+
+## refund
+
+`refund` returns the whole escrow of a call that passed its deadline without a receipt.
+
+```ts
+const refunded = await voynich.refund(callAddress)
+console.log(refunded.status, refunded.signature)
+```
+
+```ts
+refund(call: string, options?: { signal?: AbortSignal }): Promise<TxStatus>
+```
+
+The escrow goes to the call's caller whoever signs. The signer pays the transaction fee.
+
+| Code | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `ApiClientError` with `CALL_NOT_FOUND` | No call has this address. |
+| `ApiClientError` with `CALL_NOT_REFUNDABLE` | The deadline has not passed. |
+| `ApiClientError` with `CALL_NOT_OPEN` | The call settled or was refunded already. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction did not land. |
+
+Calls that can be refunded are the ones with `status: "refundable"` in [`account`](/docs/sdk/models-and-enclaves#account).
+
+## send
+
+`send` is what the functions above end with: it signs a build with the client's signer, submits it and follows it until it confirms. With `api`, the typed client of every build route, it sends any transaction the API builds. `api` and `send` are members of a client made with `createVoynich`.
+
+```ts
+import { createVoynich } from 'voynich'
+
+const voynich = createVoynich({ apiUrl: 'https://api.voynich.dev', signer: wallet })
+
+const build = await voynich.api.refundCall(callAddress, { wallet: wallet.publicKey.toBase58() })
+const status = await voynich.send(build)
+```
+
+```ts
+send(build: Build, localSigners?: Keypair[], signer?: WalletSigner | Keypair, signal?: AbortSignal): Promise<TxStatus>
+```
+
+The wallet signs first. Keys in `localSigners` that the transaction requires sign the transaction the wallet returns. `signer` replaces the client's signer for this one transaction. `send` throws `TRANSACTION_FAILED` or `TRANSACTION_EXPIRED` with the reason when the transaction does not land.
+
+The build routes are in [HTTP API: Models](/docs/api/models) and what each does on chain is in [Program: Instructions](/docs/program/instructions). The owner's tasks in order are in [Manage a model](/docs/guides/manage-a-model).

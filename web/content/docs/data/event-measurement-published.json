@@ -1,0 +1,38 @@
+[
+  {
+    "field": "measurement",
+    "type": "pubkey"
+  },
+  {
+    "field": "digest",
+    "type": "[u8; 48]"
+  },
+  {
+    "field": "publisher",
+    "type": "pubkey"
+  },
+  {
+    "field": "source_repo",
+    "type": "string"
+  },
+  {
+    "field": "commit_sha",
+    "type": "string"
+  },
+  {
+    "field": "recipe_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "version",
+    "type": "string"
+  },
+  {
+    "field": "created_slot",
+    "type": "u64"
+  },
+  {
+    "field": "status",
+    "type": "MeasurementStatus"
+  }
+]

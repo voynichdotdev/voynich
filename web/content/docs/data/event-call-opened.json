@@ -1,0 +1,86 @@
+[
+  {
+    "field": "call",
+    "type": "pubkey"
+  },
+  {
+    "field": "caller",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "enclave",
+    "type": "pubkey"
+  },
+  {
+    "field": "nonce",
+    "type": "u64"
+  },
+  {
+    "field": "input_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "price",
+    "type": "u64"
+  },
+  {
+    "field": "price_mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "owner",
+    "type": "pubkey"
+  },
+  {
+    "field": "operator",
+    "type": "pubkey"
+  },
+  {
+    "field": "fee_recipient",
+    "type": "pubkey"
+  },
+  {
+    "field": "operator_share_bps",
+    "type": "u16"
+  },
+  {
+    "field": "protocol_share_bps",
+    "type": "u16"
+  },
+  {
+    "field": "opened_slot",
+    "type": "u64"
+  },
+  {
+    "field": "deadline_slot",
+    "type": "u64"
+  },
+  {
+    "field": "answer_mode",
+    "type": "AnswerMode"
+  },
+  {
+    "field": "caller_is_program",
+    "type": "bool"
+  },
+  {
+    "field": "callback_program",
+    "type": "pubkey"
+  },
+  {
+    "field": "callback_accounts",
+    "type": "Vec<CallbackAccount>"
+  },
+  {
+    "field": "price_unit",
+    "type": "PriceUnit"
+  },
+  {
+    "field": "ceiling",
+    "type": "u64"
+  }
+]

@@ -1,0 +1,92 @@
+---
+title: Models and enclaves
+description: Read sealed models, enclaves and a wallet's own side from code.
+---
+
+Seven read functions read what the API indexes from the chain (none needs a wallet, except `account` without an argument), and two write functions publish and deprecate on-chain measurement records. Each returns the response of one HTTP route, typed and checked against the API's schema, so the fields are told once, on that route's page.
+
+| Function | Returns | Route |
+| --- | --- | --- |
+| `models(query?)` | A page of models. | [`GET /v1/models`](/docs/api/models) |
+| `model(id)` | One model, by name or address. | [`GET /v1/models/{id}`](/docs/api/models) |
+| `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
+| `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
+| `measurements(query?)` | A page of published measurement records. | [`GET /v1/measurements`](/docs/api/enclaves#get-v1measurements) |
+| `measurement(digest)` | One published measurement record by 96-hex SHA-384 digest. | [`GET /v1/measurements/{digest}`](/docs/api/enclaves#get-v1measurementsdigest) |
+| `publishMeasurement(input, options?)` | Signs `publish_measurement` and returns the indexed `MeasurementRecord`. | [`POST /v1/measurements/build`](/docs/api/enclaves#post-v1measurementsbuild) |
+| `deprecateMeasurement(digest, options?)` | Signs `deprecate_measurement` and returns the deprecated `MeasurementRecord`. | [`POST /v1/measurements/{digest}/deprecate/build`](/docs/api/enclaves#post-v1measurementsdigestdeprecatebuild) |
+| `account(wallet?)` | A wallet's models, enclaves, earnings and calls. | [`GET /v1/accounts/{wallet}`](/docs/api/accounts-and-stats) |
+
+## models
+
+```ts
+const page = await voynich.models({ sort: 'newest', limit: 10 })
+for (const model of page.items) console.log(model.name, model.price.amount, model.status)
+
+const next = page.page.nextCursor ? await voynich.models({ cursor: page.page.nextCursor }) : null
+```
+
+<Fields>
+<Field name="sort" type="'calls' | 'newest' | 'price'">
+The order. `calls` by default.
+</Field>
+<Field name="limit" type="number">
+Models per page, 1 to 100. 24 by default.
+</Field>
+<Field name="cursor" type="string">
+The `nextCursor` of the page before.
+</Field>
+</Fields>
+
+A page is `{ items, page: { nextCursor, hasMore }, asOf }`. `nextCursor` is `null` on the last page.
+
+## model
+
+```ts
+const model = await voynich.model('sketch-32')
+console.log(model.manifest.labels)
+```
+
+Takes the model's name or address. Throws an `ApiClientError` with `MODEL_NOT_FOUND` when there is none.
+
+## enclaves and enclave
+
+```ts
+const enclaves = await voynich.enclaves()
+const detail = await voynich.enclave(enclaves.items[0]!.address)
+console.log(detail.earnings)
+```
+
+`enclaves` takes `limit` and `cursor` as `models` does. It lists live and reachable enclaves first; each Enclave's `reachable` and `lastSeen` are told in [Reachability](/docs/api/enclaves#reachability). `enclave` takes an enclave's address or its signing key and returns `{ enclave, grants, receipts, earnings }`. It throws `ENCLAVE_NOT_FOUND` when there is none.
+
+## measurements, publishMeasurement and deprecateMeasurement
+
+```ts
+const active = await voynich.measurements({ status: 'active' })
+const record = await voynich.measurement(digest)
+
+const published = await voynich.publishMeasurement({
+  digest,
+  sourceRepo: 'https://github.com/...',
+  commitSha,
+  recipeHash,
+  version: '0.1.3',
+})
+
+const deprecated = await voynich.deprecateMeasurement(digest)
+```
+
+`measurements` takes `status` (`'active' | 'deprecated'`), `limit`, and `cursor`. `measurement` takes a 96-character hex SHA-384 digest and throws `MEASUREMENT_NOT_FOUND` when none exists on chain. `publishMeasurement` and `deprecateMeasurement` require a configured signer (`WALLET_REQUIRED`), submit the built transaction, wait for indexing, and resolve to the updated `MeasurementRecord`. For the same operations from the terminal (including rebuilding from source to verify a published digest), see [CLI: measurement](/docs/cli/measurement).
+
+## account
+
+```ts
+const mine = await voynich.account()
+const theirs = await voynich.account(wallet)
+```
+
+Without an argument it reads the signer's own wallet, and throws `WALLET_REQUIRED` when the client has none. It returns `{ wallet, models, ownerEarnings, enclaves, operatorEarnings, calls }`. A call whose `status` is `refundable` can be passed to [refund](/docs/sdk/grant-and-refund#refund).
+
+## Every other route
+
+`voynich.api` is the typed client of the whole [HTTP API](/docs/api/overview): the model's ciphertext (`api.weights`), its enclaves and receipts (`api.modelEnclaves`, `api.modelReceipts`), receipts and calls (`api.receipt`, `api.call`, `api.answer`), the counts (`api.stats`), the configuration (`api.config`) and every transaction build. Each method is named after its route's operation in the [route list](/docs/api/overview).

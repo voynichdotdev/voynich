@@ -1,0 +1,138 @@
+---
+title: verify
+description: Check a receipt against the chain from code, by receipt address, call address or transaction signature.
+---
+
+`verify` takes a receipt and checks it against chain accounts read over RPC. It needs no wallet.
+
+```ts
+import voynich from 'voynich'
+
+const check = await voynich.verify(id)
+console.log(check.verified, check.signature, check.record, check.expiry, check.answer, check.base, check.reason)
+```
+
+## Signature
+
+```ts
+verify(id: string, options?: { receipt?: ReceiptView; outputEnvelope?: string; signal?: AbortSignal }): Promise<Verification>
+```
+
+<Fields>
+<Field name="id" type="string" required>
+A receipt's address, its call's address, or the signature of the transaction that settled it.
+</Field>
+<Field name="options.receipt" type="ReceiptView">
+A receipt already read from `GET /v1/receipts/{id}`. Without it `verify` reads it.
+</Field>
+<Field name="options.outputEnvelope" type="string">
+An output envelope, base64. When given, its SHA-256 must equal the receipt's output hash.
+</Field>
+<Field name="options.signal" type="AbortSignal">
+Aborts the reads.
+</Field>
+</Fields>
+
+## What comes back
+
+<Fields>
+<Field name="verified" type="boolean">
+True when all five checks (`signature`, `record`, `expiry`, `answer` and `base`) are true.
+</Field>
+<Field name="signature" type="boolean">
+The receipt's Ed25519 signature is valid under the enclave's signing key (`voynich/receipt/v1|v2` for per-call receipts, or `voynich/piece/v1|v2` over `deliveredCount` and `outputHash` for metered receipts when `deliveredCount !== null`; pre-v2 adapter receipts report `signature: true, base: false`).
+</Field>
+<Field name="record" type="boolean">
+The receipt, the enclave and the attestation record hold together on chain. See [The record check](#the-record-check).
+</Field>
+<Field name="expiry" type="boolean">
+The attestation record was in force at the receipt's slot: recorded at or before it, expiring after it.
+</Field>
+<Field name="answer" type="boolean">
+For an `open` receipt, the on-chain `open_answer` bytes in the Receipt account match `receipt.openAnswer` and hash (SHA-256) to `receipt.outputHash`. For a metered receipt (`423` bytes), on-chain `deliveredCount`, `returnedAmount` and `total` match the API response. For a flat `sealed` or legacy receipt, no open bytes are stored and `answer` is true.
+</Field>
+<Field name="base" type="boolean">
+For a model with on-chain `Model.base` (decoded from the fetched Model account via `decodeModelBaseBytes`), `ReceiptView.modelBase` matches on-chain `Model.base` and the enclave signature verifies under `voynich/receipt/v2` (per-call) or `voynich/piece/v2` (metered) over `base.sha256`. True for standalone models where `Model.base` is `None`.
+</Field>
+<Field name="receipt" type="Receipt">
+The receipt that was checked.
+</Field>
+<Field name="reason" type="string, optional">
+Why the receipt is not verified. Absent when `verified` is true.
+</Field>
+<Field name="fixture" type="boolean">
+False against a cluster.
+</Field>
+</Fields>
+
+What each check proves is in [Calls and receipts](/docs/concepts/calls-and-receipts#what-the-checks-prove).
+
+## The record check
+
+`record` is true when all of this holds, read from the chain and not from the API:
+
+- the Config, the Receipt, the Enclave and the Model exist and are owned by the `voynich` program, and the record is owned by the attestation program the Config names
+- the Receipt is at the address derived from its call, and its call, model, enclave, hashes, signature, slot, every payment, and (on a 423-byte metered receipt) `deliveredCount` and `returnedAmount` equal what the API returned
+- the Model is at the address derived from its name, the Enclave at the address derived from its signing key, and the record at the address derived from that key, which is the record the Enclave names
+- the record names the enclave's signing key and has the layout version the Config names
+- the record's measurement is in the Model's allowed measurements
+
+When the enclave has attested again since the call settled, the record on chain is newer than the receipt. `verify` then reads the record as it was at the receipt's slot from the attestation program's events in the RPC's transaction history.
+
+For a transaction signature, `verify` also reads that transaction and requires that it succeeded, in the receipt's slot, and emitted the `CallSettled` event of this receipt.
+
+## Reasons
+
+| `reason` | Meaning |
+| --- | --- |
+| `The returned receipt does not match the requested identifier.` | The API answered with a receipt that is not the one asked for. |
+| `Encrypted output hash does not match the receipt.` | The `outputEnvelope` passed is not the output the enclave signed. |
+| `The requested transaction did not settle this receipt.` | The transaction signature is not the one that settled the receipt. |
+| `A required chain account is missing.` | The Config, Receipt, Enclave, record or Model is not on chain. |
+| `A chain account owner does not match its program.` | An account is not owned by the `voynich` program. |
+| `The attestation owner does not match the chain configuration.` | The record is not owned by the configured attestation program. |
+| `The signature, attestation binding or expiry check failed.` | One of the three checks is false. The booleans say which. |
+
+## Failures
+
+`verify` returns `verified: false` for a receipt that does not hold. It throws when it cannot decide:
+
+| Thrown | When |
+| --- | --- |
+| `ApiClientError` with `RECEIPT_NOT_FOUND` | No receipt matches the id. |
+| `VoynichError` with `PROGRAM_MISMATCH` | The API names a program other than the one the SDK is built for. |
+| `Error`, `The RPC did not retain the settlement transaction` | The RPC no longer holds the transaction of the signature given. |
+| `Error`, `The RPC has no retained attestation history for this receipt` | The record was renewed after settlement and the RPC no longer holds the record's history. |
+
+History that cannot be read is never taken as verification. An RPC with full history verifies any receipt.
+
+## The signature alone
+
+`verifyReceipt` (for per-call receipts) and `verifyPiece` (for 423-byte metered stream receipts where `receipt.deliveredCount !== null`) check the signature without any network access:
+
+```ts
+import { fromBase58 } from '@voynich/contract'
+import { verifyReceipt, verifyPiece, fromBase64, fromHex } from 'voynich/crypto'
+
+const baseSha256 = view.modelBase ? fromHex(view.modelBase.sha256) : undefined
+const ok = view.receipt.deliveredCount !== null
+  ? verifyPiece(
+      fromBase64(view.receipt.signature),
+      fromBase58(view.enclaveSigningKey),
+      fromBase58(view.receipt.call),
+      fromHex(view.receipt.inputHash),
+      BigInt(view.receipt.deliveredCount),
+      fromHex(view.receipt.outputHash),
+      baseSha256,
+    )
+  : verifyReceipt(
+      fromBase64(view.receipt.signature),
+      fromBase58(view.enclaveSigningKey),
+      fromBase58(view.receipt.call),
+      fromHex(view.receipt.inputHash),
+      fromHex(view.receipt.outputHash),
+      baseSha256,
+    )
+```
+
+The same checks by hand, on the site and from the CLI, are in [Verify a receipt](/docs/guides/verify-a-receipt).

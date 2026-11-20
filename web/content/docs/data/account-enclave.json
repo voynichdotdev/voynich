@@ -1,0 +1,68 @@
+[
+  {
+    "field": "signing_key",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The enclave's Ed25519 signing key, the key its attestation record names."
+  },
+  {
+    "field": "encryption_key",
+    "type": "[u8; 32]",
+    "offset": "40",
+    "meaning": "The enclave's X25519 encryption key. Grants and call inputs are encrypted to it."
+  },
+  {
+    "field": "operator",
+    "type": "pubkey",
+    "offset": "72",
+    "meaning": "The wallet that registered the enclave. It receives the operator share."
+  },
+  {
+    "field": "endpoint",
+    "type": "string",
+    "offset": "104",
+    "meaning": "The enclave's `http://` or `https://` address, up to 256 bytes."
+  },
+  {
+    "field": "attestation_record",
+    "type": "pubkey",
+    "offset": "",
+    "meaning": "The address of the enclave's attestation record."
+  },
+  {
+    "field": "hardware_type",
+    "type": "u8",
+    "offset": "",
+    "meaning": "0 `dev`, 1 Intel TDX, 2 AMD SEV-SNP, as the record states."
+  },
+  {
+    "field": "measurement",
+    "type": "[u8; 48]",
+    "offset": "",
+    "meaning": "The 48-byte measurement the record states."
+  },
+  {
+    "field": "recorded_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot the record was written in, as of the last register or refresh."
+  },
+  {
+    "field": "expires_at_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot the record expires at, as of the last register or refresh."
+  },
+  {
+    "field": "calls_settled",
+    "type": "u64",
+    "offset": "",
+    "meaning": "How many calls the enclave has settled."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "",
+    "meaning": "The PDA bump."
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "argument": "encryption_key",
+    "type": "[u8; 32]"
+  },
+  {
+    "argument": "endpoint",
+    "type": "string"
+  }
+]

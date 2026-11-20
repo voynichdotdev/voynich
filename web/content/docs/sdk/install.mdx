@@ -1,0 +1,110 @@
+---
+title: Install
+description: The voynich package, its entry points, and how to create a client in Node and in the browser.
+---
+
+The SDK is the `voynich` workspace package: TypeScript, for the browser and for Node 22 or later. It is an ES module, paired with `@voynich/contract` (the typed client of the [HTTP API](/docs/api/overview) and the types of everything the API returns).
+
+Build and pack both tarballs from the repository's `backend/` folder:
+
+```bash
+cd backend
+npm ci
+npm run contract:pack
+npm run build --workspace voynich
+npm pack --workspace voynich --pack-destination vendor-out
+```
+
+Then install the packed tarballs in your project:
+
+```bash
+npm install ./path/to/backend/vendor-out/voynich-contract-*.tgz ./path/to/backend/vendor-out/voynich-*.tgz
+```
+
+Inside the `backend/` workspace itself, `voynich` and `@voynich/contract` are already linked and ready to import after `npm run build --workspace @voynich/contract && npm run build --workspace voynich`.
+
+## In Node
+
+The default export is a client configured from the environment on first use.
+
+```ts
+import voynich from 'voynich'
+
+const { output, receipt, verified } = await voynich.call('sketch-32', pixels)
+```
+
+| Variable | Meaning |
+| --- | --- |
+| `VOYNICH_API_URL` | The address of the Voynich API, `https://api.voynich.dev`. Without it the client looks for an API on `http://127.0.0.1:9702`. |
+| `VOYNICH_KEYPAIR` | The path of a Solana JSON keypair file: the wallet that signs and pays. Read by `call`, `stream`, `openStream`, `seal`, `grant`, `revoke`, `setPrice`, `retire` and `refund`, and by `account` when no wallet is passed. `verify`, `streamPieces`, `models`, `model`, `enclaves`, `enclave` and `account(wallet)` do not read it. |
+
+The default export has `call`, `stream`, `openStream`, `streamPieces`, `verify`, `seal`, `models`, `model`, `enclaves`, `enclave`, `grant`, `revoke`, `setPrice`, `retire`, `refund` and `account`. `api` and `send` are on a client made with `createVoynich`.
+
+## In the browser
+
+Create a client with the API's address and the connected wallet.
+
+```ts
+import { createVoynich } from 'voynich'
+
+const voynich = createVoynich({ apiUrl: 'https://api.voynich.dev', signer: wallet })
+```
+
+`createVoynich` works the same way in Node, with a `Keypair` as the signer.
+
+### Options
+
+<Fields>
+<Field name="apiUrl" type="string" required>
+The address of the Voynich API.
+</Field>
+<Field name="signer" type="WalletSigner | Keypair">
+What signs transactions. A `WalletSigner` is any object with a `publicKey` (a web3.js `PublicKey`) and `signTransaction(transaction: VersionedTransaction)` that resolves to the signed transaction, which is what wallet adapters provide. A web3.js `Keypair` signs directly. Without a signer the client reads and verifies, and a write throws `WALLET_REQUIRED`.
+</Field>
+<Field name="connection" type="Connection">
+The web3.js `Connection` the client reads chain accounts through when it checks an enclave or a receipt. Without it the client connects to the `rpcUrl` in `GET /v1/config` at `confirmed` commitment. Verification trusts this view of the chain, so pass a connection to an RPC of your own to verify independently of the API.
+</Field>
+<Field name="headers" type="Record<string, string>">
+Headers added to every API request.
+</Field>
+<Field name="fetch" type="typeof fetch">
+The `fetch` to use. The global one by default.
+</Field>
+<Field name="pollMs" type="number">
+How often the client polls while it follows a transaction or waits for an answer, in milliseconds. 500 by default.
+</Field>
+<Field name="fixture" type="string">
+A scenario name for an API running in fixture mode, used when building an interface without a cluster.
+</Field>
+</Fields>
+
+### The client
+
+| Member | Does | Reference |
+| --- | --- | --- |
+| `call(model, input, options?)` | Calls a sealed model and returns the verified answer. | [call](/docs/sdk/call) |
+| `stream(model, input, options?)` | Opens a per-token stream of verified pieces with live spend, `stop()`, and `final()`. | [stream](/docs/sdk/stream) |
+| `verify(id, options?)` | Checks a receipt against the chain. | [verify](/docs/sdk/verify) |
+| `seal(options)` | Encrypts a model, writes it to chain and seals it. | [seal](/docs/sdk/seal) |
+| `grant(model, enclave, modelKey)` | Grants a model to an enclave as its owner. | [grant and refund](/docs/sdk/grant-and-refund#grant) |
+| `revoke(model, enclave)` | Revokes an enclave's grant as the owner. | [grant and refund](/docs/sdk/grant-and-refund#revoke) |
+| `setPrice(model, price, operatorShareBps)` | Sets the price and the operator share as the owner. | [grant and refund](/docs/sdk/grant-and-refund#setprice) |
+| `retire(model)` | Retires a model as the owner. | [grant and refund](/docs/sdk/grant-and-refund#retire) |
+| `settle(call, piece)` | Self-settles an open per-token metered call before its deadline using a signed piece. | [grant and refund](/docs/sdk/grant-and-refund#settle) |
+| `refund(call)` | Takes back the escrow of a call past its deadline. | [grant and refund](/docs/sdk/grant-and-refund#refund) |
+| `models`, `model`, `enclaves`, `enclave`, `measurements`, `measurement`, `publishMeasurement`, `deprecateMeasurement`, `account` | Read models, enclaves, published measurements and a wallet's side; publish or deprecate a measurement record. | [Models and enclaves](/docs/sdk/models-and-enclaves) |
+| `api` | The typed client of every HTTP route. | [HTTP API](/docs/api/overview) |
+| `send(build)` | Signs a transaction the API built, submits it and follows it until it confirms. | [grant and refund](/docs/sdk/grant-and-refund#send) |
+
+## Entry points
+
+| Import | Holds |
+| --- | --- |
+| `voynich` | `createVoynich`, `VoynichError`, `preprocessSketch`, the cryptography functions and the default client. In Node the default client reads the environment. |
+| `voynich/node` | The Node entry itself: everything in `voynich`, with the default client that reads the environment. |
+| `voynich/crypto` | The cryptography alone: sealing weights, wrapping keys, call envelopes, the receipt message and its verification. No dependency on Solana libraries. |
+| `voynich/adapter` | The `voynich/adapter/v1` binary codec (`encodeAdapter`, `decodeAdapter`) and pure-TypeScript ONNX initializer applier (`inspectOnnxInitializers`, `applyOnnxAdapter`). Browser and Node compatible, zero Node-only imports. |
+| `voynich/program` | The program's address, PDA derivation, typed Anchor program clients and the decoders of the attestation record and the Weights header. |
+| `voynich/idl/voynich`, `voynich/idl/attest` | The IDLs as TypeScript modules. |
+
+Every export is listed in [Types and errors](/docs/sdk/types-and-errors). For a complete Node script that calls a model with an agent keypair, verifies the receipt and forwards a JSON proof report, see [Calling from an agent](/docs/sdk/from-an-agent).

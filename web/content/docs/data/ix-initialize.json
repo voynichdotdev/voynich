@@ -1,0 +1,58 @@
+[
+  {
+    "account": "admin",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The program's upgrade authority. Becomes the Config's admin and pays its rent."
+  },
+  {
+    "account": "config",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"config\"]`",
+    "is": "The Config, created here."
+  },
+  {
+    "account": "program_account",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS`",
+    "is": "The Voynich program."
+  },
+  {
+    "account": "program_data",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The program's ProgramData account, which names the upgrade authority."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

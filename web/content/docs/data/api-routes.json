@@ -1,0 +1,232 @@
+[
+  {
+    "route": "GET /health",
+    "operation": "health",
+    "does": "Service readiness"
+  },
+  {
+    "route": "GET /v1/config",
+    "operation": "config",
+    "does": "Browser and protocol configuration"
+  },
+  {
+    "route": "GET /v1/stats",
+    "operation": "stats",
+    "does": "Live counts and operator earnings by mint"
+  },
+  {
+    "route": "GET /v1/home",
+    "operation": "home",
+    "does": "Sketch-32, its ciphertext excerpt, receipts and counts"
+  },
+  {
+    "route": "GET /v1/models",
+    "operation": "models",
+    "does": "Browse models"
+  },
+  {
+    "route": "GET /v1/models/{id}",
+    "operation": "model",
+    "does": "Model facts and resumable upload progress"
+  },
+  {
+    "route": "GET /v1/models/{id}/weights",
+    "operation": "weights",
+    "does": "Raw ciphertext range encoded as base64 and its account locations"
+  },
+  {
+    "route": "GET /v1/models/{id}/enclaves",
+    "operation": "modelEnclaves",
+    "does": "Enclaves granted this model, including expired records"
+  },
+  {
+    "route": "GET /v1/models/{id}/receipts",
+    "operation": "modelReceipts",
+    "does": "Recent model receipts"
+  },
+  {
+    "route": "POST /v1/models/build",
+    "operation": "createModel",
+    "does": "Build create_model and upload-key funding in one transaction"
+  },
+  {
+    "route": "POST /v1/models/quote",
+    "operation": "quoteModel",
+    "does": "Estimate sealing costs and check create_model size before allocation"
+  },
+  {
+    "route": "POST /v1/models/{id}/weights/attach/build",
+    "operation": "attachWeights",
+    "does": "Attach additional preallocated Weights accounts to an uploading model"
+  },
+  {
+    "route": "POST /v1/models/{id}/write/build",
+    "operation": "writeWeights",
+    "does": "Build a ciphertext write signed by an authorized upload key"
+  },
+  {
+    "route": "POST /v1/models/{id}/seal-range/build",
+    "operation": "sealRange",
+    "does": "Hash consecutive 64 KiB ciphertext chunks into the on-chain Merkle frontier"
+  },
+  {
+    "route": "POST /v1/models/{id}/seal/build",
+    "operation": "sealModel",
+    "does": "Build seal_model, fix the hash and close the upload key"
+  },
+  {
+    "route": "POST /v1/models/{id}/price/build",
+    "operation": "setPrice",
+    "does": "Build set_price, price unit, and operator share"
+  },
+  {
+    "route": "POST /v1/models/{id}/grant/build",
+    "operation": "grantByOwner",
+    "does": "Build grant_by_owner with a browser-wrapped model key"
+  },
+  {
+    "route": "POST /v1/models/{id}/revoke/build",
+    "operation": "revokeGrant",
+    "does": "Build revoke_grant as the model owner"
+  },
+  {
+    "route": "POST /v1/models/{id}/retire/build",
+    "operation": "retireModel",
+    "does": "Build retire_model"
+  },
+  {
+    "route": "GET /v1/enclaves",
+    "operation": "enclaves",
+    "does": "Browse live and expired enclaves"
+  },
+  {
+    "route": "GET /v1/enclaves/{key}",
+    "operation": "enclave",
+    "does": "Attestation, grants, receipts and earnings"
+  },
+  {
+    "route": "GET /v1/measurements",
+    "operation": "measurements",
+    "does": "Browse published enclave runtime measurements"
+  },
+  {
+    "route": "GET /v1/measurements/{digest}",
+    "operation": "measurement",
+    "does": "Read a published measurement record by its 96-hex SHA-384 digest"
+  },
+  {
+    "route": "POST /v1/measurements/build",
+    "operation": "publishMeasurement",
+    "does": "Build publish_measurement to record a 48-byte SHA-384 digest with its source repo, commit, version, and recipe hash on chain"
+  },
+  {
+    "route": "POST /v1/measurements/{digest}/deprecate/build",
+    "operation": "deprecateMeasurement",
+    "does": "Build deprecate_measurement as the publisher or protocol admin"
+  },
+  {
+    "route": "GET /v1/receipts/{id}",
+    "operation": "receipt",
+    "does": "Resolve a receipt address, call address or settle transaction signature"
+  },
+  {
+    "route": "GET /v1/accounts/{wallet}",
+    "operation": "account",
+    "does": "Owned models, operated enclaves, earnings and calls"
+  },
+  {
+    "route": "POST /v1/calls/build",
+    "operation": "openCall",
+    "does": "Build open_call or open_metered_call escrowing the price or token ceiling with an encrypted input hash"
+  },
+  {
+    "route": "GET /v1/calls/{id}",
+    "operation": "call",
+    "does": "Read a call and its refund state"
+  },
+  {
+    "route": "POST /v1/calls/{id}/input",
+    "operation": "relayInput",
+    "does": "Relay the encrypted input to the selected enclave"
+  },
+  {
+    "route": "GET /v1/calls/{id}/answer",
+    "operation": "answer",
+    "does": "Poll an encrypted signed answer and settlement identifiers"
+  },
+  {
+    "route": "GET /v1/calls/{id}/pieces",
+    "operation": "callPieces",
+    "does": "Read buffered encrypted signed pieces for a metered streaming call"
+  },
+  {
+    "route": "POST /v1/calls/{id}/stop",
+    "operation": "stopCall",
+    "does": "Request cooperative stop and immediate settlement of a metered stream"
+  },
+  {
+    "route": "POST /v1/calls/{id}/settle/build",
+    "operation": "settleCall",
+    "does": "Build settle_metered_call from a verified signed stream piece"
+  },
+  {
+    "route": "POST /v1/calls/{id}/refund/build",
+    "operation": "refundCall",
+    "does": "Build refund_call returning the whole escrow after its deadline"
+  },
+  {
+    "route": "GET /v1/bounties",
+    "operation": "bounties",
+    "does": "Browse bounties posted against Voynich models"
+  },
+  {
+    "route": "GET /v1/bounties/{address}",
+    "operation": "bounty",
+    "does": "Read a bounty and its recorded attempts"
+  },
+  {
+    "route": "POST /v1/bounties/build",
+    "operation": "postBounty",
+    "does": "Build post to escrow a bounty reward for a target model label"
+  },
+  {
+    "route": "POST /v1/bounties/{address}/draw/build",
+    "operation": "drawBounty",
+    "does": "Build draw to open an open-answer call against a bounty via CPI"
+  },
+  {
+    "route": "POST /v1/bounties/{address}/collect/build",
+    "operation": "collectBounty",
+    "does": "Build collect to read the verified Receipt and pay the bounty winner"
+  },
+  {
+    "route": "POST /v1/bounties/{address}/cancel/build",
+    "operation": "cancelBounty",
+    "does": "Build cancel to refund an open bounty to its creator"
+  },
+  {
+    "route": "POST /v1/transactions/submit",
+    "operation": "submitTransaction",
+    "does": "Submit signed bytes or follow a wallet-sent signature"
+  },
+  {
+    "route": "GET /v1/transactions/{id}",
+    "operation": "transaction",
+    "does": "Follow the transaction ledger"
+  },
+  {
+    "route": "GET /v1/events",
+    "operation": "events",
+    "does": "Program events"
+  },
+  {
+    "route": "GET /v1/calls/{id}/events",
+    "operation": "callEvents",
+    "does": "Events for a call"
+  },
+  {
+    "route": "GET /v1/calls/{id}/stream",
+    "operation": "callStream",
+    "does": "Live encrypted signed pieces for a metered call"
+  }
+]

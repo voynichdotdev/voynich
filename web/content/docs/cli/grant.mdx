@@ -1,0 +1,116 @@
+---
+title: grant
+description: voynich grant wraps a model's key to an enclave as the owner, and voynich model revoke revokes a grant. What each reads, checks, prints and what fails.
+---
+
+`voynich grant` gives an enclave the key of a sealed model. It reads the model key from the owner key file, wraps it to the enclave's encryption key on this machine and sends `grant_by_owner`, signed by the owner's wallet. How the key moves is told in [Grants](/docs/concepts/grants). The same from code is [grant](/docs/sdk/grant-and-refund#grant). The owner takes a grant back with [`voynich model revoke`](#voynich-model-revoke).
+
+```bash
+voynich grant sketch-32 <enclave> --state owner.enc.json
+```
+
+## Arguments and flags
+
+<Fields>
+<Field name="model" type="name or address, first argument" required>
+The model to grant.
+</Field>
+<Field name="enclave" type="enclave address or signing key, second argument" required>
+The enclave that receives the key. Both values are in [`voynich enclaves`](/docs/cli/models#voynich-enclaves).
+</Field>
+<Field name="--state" type="file path" required>
+The [owner key file](/docs/cli/seal#the-owner-key-file) that `voynich seal` wrote for this model.
+</Field>
+</Fields>
+
+The command asks for the owner key file's password the way `seal` does, or reads it from `VOYNICH_PASSWORD`. The wallet is chosen as told in [Install](/docs/cli/install#the-signing-wallet) and has to be the model's owner.
+
+## What it checks first
+
+The model key is wrapped only after the enclave has been checked against the chain. The CLI reads the accounts itself, through the RPC the API names, and stops at the first check that fails:
+
+1. The owner key file opens with the password, and the model it was written for is the model named.
+2. The API names the Voynich program the CLI was built with.
+3. The Config, the Model and the Enclave exist and are owned by the program.
+4. The Model's address is the one derived from its name, and the Enclave's address is the one derived from its signing key.
+5. The Model's status is `sealed` or `live`.
+6. The signing wallet is the Model's owner.
+7. The enclave's attestation record is at the address derived from its signing key and is owned by the attestation program the Config names.
+8. The record has the Config's layout, names the enclave's signing key, and states the hardware type and measurement the Enclave holds.
+9. The record is in force at the current slot: recorded at or before it, expiring after it.
+10. The record's measurement is one of the model's allowed measurements.
+11. The enclave named on the command line is the enclave the API returned, by address or by signing key.
+
+The encryption key the model key is wrapped to is the one read from the Enclave account in step 3.
+
+## What it prints
+
+The status of the granting transaction, as JSON on stdout:
+
+<Fields>
+<Field name="id" type="string">
+The transaction's id at the API.
+</Field>
+<Field name="status" type="string">
+`confirmed` or `finalized`.
+</Field>
+<Field name="signature" type="base58 signature">
+The transaction's signature.
+</Field>
+</Fields>
+
+A first grant moves a `sealed` model to `live`.
+
+## Failures
+
+The command prints the code and the message to stderr as `<code>: <message>`, or the message alone where the table shows no code, and exits with code `1`. The code is the one the SDK raises for the same failure.
+
+| Code | Message | Cause |
+| --- | --- | --- |
+|  | `Supply --state.` | A missing flag or argument. The message names it: `--state`, `model`, `enclave`. |
+|  | `Set VOYNICH_PASSWORD when no interactive terminal is available` | No terminal to prompt on and no `VOYNICH_PASSWORD`. |
+|  | `Unsupported owner key file format` | The file at `--state` has another `version` or `kdf`. |
+|  | `The owner key file belongs to another model` | The file was written for a model other than the one named. |
+| `MODEL_NOT_FOUND` | The API's message | No model has this name or address. |
+| `ENCLAVE_NOT_FOUND` | The API's message | No enclave has this address or signing key. |
+| `PROGRAM_MISMATCH` | `The API does not name the canonical Voynich program.` | Check 2. |
+| `INVALID_CHAIN_ACCOUNT` | `The model, enclave or configuration account is missing or has an invalid owner.` | Check 3. |
+| `MODEL_MISMATCH` | `The chain accounts do not match the requested model and enclave.` | Check 4. |
+| `MODEL_NOT_LIVE` | `The model is not ready for this action.` | Check 5: the model is `uploading` or `retired`. |
+| `OWNER_REQUIRED` | `Only this model owner may wrap an owner grant.` | Check 6. |
+| `INVALID_ATTESTATION` | `The enclave points to an invalid attestation record.` | Check 7: the record's address. |
+| `INVALID_ATTESTATION` | `The attestation record owner does not match the chain configuration.` | Check 7: the record's owner. |
+| `INVALID_ATTESTATION` | `The enclave record is expired or does not match the registered and allowed software.` | Checks 8 to 10. |
+| `ENCLAVE_MISMATCH` | `The enclave does not match the requested grant recipient.` | Check 11. |
+| `TRANSACTION_FAILED` | The failure's own message, or `The transaction did not land.` | The transaction was refused. A refusal by the program carries one of its [errors](/docs/program/errors). |
+| `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | The transaction did not land before its blockhash expired. |
+
+## voynich model revoke
+
+```bash
+voynich model revoke <model> <enclave>
+```
+
+Revokes one enclave's grant for a model with `revoke_grant`, signed by the owner's wallet. It needs no owner key file. What a revoked grant stops is told in [Grants](/docs/concepts/grants#revoking). The same from code is [revoke](/docs/sdk/grant-and-refund#revoke).
+
+<Fields>
+<Field name="model" type="name or address, first argument" required>
+The model whose grant is revoked.
+</Field>
+<Field name="enclave" type="enclave address or signing key, second argument" required>
+The enclave that holds the grant.
+</Field>
+</Fields>
+
+The wallet is chosen as told in [Install](/docs/cli/install#the-signing-wallet) and has to be the model's owner.
+
+It prints the status of the transaction, as JSON on stdout: `id`, `status` (`confirmed` or `finalized`) and `signature`.
+
+| Code | Message | Cause |
+| --- | --- | --- |
+|  | `Supply model.` or `Supply enclave.` | A missing argument. |
+| `ENCLAVE_NOT_FOUND` | The API's message | No enclave has this address or signing key. |
+| `MODEL_NOT_FOUND` | The API's message | No model has this name or address. |
+| `GRANT_REQUIRED` | The API's message | The enclave holds no grant for the model. |
+| `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `revoke_grant` was refused, or did not land before its blockhash expired. |

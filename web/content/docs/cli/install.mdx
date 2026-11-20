@@ -1,0 +1,153 @@
+---
+title: Install
+description: The voynich binary, the Node version it needs, its global flags and environment variables, the wallet each command signs with, and the command list.
+---
+
+The CLI is the `voynich` binary of the `voynich` workspace package, the same package that holds the [SDK](/docs/sdk/install). It needs Node 22 or later.
+
+Build it from the repository's `backend/` folder and run it with `npx voynich` (or link the binary globally):
+
+```bash
+cd backend
+npm ci
+npm run build --workspace @voynich/contract
+npm run build --workspace voynich
+npm link --workspace voynich
+```
+
+The three `enclave` commands load a second workspace package, `voynich-enclave`, the enclave runtime, which also brings a `voynich-enclave` binary of its own. An operator builds and links both:
+
+```bash
+npm run build --workspace voynich-enclave
+npm link --workspace voynich --workspace voynich-enclave
+```
+
+To install the CLI into another machine without linking the workspace, pack `@voynich/contract` and `voynich` into `backend/vendor-out/` (`npm run contract:pack && npm pack --workspace voynich --pack-destination vendor-out`) and install the resulting `.tgz` files with `npm install -g`.
+
+## Point it at the API
+
+Every command reads and builds transactions through the Voynich API. Set its address once:
+
+```bash
+export VOYNICH_API_URL=https://api.voynich.dev
+```
+
+or pass it per command:
+
+```bash
+voynich models --api-url https://api.voynich.dev
+```
+
+## Commands
+
+| Command | Job |
+| --- | --- |
+| [`voynich seal <weights file>`](/docs/cli/seal) | Encrypt a weights file, write the ciphertext to chain, seal the model and, with `--enclave`, grant a first enclave. |
+| [`voynich models`](/docs/cli/models) | List sealed models. |
+| [`voynich model price <model>`](/docs/cli/models#voynich-model-price) | Set a model's price and operator share, as the model's owner. |
+| [`voynich model retire <model>`](/docs/cli/models#voynich-model-retire) | Retire a model, as the model's owner. |
+| [`voynich enclaves`](/docs/cli/models#voynich-enclaves) | List registered enclaves. |
+| [`voynich grant <model> <enclave>`](/docs/cli/grant) | Wrap a model's key to an enclave, as the model's owner. |
+| [`voynich model revoke <model> <enclave>`](/docs/cli/grant#voynich-model-revoke) | Revoke an enclave's grant, as the model's owner. |
+| [`voynich call <model> <input.json>`](/docs/cli/call) | Call a model and print the output, the receipt and the checks. |
+| [`voynich settle <call>`](/docs/cli/call#voynich-settle) | Self-settle an open per-token metered stream before its deadline using the last signed piece. |
+| [`voynich refund <call>`](/docs/cli/call#voynich-refund) | Return the escrow of a call that passed its deadline without a receipt. |
+| [`voynich verify <id>`](/docs/cli/verify) | Check a receipt by its address, its call's address or its settling transaction's signature. |
+| [`voynich enclave register`](/docs/cli/enclave#voynich-enclave-register) | Attest an enclave and register it. |
+| [`voynich enclave run`](/docs/cli/enclave#voynich-enclave-run) | Run the enclave runtime. |
+| [`voynich enclave status`](/docs/cli/enclave#voynich-enclave-status) | Print an enclave's address, keys and registration. |
+| [`voynich measurement list\|show\|publish\|deprecate\|verify`](/docs/cli/measurement) | List, publish, deprecate and verify on-chain enclave measurement records from source or `recipe.json`. |
+| [`voynich account <wallet>`](/docs/cli/account) | Print a wallet's models, enclaves, calls and earnings. |
+
+`voynich --help`, `voynich -h` and `voynich` with no command print the usage to stderr and exit with code `0`:
+
+```text
+voynich models | enclaves | call <model> <input.json> | verify <receipt> | seal <weights.onnx> --manifest <manifest.json> --state <owner.enc.json> --price <base units> --operator-share-bps <bps> --measurement <hex48> --upload-funding <lamports> [--enclave <key>] [--resume]
+voynich grant <model> <enclave> --state <owner.enc.json> | refund <call> | enclave register|run|status | account <wallet>
+voynich model price <model> --price <base units> [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]
+voynich model retire <model> | model revoke <model> <enclave>
+Global: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password. Results are JSON on stdout; prompts and progress go to stderr.
+```
+
+## Global flags
+
+Flags can stand anywhere on the line, before or after the command and its arguments.
+
+<Fields>
+<Field name="--api-url" type="URL">
+The Voynich API's address. It takes the place of `VOYNICH_API_URL` for this command.
+</Field>
+<Field name="--keypair" type="file path">
+A Solana JSON keypair file to sign with. It takes the place of `VOYNICH_KEYPAIR` for a command that signs, and of `OPERATOR_KEYPAIR` for `enclave register` and `enclave run`.
+</Field>
+<Field name="--help, -h" type="flag">
+Print the usage and exit.
+</Field>
+</Fields>
+
+## Environment variables
+
+<Fields>
+<Field name="VOYNICH_API_URL" type="URL">
+The Voynich API's address. Set it to `https://api.voynich.dev`. When it is unset and `--api-url` is not given, the CLI uses `http://127.0.0.1:9702`.
+</Field>
+<Field name="VOYNICH_KEYPAIR" type="file path">
+The Solana JSON keypair file the CLI signs with: a JSON array of 64 integers from 0 to 255, the format `solana-keygen` writes. Only the commands that sign read it.
+</Field>
+<Field name="VOYNICH_PASSWORD" type="string">
+The password of the [owner key file](/docs/cli/seal#the-owner-key-file), for `seal` and `grant` where no terminal is attached. When it is set the CLI does not prompt.
+</Field>
+</Fields>
+
+The `enclave` commands read their own variables, listed in [enclave](/docs/cli/enclave#environment-variables).
+
+## The signing wallet
+
+The CLI signs with a keypair file. Which file depends on the command.
+
+**`seal`, `grant`, `call`, `settle`, `refund`, `model price`, `model retire`, `model revoke`, `measurement publish` and `measurement deprecate`** take the first of these that is set:
+
+1. `--keypair`
+2. `VOYNICH_KEYPAIR`
+3. `keypair_path` in the Solana CLI's config file, `~/.config/solana/cli/config.yml`. A relative path is read from the config file's folder, and a leading `~` is the home folder.
+4. `~/.config/solana/id.json`, when the config file does not exist or names no `keypair_path`.
+
+**`enclave register` and `enclave run`** sign as the operator and take the first of:
+
+1. `--keypair`
+2. `OPERATOR_KEYPAIR`
+3. the Solana CLI's keypair, found the same way as above.
+
+**`models`, `enclaves`, `verify`, `account`, `enclave status`, `measurement list`, `measurement show` and `measurement verify`** sign nothing and need no wallet. They do not read `--keypair` or `VOYNICH_KEYPAIR`.
+
+A command that signs fails with one of these when its keypair file cannot be used:
+
+| Message | Cause |
+| --- | --- |
+| `VOYNICH_KEYPAIR must name a readable Solana JSON keypair file` | The file is missing, unreadable or not JSON. |
+| `VOYNICH_KEYPAIR must name a Solana JSON keypair file` | The file is JSON but not an array of 64 bytes. |
+| `Solana CLI config has an invalid quoted keypair_path` | The `keypair_path` in the Solana CLI's config opens a quote that does not close. |
+
+## Output and exit codes
+
+- A command prints its result to stdout as JSON, indented by two spaces. Amounts and slots are decimal strings.
+- Progress, the password prompt and the log lines of the `enclave` commands go to stderr, so stdout can be piped into a file or a JSON tool. `seal` writes one progress line per step, and one per upload write.
+- A command that fails prints one line to stderr and exits with code `1`. When the failure has a code, the line is the code, a colon and the message, such as `RECEIPT_NOT_FOUND: This receipt was not found.` Otherwise it is the message alone.
+- A command that prints its result exits with code `0`. [`voynich verify`](/docs/cli/verify#what-it-prints) prints its result and exits with code `1` when the receipt is not verified.
+
+```bash
+voynich models > models.json
+```
+
+A missing argument fails with `Supply <what is missing>.`, for example `Supply receipt address, call address or transaction signature.` The codes are the API's [error codes](/docs/api/overview#errors) and the SDK's [errors](/docs/sdk/types-and-errors#errors). A command the CLI does not have fails with `Unknown command: <command>. Use --help.`
+
+## Read next
+
+<Cards>
+<Card href="/docs/cli/call" title="call">
+Call a model from a JSON file.
+</Card>
+<Card href="/docs/cli/seal" title="seal">
+Seal a model from a weights file.
+</Card>
+</Cards>

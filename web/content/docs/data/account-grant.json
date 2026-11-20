@@ -1,0 +1,44 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model the grant opens."
+  },
+  {
+    "field": "enclave",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The Enclave the grant is made to."
+  },
+  {
+    "field": "wrapped_key",
+    "type": "bytes",
+    "offset": "72",
+    "meaning": "The model key wrapped to the enclave's encryption key: a version 1 envelope of 105 bytes."
+  },
+  {
+    "field": "granted_by",
+    "type": "pubkey",
+    "offset": "",
+    "meaning": "The owner's wallet, or the Enclave account of the enclave that passed the key on."
+  },
+  {
+    "field": "granted_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot the grant was written in."
+  },
+  {
+    "field": "revoked",
+    "type": "bool",
+    "offset": "",
+    "meaning": "True once the owner has revoked the grant."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "",
+    "meaning": "The PDA bump."
+  }
+]

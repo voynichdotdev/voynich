@@ -1,0 +1,175 @@
+---
+title: Types and errors
+description: Every export of the voynich package and every error it raises.
+---
+
+## voynich
+
+| Export | Kind | What it is |
+| --- | --- | --- |
+| `default` | client | In Node: `call`, `stream`, `openStream`, `streamPieces`, `settle`, `verify`, `seal`, `models`, `model`, `enclaves`, `enclave`, `measurements`, `measurement`, `publishMeasurement`, `deprecateMeasurement`, `grant`, `revoke`, `setPrice`, `retire`, `refund` and `account`, configured from `VOYNICH_API_URL` and `VOYNICH_KEYPAIR` on first use. The functions that sign read `VOYNICH_KEYPAIR`; the reads do not. |
+| `createVoynich(options)` | function | Creates a client. See [Install](/docs/sdk/install#options). |
+| `VoynichError` | class | The error the client throws. See [Errors](#errors). |
+| `verifyStreamPiece(params)` | function | Verifies one encrypted signed `StreamPiece` against sequential index, monotonic count, piece SHA-256, `streamNextHash` chain, and Ed25519 `voynich/piece/v1` or `voynich/piece/v2` signature before decrypting its payload. |
+| `preprocessSketch(input)` | function | Turns a drawing in any accepted form into the 784 numbers a `sketch` model takes. See [call](/docs/sdk/call#input). |
+| `transactionFeeLamports(transaction)` | function | Computes the exact transaction fee in lamports (`bigint`) from a `VersionedTransaction`'s required signatures and compute budget instructions. |
+| `findUnwrittenRangesFromChain(params)` | function | Inspects attached on-chain `Weights` accounts via batched 56-byte headers and concurrent 8-chunk `dataSlice` reads, authenticating 64 KiB chunks with `openWeightsChunk` to find unwritten or incomplete byte ranges for cross-device resume. |
+| `Voynich` | type | The client: `ReturnType<typeof createVoynich>`. |
+| `VoynichOptions` | type | The options of `createVoynich`. |
+| `WalletSigner` | type | `{ publicKey: PublicKey; signTransaction(transaction: VersionedTransaction): Promise<VersionedTransaction>; signMessage?(message: Uint8Array): Promise<Uint8Array> }` |
+| `VoynichSigner` | type | `WalletSigner \| Keypair` |
+| `CallOptions` | type | `{ signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string }` |
+| `CallStep` | type | `'encrypting' \| 'awaiting-signature' \| 'escrowed' \| 'answering' \| 'verified'` |
+| `ClassificationScore`, `ClassificationOutput`, `TextGenerationOutput`, `CallOutput` | types | Return shapes of `call().output`: classification (`{ label, probability?, scores? }`) or text generation (`{ text, tokens, finishReason: 'eos' \| 'length' }`). |
+| `StreamPiecePayload`, `VerifiedStreamPiece`, `VerifyStreamPieceOptions`, `StreamPiecesOptions`, `OpenStreamOptions`, `StreamOptions`, `StreamResult`, `VoynichStream` | types | Payloads, options, stream handle (`stop()`, `settle()`, `lastPiece()`, `final()`), and verified piece output (`spentAmount?`, `remainingAmount?`) for `verifyStreamPiece`, `streamPieces`, `openStream` and [`stream`](/docs/sdk/stream). |
+| `SettlePieceInput`, `SettleResult` | types | Input (`{ count, runningHash, signature }`) and verified result (`{ receipt, verification }`) of [`settle`](/docs/sdk/grant-and-refund#settle). |
+| `Verification` | type | The result of [verify](/docs/sdk/verify#what-comes-back). |
+| `SealOptions`, `SealResume`, `SealMetrics`, `SealProgress`, `SealResult` | types | The options, saved state, metrics, progress and result of [seal](/docs/sdk/seal). |
+| `SketchInput` | type | `readonly number[] \| readonly (readonly number[])[] \| Float32Array \| Float64Array \| { strokes: readonly Stroke[]; width: number; height: number }` |
+| `Stroke` | type | `readonly (readonly [number, number])[]` |
+
+Everything in `voynich/crypto` and `voynich/adapter` is exported from `voynich` as well.
+
+The types of what the API returns (`Model`, `ModelBase`, `PriceUnit`, `TokenizerRef`, `TokenizerFormat`, `Enclave`, `MeasurementStatus`, `MeasurementRecord`, `MeasurementsPage`, `MeasurementQuery`, `PublishMeasurementRequest`, `Grant`, `Call`, `CallAnswer`, `StreamFinishReason`, `StreamPiece`, `CallStreamDone`, `CallPieces`, `StopCallRequest`, `StopCallAccepted`, `SettleCallRequest`, `Receipt`, `ReceiptView`, `Money`, `Manifest`, `Build`, `TxStatus` and the rest), the contract limits (`MODEL_BASE_FORMATS`, `TOKENIZER_FORMATS`, `MAX_BASE_FORMAT`, `MAX_BASE_SOURCE`, `PROGRAM_LIMITS`), and `ApiClientError` come from `@voynich/contract`. Their fields are on the [HTTP API](/docs/api/overview) pages.
+
+## voynich/crypto
+
+Bytes are `Uint8Array` throughout.
+
+| Export | Signature | Does |
+| --- | --- | --- |
+| `sealWeights` | `(plaintext, key?, header?) => { key, header, ciphertext, sha256 }` | Encrypts weights. Draws the key when none is given, and a fresh nonce prefix. With a key and the `header` of an earlier sealing it produces that sealing's ciphertext again. |
+| `weightsCipherRange` | `(header, offset, length) => { offset, length, firstChunk }` | The ciphertext range that holds a plaintext range: the complete sealed chunks it touches. |
+| `openWeightsRange` | `(ciphertextRange, key, header, offset, length) => Uint8Array` | Decrypts a plaintext range from that ciphertext range, authenticating every chunk first. |
+| `openWeightsChunk` | `(chunkCiphertext, chunkIndex, key, header) => { plaintext, leafHash }` | Authenticates and decrypts a single 64 KiB sealed chunk while computing its `voynich/chunk/v1` Merkle leaf hash in one pass. |
+| `wrapKey` | `(key, recipientPublicKey) => Uint8Array` | Wraps a 32-byte model key to an enclave's encryption key: the 105-byte envelope of a grant. |
+| `unwrapKey` | `(envelope, recipientSecret) => Uint8Array` | Unwraps it. |
+| `encryptCallInput` | `(plaintext, enclavePublicKey) => Uint8Array` | The input envelope of a call. |
+| `decryptCallInput` | `(envelope, enclaveSecret) => Uint8Array` | Opens it. |
+| `encryptCallOutput` | `(plaintext, callerPublicKey) => Uint8Array` | The output envelope of a call. |
+| `decryptCallOutput` | `(envelope, callerSecret) => Uint8Array` | Opens it. |
+| `receiptMessage` | `(call, inputHash, outputHash, baseSha256?) => Uint8Array` | The 114-byte `voynich/receipt/v1` message (standalone models) or 146-byte `voynich/receipt/v2` message (when 32-byte `baseSha256` is provided). |
+| `signReceipt` | `(seed, call, inputHash, outputHash, baseSha256?) => Uint8Array` | Signs the `v1` or `v2` receipt message with an Ed25519 seed. |
+| `verifyReceipt` | `(signature, signingKey, call, inputHash, outputHash, baseSha256?) => boolean` | Verifies the `v1` or `v2` receipt signature. |
+| `streamInitialHash` | `(call, inputHash) => Uint8Array` | Initial 32-byte running hash `SHA-256("voynich/stream-init/v1" \|\| call \|\| inputHash)` binding a metered stream to one Call and input hash. |
+| `streamNextHash` | `(prevHash, count, pieceBytes) => Uint8Array` | Advances the 32-byte running hash with `SHA-256("voynich/stream-piece/v1" \|\| prevHash \|\| u64_le(count) \|\| SHA-256(pieceBytes))`. |
+| `pieceMessage` | `(call, inputHash, count, runningHash, baseSha256?) => Uint8Array` | The 120-byte `voynich/piece/v1` message (standalone models) or 152-byte `voynich/piece/v2` message (when 32-byte `baseSha256` is provided). |
+| `signPiece` | `(seed, call, inputHash, count, runningHash, baseSha256?) => Uint8Array` | Signs the `voynich/piece/v1` or `v2` message with an Ed25519 seed. |
+| `verifyPiece` | `(signature, signingKey, call, inputHash, count, runningHash, baseSha256?) => boolean` | Verifies a canonical Ed25519 signature over `voynich/piece/v1` or `v2` (`zip215: false`). |
+| `generateEncryptionKeyPair` | `() => { secretKey, publicKey }` | A fresh X25519 key pair. |
+| `encryptionPublicKey` | `(secretKey) => Uint8Array` | The X25519 public key of a secret. |
+| `signingPublicKey` | `(seed) => Uint8Array` | The Ed25519 public key of a seed. |
+| `sha256`, `randomBytes` | | SHA-256 and random bytes. |
+| `toHex`, `fromHex`, `toBase64`, `fromBase64`, `utf8` | | Encodings. |
+| `WEIGHTS_CIPHER` | `'xchacha20poly1305-64k-v1'` | The cipher id. |
+| `WEIGHTS_CHUNK_BYTES` | `65536` | The plaintext chunk size. |
+| `CIPHER_CHUNK_BYTES` | `65552` | The sealed ciphertext chunk size (`65536 + 16`). |
+| `chunkLeafHash` | `(chunkIndex, chunkBytes) => Uint8Array` | Domain-separated Merkle leaf hash `SHA-256("voynich/chunk/v1" \|\| u32_le(chunkIndex) \|\| chunkBytes)`. |
+| `merkleParentHash` | `(left, right) => Uint8Array` | Domain-separated Merkle parent hash `SHA-256("voynich/node/v1" \|\| left \|\| right)`. |
+| `merkleRootFromLeaves` | `(leaves) => Uint8Array` | Computes the `voynich/node/v1` binary Merkle root directly from precomputed 32-byte chunk leaf hashes. |
+| `ciphertextMerkleRoot` | `(ciphertext) => Uint8Array` | Binary Merkle root over a ciphertext's 65,552-byte chunks (`hashVersion = 1`). |
+| `ciphertextHash` | `(ciphertext, hashVersion) => Uint8Array` | Flat SHA-256 for `hashVersion = 0`, or `ciphertextMerkleRoot` for `hashVersion = 1`. |
+| `SEAL_DERIVATION_UPLOAD_KEYS` | `8` | Default number of deterministic upload keys derived by `deriveSealSecrets`. |
+| `sealDerivationMessage` | `(programId, modelAddress) => Uint8Array` | Canonical domain-separated UTF-8 message (`voynich/seal/v1\nprogram: <programId>\nmodel: <modelAddress>`) signed by the model owner to derive resumable sealing secrets. |
+| `verifySealDerivationSignature` | `(message, signature, ownerPublicKey) => boolean` | Enforces canonical 64-byte Ed25519 verification (`zip215: false`) of a seal derivation signature against the owner public key. |
+| `deriveSealSecrets` | `(signature, options?) => DerivedSealSecrets` | Derives `modelKey`, `noncePrefix`, `uploadKey`, `uploadKeys` (1 to 8) and optional `weightsKeys` (0 to 64) via HKDF-SHA256 (`voynich/seal-secrets/v1`) from a verified 64-byte signature. |
+| `signSealDerivation` | `(signer, programId, modelAddress, options?) => Promise<DerivedSealSecrets>` | Signs `sealDerivationMessage` using a `Keypair` or `{ publicKey, signMessage }`, verifies the signature canonically and returns `DerivedSealSecrets`. |
+| `SealDerivationSigner` | type | `Keypair \| { publicKey: PublicKey; signMessage(message: Uint8Array): Promise<Uint8Array> }` |
+| `DerivedSealSecrets` | type | `{ signature, modelKey, noncePrefix, uploadKey, uploadKeys, weightsKeys }` |
+| `WeightsCipherHeader` | type | `{ cipher, noncePrefix: Uint8Array, plaintextBytes: number, chunkBytes }` |
+| `SealedWeights` | type | What `sealWeights` returns: `{ key: Uint8Array, header: WeightsCipherHeader, ciphertext: Uint8Array, sha256: Uint8Array, merkleRoot: Uint8Array }` |
+
+The byte layouts are in [Sealed models](/docs/concepts/sealed-models#the-cipher), [Grants](/docs/concepts/grants#the-wrapped-key) and [Calls and receipts](/docs/concepts/calls-and-receipts#what-is-encrypted).
+
+## voynich/adapter
+
+Browser and Node compatible, zero Node-only imports.
+
+| Export | Signature / Value | Does |
+| --- | --- | --- |
+| `ADAPTER_MAGIC` | `'VOYA'` | 4-byte ASCII header magic of `voynich/adapter/v1`. |
+| `ADAPTER_VERSION` | `1` | Binary format version byte. |
+| `ADAPTER_FORMAT` | `'onnx'` | Supported base model weight format. |
+| `encodeAdapter` | `(spec: AdapterSpec) => Uint8Array` | Encodes a `voynich/adapter/v1` payload (`VOYA` + version `1` + uint32 LE header length + UTF-8 JSON header + packed LE `float32` tensor payloads) supporting `replace`, `delta` and `lora` ops. |
+| `decodeAdapter` | `(bytes: Uint8Array) => DecodedAdapter` | Validates and decodes a `voynich/adapter/v1` payload into typed tensor entries. |
+| `inspectOnnxInitializers` | `(onnxBytes: Uint8Array) => OnnxInitializerInfo[]` | Pure-TypeScript ONNX Protobuf reader inspecting initializer names, `dims`, `dataType` and `Float32Array` values from both `raw_data` and `float_data`. |
+| `applyOnnxAdapter` | `(baseOnnxBytes, adapterBytes, expectedBaseSha256?) => Uint8Array` | Verifies `baseSha256`, applies `replace`, `delta` (`W + delta`) and `lora` (`W + (alpha / rank) * (A @ B)`) to matching float32 ONNX initializers strictly in memory, and returns the merged ONNX bytes. |
+| `verifyOnnxAdapterCompatibility` | `(baseOnnxBytes, adapterOrBytes, expectedBaseSha256?) => { baseSha256, baseSizeBytes, matchedTensors }` | Pre-flight checks base SHA-256 and confirms every adapter tensor exists in the base ONNX graph initializers as `FLOAT` (`dataType === 1`) with matching `dims`, without allocating merged output bytes. |
+| `AdapterTensorOp`, `AdapterTensorInput`, `AdapterSpec`, `AdapterTensorHeader`, `AdapterHeader`, `DecodedAdapterTensor`, `DecodedAdapter`, `OnnxInitializerInfo` | types | Types for encoding, decoding and applying `voynich/adapter/v1` adapters. |
+
+## voynich/program
+
+| Export | What it is |
+| --- | --- |
+| `PROGRAM_ID` | The address of the `voynich` program the SDK is built for, as a `PublicKey`. |
+| `ATTESTATION_PROGRAM_ID` | The address of the attestation program in the SDK's IDL. The client reads the one in force from the chain's Config. |
+| `addresses(programId?, attestationProgramId?)` | The PDAs: `config`, `model(name)`, `enclave(signingKey)`, `grant(model, enclave)`, `call(caller, nonce)`, `receipt(call)`, `measurement(digest)`, `record(signingKey)`. Keys are `PublicKey` or base58 strings; `nonce` is a `bigint`; `digest` is 48 bytes or 96-hex. |
+| `measurementPda(digest, programId?)` | Derives the `Measurement` PDA (`["measurement", digest[..32], digest[32..]]`). `MEASUREMENT_SPACE` is `366` bytes. |
+| `decodeMeasurementAccount(data)` | Decodes a 366-byte on-chain `Measurement` account into `{ digest, publisher, sourceRepo, commitSha, recipeHash, version, createdSlot, status, bump }`. |
+| `pda(programId, ...seeds)` | A PDA from raw seeds. |
+| `eventAccounts(programId)` | `{ eventAuthority, program }`, the two accounts every instruction ends with. |
+| `chainPrograms(connection, ids?)` | Typed Anchor program clients, `{ voynich, attest }`, for reading accounts and decoding events. |
+| `decodeAttestation(data)` | Decodes an attestation record of layout version 1 into `{ layoutVersion, signingKey, hardwareType, measurement, recordedSlot, expiresAtSlot, reportSlot }`. |
+| `decodeWeightsHeader(data, options?)` | Decodes the 56-byte header of a Weights account into `{ model, index, sizeBytes, writtenBytes }`. Pass `{ headerOnly: true }` when reading a 56-byte `dataSlice`. |
+| `decodeCallAccount(data)` | Decodes a `Call` account across all five on-chain layouts (`CALL_LEGACY_SPACE = 302`, `CALL_STEP1_SPACE = 303`, `CALL_STEP2_SPACE = 304`, `CALL_STEP6_SPACE = 340 + 33 * N`, `CALL_SPACE = 349 + 33 * N`), exposing `priceUnit` and `ceiling`. |
+| `decodeReceiptAccount(data)` | Decodes a `Receipt` account across all four on-chain layouts (`RECEIPT_LEGACY_SPACE = 401`, `406 + N`, `407 + N`, and `RECEIPT_METERED_SPACE = 423 + N` with `RECEIPT_METERED_EXTENSION = 16`), exposing `deliveredCount` and `returnedAmount`. |
+| `normalizeLegacyVoynichEvent(bytes)` | Pads legacy and earlier-step mainnet CPI event payloads (including `CallSettled` Eras 0 to 2 padded to `440 + N` bytes) so the current Anchor IDL event coder decodes every historical transaction cleanly. |
+| `decodeModelBaseBytes(data)` | Browser-safe decoder (zero Node imports) reading `Option<ModelBase>` from raw on-chain Model account bytes (returns `null` on legacy 6,000-byte accounts and standalone models). |
+| `BN` | Anchor's big-number class. |
+| `Voynich`, `Attest` | The IDL types. |
+
+The accounts and instructions themselves are in the [Program](/docs/program/accounts) reference.
+
+## Errors
+
+The client throws a `VoynichError`:
+
+<Fields>
+<Field name="code" type="string">
+What went wrong. One of the codes below, or the code of a failed call.
+</Field>
+<Field name="message" type="string">
+A sentence to show.
+</Field>
+<Field name="call" type="Call, optional">
+The call, when the error happened after its price was in escrow.
+</Field>
+<Field name="refundState" type="string, optional">
+With `call`: `unavailable`, `pending-deadline`, `refundable` or `refunded`.
+</Field>
+</Fields>
+
+| Code | Raised by | When |
+| --- | --- | --- |
+| `WALLET_REQUIRED` | every write, `account()` | The client has no signer. |
+| `PROGRAM_MISMATCH` | `call`, `grant`, `verify` | The API names a program other than `PROGRAM_ID`. |
+| `INVALID_CHAIN_ACCOUNT` | `call`, `grant` | The Config, Model or Enclave is missing on chain or not owned by the program. |
+| `MODEL_MISMATCH` | `call`, `grant` | The accounts on chain are not the model and enclave asked for. |
+| `MODEL_NOT_LIVE` | `call`, `grant` | The model is not in a status that allows the action. |
+| `OWNER_REQUIRED` | `grant` | The signer is not the model's owner. |
+| `INVALID_ATTESTATION` | `call`, `grant` | The enclave's record does not hold: address, owner, layout, key, expiry or measurement. |
+| `GRANT_REQUIRED` | `call` | The enclave has no active grant for the model on chain. |
+| `ENCLAVE_UNAVAILABLE` | `call` | No live, reachable enclave holds a live grant for the model, or the enclave named in `options.enclave` is not one. |
+| `ENCLAVE_MISMATCH` | `call`, `grant` | The API answered with another enclave than the one asked for. |
+| `CALL_FAILED` | `call` | The call did not settle and the API gave no code of its own. |
+| `INVALID_ANSWER` | `call` | The answer is incomplete. |
+| `RECEIPT_MISMATCH` | `call` | The answer or the receipt belongs to another call. |
+| `VERIFICATION_FAILED` | `call` | A check on the receipt failed. |
+| `CALL_INTERRUPTED` | `call` | The call was interrupted after escrow by something other than the API. |
+| `STREAM_INTERRUPTED` | `stream`, `streamPieces`, `openStream` | The piece stream disconnected and exceeded reconnect retries before completing. |
+| `INVALID_BASE` | `seal` | `base` failed `ModelBase` validation before any transaction was built. |
+| `INVALID_ADAPTER` | `seal` | `weights` supplied with `base` is not a valid `voynich/adapter/v1` payload. |
+| `BASE_MISMATCH` | `seal` | The adapter's `baseSha256` does not match `base.sha256`. |
+| `MODEL_TOO_LARGE` | `seal` | The ciphertext needs more than 64 Weights accounts (~640 MiB). |
+| `CREATE_MODEL_TOO_LARGE` | `seal` | The quote's `canCreate` is not `true`: the `create_model` transaction is larger than 1,104 bytes or the stored manifest larger than 4,096. |
+| `CONFIGURATION_REQUIRED` | `seal` | The API does not name the program. |
+| `ALLOCATION_FAILED` | `seal` | Creating a Weights account failed. |
+| `INVALID_WEIGHTS` | `seal` | A Weights account does not match the model. |
+| `RESUME_MISMATCH` | `seal` | The saved state does not match the model on chain. |
+| `TRANSACTION_FAILED` | every write | A transaction was refused. The message carries the reason. |
+| `TRANSACTION_EXPIRED` | every write | A transaction's blockhash expired before it landed. |
+| `TRANSACTION_NOT_SUBMITTED` | every write | The API reports the transaction as `built`, not submitted. |
+
+A request the API refuses is thrown as an `ApiClientError` from `@voynich/contract`, with `status` (the HTTP status), `code` and `body.error`. The codes are in [HTTP API: Overview](/docs/api/overview#errors). After a call's price is in escrow, `call` wraps an API error in a `VoynichError` with the same code.
+
+`preprocessSketch` and the functions of `voynich/crypto` throw a plain `Error` for an input of the wrong shape or length, and decryption throws when a ciphertext does not authenticate.

@@ -1,0 +1,26 @@
+[
+  {
+    "field": "call",
+    "type": "pubkey"
+  },
+  {
+    "field": "caller",
+    "type": "pubkey"
+  },
+  {
+    "field": "price_mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "amount",
+    "type": "u64"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  },
+  {
+    "field": "status",
+    "type": "CallStatus"
+  }
+]

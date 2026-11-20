@@ -1,0 +1,152 @@
+[
+  {
+    "field": "owner",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The wallet that sealed the model."
+  },
+  {
+    "field": "name",
+    "type": "string",
+    "offset": "40",
+    "meaning": "The model's name, 1 to 32 bytes: lowercase letters and digits in groups joined by single hyphens."
+  },
+  {
+    "field": "manifest",
+    "type": "bytes",
+    "offset": "",
+    "meaning": "The manifest as compact UTF-8 JSON, up to 4,096 bytes. A `sketch` manifest leaves out the fields that equal the sketch defaults."
+  },
+  {
+    "field": "weights",
+    "type": "Vec<pubkey>",
+    "offset": "",
+    "meaning": "The Weights accounts in order, 1 to 64."
+  },
+  {
+    "field": "size_bytes",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The length of the ciphertext across all Weights accounts."
+  },
+  {
+    "field": "cipher",
+    "type": "string",
+    "offset": "",
+    "meaning": "The cipher id, `xchacha20poly1305-64k-v1`."
+  },
+  {
+    "field": "nonce_prefix",
+    "type": "[u8; 16]",
+    "offset": "",
+    "meaning": "The 16-byte nonce prefix of the weights cipher."
+  },
+  {
+    "field": "ciphertext_sha256",
+    "type": "[u8; 32]",
+    "offset": "",
+    "meaning": "Ciphertext root hash (`hash_version = 0`: flat SHA-256; `hash_version = 1`: 64 KiB chunk Merkle root). All zero until the model is sealed."
+  },
+  {
+    "field": "allowed_measurements",
+    "type": "Vec<[u8; 48]>",
+    "offset": "",
+    "meaning": "The measurements allowed to open the model, 1 to 8."
+  },
+  {
+    "field": "price",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The price of one unit (one call when `price_unit` is `Call`, or one output token when `Token`), in base units of the price mint."
+  },
+  {
+    "field": "price_mint",
+    "type": "pubkey",
+    "offset": "",
+    "meaning": "The mint the price is paid in. The default (all-zero) address means SOL."
+  },
+  {
+    "field": "operator_share_bps",
+    "type": "u16",
+    "offset": "",
+    "meaning": "The operator's share of the price, in basis points."
+  },
+  {
+    "field": "upload_key",
+    "type": "pubkey",
+    "offset": "",
+    "meaning": "The primary key allowed to write the ciphertext. The default address once the model is sealed."
+  },
+  {
+    "field": "status",
+    "type": "ModelStatus",
+    "offset": "",
+    "meaning": "`Uploading`, `Sealed`, `Live` or `Retired`."
+  },
+  {
+    "field": "created_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot the model was created in."
+  },
+  {
+    "field": "sealed_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot the model was sealed in. 0 until then."
+  },
+  {
+    "field": "calls_settled",
+    "type": "u64",
+    "offset": "",
+    "meaning": "How many calls to the model have settled."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "",
+    "meaning": "The PDA bump."
+  },
+  {
+    "field": "upload_keys",
+    "type": "Vec<pubkey>",
+    "offset": "",
+    "meaning": "Every key authorized to write the ciphertext, 1 to 8 (starts with `upload_key`). Empty once the model is sealed."
+  },
+  {
+    "field": "hash_version",
+    "type": "u8",
+    "offset": "",
+    "meaning": "`0` for legacy flat SHA-256 across all ciphertext bytes; `1` for the 64 KiB chunk binary Merkle root."
+  },
+  {
+    "field": "sealed_chunks",
+    "type": "u32",
+    "offset": "",
+    "meaning": "Count of 65,552-byte ciphertext chunks folded into `merkle_frontier` so far during range sealing."
+  },
+  {
+    "field": "merkle_frontier",
+    "type": "Vec<[u8; 32]>",
+    "offset": "",
+    "meaning": "Incremental binary Merkle peaks (up to 20 hashes) maintained across `seal_range` calls and cleared on `seal_model`."
+  },
+  {
+    "field": "merkle_frontier_mask",
+    "type": "u32",
+    "offset": "",
+    "meaning": "Bitmask of occupied levels in `merkle_frontier`, cleared to 0 on `seal_model`."
+  },
+  {
+    "field": "base",
+    "type": "Option<ModelBase>",
+    "offset": "",
+    "meaning": "Optional `ModelBase` (`sha256`, `size_bytes`, `format`, `source`) binding a sealed adapter to a public open-weight base model. `None` for standalone models."
+  },
+  {
+    "field": "price_unit",
+    "type": "PriceUnit",
+    "offset": "",
+    "meaning": "Whether `price` is charged per `Call` (`0`) or per output `Token` (`1`)."
+  }
+]

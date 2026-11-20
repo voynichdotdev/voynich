@@ -1,0 +1,50 @@
+[
+  {
+    "field": "admin",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The wallet that may change the configuration."
+  },
+  {
+    "field": "attestation_program",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The program whose attestation records the protocol reads."
+  },
+  {
+    "field": "record_layout_version",
+    "type": "u8",
+    "offset": "72",
+    "meaning": "The layout version of those records."
+  },
+  {
+    "field": "fee_recipient",
+    "type": "pubkey",
+    "offset": "73",
+    "meaning": "The wallet the protocol share of every settled call is paid to."
+  },
+  {
+    "field": "protocol_share_bps",
+    "type": "u16",
+    "offset": "105",
+    "meaning": "The protocol share of a call's price, in basis points."
+  },
+  {
+    "field": "call_deadline_slots",
+    "type": "u64",
+    "offset": "107",
+    "meaning": "How many slots after opening a call can still settle."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "115",
+    "meaning": "The PDA bump."
+  },
+  {
+    "field": "max_open_answer_bytes",
+    "type": "u16",
+    "offset": "116",
+    "meaning": "Maximum length in bytes of an open answer stored on a Receipt, 1 to 4,096."
+  }
+]

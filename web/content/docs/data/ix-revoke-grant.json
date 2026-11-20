@@ -1,0 +1,42 @@
+[
+  {
+    "account": "owner",
+    "writable": "",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The model's owner."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "grant",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"grant\", model, grant.enclave]`",
+    "is": "The Grant to revoke."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

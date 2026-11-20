@@ -1,0 +1,214 @@
+---
+title: stream
+description: Stream verified output pieces from a per-token sealed model, track live spend, stop cooperatively, and verify the settled metered receipt.
+---
+
+`stream` opens a metered call on a per-token (`priceUnit: 'token'`) text model and returns a `VoynichStream` handle. Iterating the handle yields each encrypted piece only after verifying its sequential index, monotonic token count, piece hash, running hash chain, and Ed25519 signature. Calling `stop()` ends generation cooperatively without another wallet signature, and `final()` waits for settlement and verifies all five checks on the 423-byte metered receipt.
+
+```ts
+import voynich from 'voynich'
+
+const stream = await voynich.stream('text-1m', 'Q: What is Voynich?\nA:', {
+  maxTokens: 64,
+})
+
+for await (const piece of stream) {
+  process.stdout.write(piece.text)
+}
+
+const result = await stream.final()
+console.log(result.receipt.address, result.spentAmount, result.returnedAmount)
+```
+
+## Signature
+
+```ts
+stream(model: string, input: string, options?: StreamOptions): Promise<VoynichStream>
+```
+
+<Fields>
+<Field name="model" type="string" required>
+The model's name, such as `text-1m`, or its address. The model must have `priceUnit: 'token'` and `manifest.inputKind: 'text'`.
+</Field>
+<Field name="input" type="string" required>
+The UTF-8 prompt string sent inside the encrypted input envelope.
+</Field>
+<Field name="options.ceiling" type="string">
+Maximum escrow in base units of the model's price mint (decimal string). When omitted, the SDK computes `BigInt(maxTokens ?? tokenizer.maxOutputTokens ?? 64) * BigInt(model.price.amount)`.
+</Field>
+<Field name="options.maxTokens" type="number">
+Maximum output tokens to request. The enclave caps generation at `min(maxTokens, manifest.tokenizer.maxOutputTokens, floor(ceiling / price))`.
+</Field>
+<Field name="options.enclave" type="string">
+The enclave that answers, by its address or signing key. Without it the client picks the first live, reachable enclave holding a live grant in [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves).
+</Field>
+<Field name="options.onStep" type="(step: 'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming' | 'verified') => void">
+Called as the stream moves through its [steps](#steps).
+</Field>
+<Field name="options.signal" type="AbortSignal">
+Aborts waiting or streaming. An abort after the ceiling is in escrow leaves a call that settles or becomes refundable after its deadline.
+</Field>
+</Fields>
+
+## The stream handle
+
+`voynich.stream` resolves to a `VoynichStream` once `open_metered_call` is confirmed and the encrypted input (carrying a fresh 16-byte `stopToken` and ephemeral X25519 reply key) is accepted by the enclave.
+
+<Fields>
+<Field name="call" type="Call">
+The opened metered Call account (`priceUnit: 'token'`, `unitPrice`, `ceiling`).
+</Field>
+<Field name="model" type="Model">
+The model facts read when the stream opened.
+</Field>
+<Field name="enclave" type="Enclave">
+The enclave serving the stream.
+</Field>
+<Field name="ceiling" type="string">
+The escrow ceiling in base units (decimal string) deposited by `open_metered_call`.
+</Field>
+<Field name="[Symbol.asyncIterator]()" type="AsyncIterator<VerifiedStreamPiece>">
+Yields each [VerifiedStreamPiece](#each-piece) as it arrives over `GET /v1/calls/{id}/stream` (with automatic `?after=<index>` catch-up via `GET /v1/calls/{id}/pieces`).
+</Field>
+<Field name="stop()" type="() => Promise<void>">
+Sends `POST /v1/calls/{id}/stop` with the stream's 16-byte `stopToken`. Idempotent: repeated calls share the same request. The enclave emits a terminal piece with `finishReason: 'stopped'` (at `deltaTokens: 0` when no tokens are buffered) and settles immediately via `settle_metered_call`, returning `ceiling - total` in the same transaction.
+</Field>
+<Field name="settle()" type="() => Promise<StreamResult>">
+Self-settles the call directly from the caller's wallet using `lastPiece()` via [`voynich.settle`](/docs/sdk/grant-and-refund#settle) (`POST /v1/calls/{id}/settle/build` -> `settle_metered_call`), without waiting for the enclave to settle or the call deadline to pass. Pays for `lastPiece().count` tokens, returns `ceiling - total` in the same transaction, verifies all five receipt checks, and resolves to `StreamResult`. Throws `VERIFICATION_FAILED` if no verified piece has arrived yet.
+</Field>
+<Field name="lastPiece()" type="() => VerifiedStreamPiece | null">
+Returns the latest verified piece yielded so far, or `null` before the first piece arrives. Holds the exact `{ count, runningHash, signature }` tuple committed on chain.
+</Field>
+<Field name="final()" type="() => Promise<StreamResult>">
+Drains any unread pieces, waits for the enclave's `settle_metered_call` transaction to produce the 423-byte metered Receipt, checks that `receipt.call === call.address`, `receipt.outputHash === lastPiece.runningHash`, and `receipt.deliveredCount === String(lastPiece.count)`, runs all five checks via [`verify`](/docs/sdk/verify), and resolves to [StreamResult](#what-final-returns).
+</Field>
+</Fields>
+
+### Each piece
+
+Every item yielded by `for await (const piece of stream)` is a `VerifiedStreamPiece`:
+
+<Fields>
+<Field name="text" type="string">
+Decrypted UTF-8 text chunk for this piece.
+</Field>
+<Field name="tokens" type="number">
+Tokens added by this piece (`piece.deltaTokens`).
+</Field>
+<Field name="count" type="number">
+Cumulative output token count through this piece.
+</Field>
+<Field name="runningHash" type="string">
+64-character hex cumulative hash after this piece.
+</Field>
+<Field name="finishReason" type="'eos' | 'length' | 'ceiling' | 'stopped' | null">
+`null` on intermediate pieces; on the terminal piece, why generation stopped.
+</Field>
+<Field name="spentAmount" type="string">
+Cumulative spend so far in base units (`count * unitPrice`).
+</Field>
+<Field name="remainingAmount" type="string">
+Unspent escrow ceiling remaining in base units (`ceiling - spentAmount`, floored at `'0'`).
+</Field>
+<Field name="piece" type="StreamPiece">
+The raw signed [`StreamPiece`](/docs/api/calls-and-receipts#streampiece) from the API, including `index`, `envelope`, `pieceHash`, and `signature`.
+</Field>
+<Field name="payload" type="StreamPiecePayload">
+The decrypted inner JSON `{ index, text, tokens, finishReason }`.
+</Field>
+</Fields>
+
+### What `final()` returns
+
+<Fields>
+<Field name="text" type="string">
+Full concatenated text across all verified pieces.
+</Field>
+<Field name="count" type="number">
+Final cumulative token count settled on chain.
+</Field>
+<Field name="finishReason" type="'eos' | 'length' | 'ceiling' | 'stopped' | null">
+Terminal finish reason from the last piece.
+</Field>
+<Field name="call" type="Call">
+Refreshed Call account after settlement.
+</Field>
+<Field name="receipt" type="Receipt">
+The 423-byte metered [Receipt](/docs/api/calls-and-receipts#receipt), including `deliveredCount`, `returnedAmount`, and `payments`.
+</Field>
+<Field name="verified" type="boolean">
+`true` when all five checks pass against the cluster. `final()` throws `VERIFICATION_FAILED` or `RECEIPT_MISMATCH` rather than returning an unverified receipt.
+</Field>
+<Field name="checks" type="{ signature, record, expiry, answer, base }">
+Boolean result of each of the five checks.
+</Field>
+<Field name="spentAmount" type="string">
+Total paid out across owner, operator, and protocol (`receipt.payments.total`).
+</Field>
+<Field name="returnedAmount" type="string">
+Unspent ceiling returned to the caller in the settling transaction (`receipt.returnedAmount ?? '0'`).
+</Field>
+<Field name="lastPiece" type="VerifiedStreamPiece | null">
+The final verified piece whose `count`, `runningHash`, and `signature` match the Receipt.
+</Field>
+<Field name="fixture" type="boolean">
+`false` against a cluster; `true` only in fixture mode.
+</Field>
+</Fields>
+
+## Stopping early
+
+Call `stream.stop()` from inside the iteration loop or from a button or signal handler. Keep reading the loop until the terminal piece (`finishReason: 'stopped'`) arrives, then await `stream.final()`:
+
+```ts
+const stream = await voynich.stream('text-1m', 'Q: What is Voynich?\nA:', {
+  ceiling: '200000',
+  maxTokens: 64,
+})
+
+for await (const piece of stream) {
+  process.stdout.write(piece.text)
+  if (piece.count >= 16) {
+    await stream.stop()
+  }
+}
+
+const result = await stream.final()
+// result.finishReason === 'stopped'
+// BigInt(result.returnedAmount) > 0n
+```
+
+Because `stopToken` is generated on the caller's device and sealed inside the encrypted input envelope, only the caller and the enclave know it. Third parties calling `POST /v1/calls/{id}/stop` without the matching token receive `403 UNAUTHORIZED`.
+
+## Steps
+
+| Step | What has happened |
+| --- | --- |
+| `encrypting` | The client verified Config, Model, Enclave, attestation record, and Grant on chain, generated a 16-byte `stopToken` and ephemeral reply key, and encrypted the prompt envelope. |
+| `awaiting-signature` | `open_metered_call` is built and waiting for the wallet signature. |
+| `escrowed` | The Call is open on chain with the ceiling in escrow. |
+| `streaming` | The enclave accepted the encrypted input and pieces are arriving over SSE. |
+| `verified` | `final()` confirmed the 423-byte metered Receipt matches `lastPiece` and passed all five checks. |
+
+The wallet signs once, at `awaiting-signature`.
+
+## Lower-level helpers
+
+For custom transports or reconnect loops, the client also exposes `openStream`, `streamPieces`, and `verifyStreamPiece`:
+
+- `openStream(model, input, options)` opens the metered call, relays the encrypted input with `stopToken`, and returns `{ call, model, enclave, inputHash, baseSha256, enclaveSigningKey, replySecretKey, stopToken, stop, pieces }`. `OpenStreamOptions` requires an explicit `ceiling`.
+- `streamPieces(callAddress, options)` subscribes to `GET /v1/calls/{id}/stream`, catches up via `GET /v1/calls/{id}/pieces` on disconnect, and verifies every piece through `verifyStreamPiece`.
+- `verifyStreamPiece(params)` checks `call`, sequential `index`, monotonic `count`, non-zero `deltaTokens` on intermediate pieces (`deltaTokens === 0` is accepted only when `finishReason` is non-null), `pieceHash`, `streamNextHash`, and `verifyPiece` (`voynich/piece/v1` or `v2`) before decrypting the piece envelope.
+
+## Failures
+
+`stream` throws `VoynichError` with the same pre-escrow codes as [`call`](/docs/sdk/call#failures), plus:
+
+| Code | When |
+| --- | --- |
+| `INVALID_MODEL` | The model is not priced per token (`priceUnit !== 'token'`). |
+| `INVALID_INPUT` | The model's `inputKind` is not `'text'`. |
+| `STREAM_INTERRUPTED` | The SSE stream disconnected and exceeded reconnect retries before completing. |
+| `VERIFICATION_FAILED` | A piece failed index, count, hash-chain, signature, or decryption checks, the stream ended with no pieces, or the settled Receipt failed verification. |
+| `RECEIPT_MISMATCH` | The settled Receipt's `call`, `outputHash`, or `deliveredCount` does not match `lastPiece`. |
+| `CALL_FAILED`, or the failure's own code | The call failed or passed its deadline without settling. `error.call` and `error.refundState` say whether it can be refunded via [`refund`](/docs/sdk/grant-and-refund#refund). |

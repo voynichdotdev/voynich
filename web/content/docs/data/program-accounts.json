@@ -1,0 +1,44 @@
+[
+  {
+    "account": "Call",
+    "discriminator": "`3ee7a93a9a9653c4`",
+    "fields": 22,
+    "bytes": ""
+  },
+  {
+    "account": "Config",
+    "discriminator": "`9b0caae01efacc82`",
+    "fields": 8,
+    "bytes": "118"
+  },
+  {
+    "account": "Enclave",
+    "discriminator": "`dea6dffc12035422`",
+    "fields": 11,
+    "bytes": ""
+  },
+  {
+    "account": "Grant",
+    "discriminator": "`a1a60bcdcc87cd36`",
+    "fields": 7,
+    "bytes": ""
+  },
+  {
+    "account": "Measurement",
+    "discriminator": "`663a309b44dcaca9`",
+    "fields": 9,
+    "bytes": ""
+  },
+  {
+    "account": "Model",
+    "discriminator": "`98ddf77ab97ddf97`",
+    "fields": 25,
+    "bytes": ""
+  },
+  {
+    "account": "Receipt",
+    "discriminator": "`279a496a50669199`",
+    "fields": 19,
+    "bytes": ""
+  }
+]

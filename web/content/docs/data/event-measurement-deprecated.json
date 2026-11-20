@@ -1,0 +1,22 @@
+[
+  {
+    "field": "measurement",
+    "type": "pubkey"
+  },
+  {
+    "field": "digest",
+    "type": "[u8; 48]"
+  },
+  {
+    "field": "authority",
+    "type": "pubkey"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  },
+  {
+    "field": "status",
+    "type": "MeasurementStatus"
+  }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "account": "operator",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The operator's wallet. Pays the Enclave's rent and receives the operator share of its calls."
+  },
+  {
+    "account": "signing_key",
+    "writable": "",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The enclave's signing key, the key the attestation record names."
+  },
+  {
+    "account": "config",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"config\"]`",
+    "is": "The protocol's Config."
+  },
+  {
+    "account": "attestation_record",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The enclave's attestation record."
+  },
+  {
+    "account": "enclave",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"enclave\", signing_key]`",
+    "is": "The Enclave, created here."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

@@ -1,0 +1,210 @@
+---
+title: enclave
+description: voynich enclave register, run and status, the voynich-enclave package they load, every environment variable they read and what each prints.
+---
+
+The three `enclave` commands are the operator's: `register` attests an enclave and registers it, `run` runs the enclave runtime, `status` prints where an enclave stands. This page is the command reference. The operator's path from a machine to earnings is told in [Run the enclave runtime](/docs/operators/run-the-runtime) and [Register and get granted](/docs/operators/register-and-get-granted), and what an enclave is in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+
+## The runtime package
+
+The commands load the enclave runtime from the `voynich-enclave` workspace package beside the CLI. Build and link both from `backend/`:
+
+```bash
+cd backend
+npm ci --include=dev
+npm run build --workspace @voynich/contract
+npm run build --workspace voynich
+npm run build --workspace voynich-enclave
+npm link --workspace voynich --workspace voynich-enclave
+```
+
+The runtime needs Node 22 or later. The package also provides its own binary, `voynich-enclave`, which starts the runtime without the CLI, as told in [Run the enclave runtime](/docs/operators/run-the-runtime#start). Building and running it in a container is told in [Run the enclave runtime](/docs/operators/run-the-runtime#build-and-install).
+
+## Environment variables
+
+The three commands take no flags of their own. They are configured through the environment, and through a `.env` file in the working directory when one exists. A variable set to an empty value counts as unset.
+
+<Fields>
+<Field name="SOLANA_RPC_URL" type="URL" required>
+The Solana RPC the runtime reads the chain and sends its transactions through.
+</Field>
+<Field name="OPERATOR_KEYPAIR" type="file path or JSON array">
+The operator's keypair: a Solana JSON keypair file, or the 64-byte array itself. It pays the runtime's fees and is recorded as the enclave's operator. For `register` and `run` the CLI sets it from `--keypair`, then from this variable, then from the Solana CLI's keypair, as told in [Install](/docs/cli/install#the-signing-wallet).
+</Field>
+<Field name="DEV_ATTESTATION_ROOT_KEYPAIR" type="file path or JSON array" required>
+The keypair that signs the enclave's hardware type `dev` attestation report when `Config.attestation_program` points to `attest` (used at mainnet launch as well as on local clusters until `set_config` switches to Solana Confidential Compute). It must match `dev_root` in `attest`'s config.
+</Field>
+<Field name="DEV_SEALING_KEY" type="64 hex characters" required>
+The 32-byte key the state file is encrypted under.
+</Field>
+<Field name="ENCLAVE_STATE_PATH" type="file path">
+The enclave's state file. `.local/enclave.sealed.json` under the working directory when unset. Each enclave has its own.
+</Field>
+<Field name="ENCLAVE_BASE_CACHE_DIR" type="file path">
+Directory for content-addressed open base model files (`<sha256>.<format>`) verified by SHA-256 before loading sealed adapters. `<dirname(ENCLAVE_STATE_PATH)>/base-cache` when unset.
+</Field>
+<Field name="ENCLAVE_ALLOW_LOCAL_BASE" type="string">
+Set to `1` to allow fetching base model URLs from loopback or private hosts outside `CLUSTER=localnet`. Blocked by default.
+</Field>
+<Field name="ENCLAVE_HF_BASE_URL" type="URL">
+Base URL used to resolve `hf://<owner>/<repo>[@<rev>]/<path>` sources. `https://huggingface.co` when unset.
+</Field>
+<Field name="ENCLAVE_IPFS_GATEWAY" type="URL">
+Gateway URL used to resolve `ipfs://<cid>[/<path>]` sources. `https://ipfs.io` when unset.
+</Field>
+<Field name="ENCLAVE_ENDPOINT" type="URL">
+The address callers' inputs reach the runtime at. It is recorded on the Enclave account, so set it to the runtime's public URL. `http://127.0.0.1:<ENCLAVE_PORT>` when unset.
+</Field>
+<Field name="ENCLAVE_HOST" type="host">
+The interface `run` listens on. `127.0.0.1` when unset.
+</Field>
+<Field name="ENCLAVE_PORT" type="integer">
+The port `run` listens on. `9707` when unset.
+</Field>
+<Field name="ENCLAVE_POLL_MS" type="integer, milliseconds">
+How often `run` checks its attestation record, its grants and other enclaves. `5000` when unset.
+</Field>
+<Field name="ENCLAVE_RPC_RPS" type="integer">
+The most RPC requests per second the runtime sends. Required when `SOLANA_RPC_URL` is not a local address.
+</Field>
+<Field name="ENCLAVE_SCAN_INTERVAL_MS" type="integer, milliseconds">
+The shortest gap between two scans of the program's accounts. Required when `SOLANA_RPC_URL` is not a local address.
+</Field>
+<Field name="PROGRAM_ID" type="address">
+The `voynich` program. The id built into the runtime when unset.
+</Field>
+<Field name="ATTESTATION_PROGRAM_ID" type="address">
+The attestation program. The id built into the runtime when unset.
+</Field>
+<Field name="LOOKUP_TABLE" type="address">
+An address lookup table the runtime's transactions use. None when unset.
+</Field>
+</Fields>
+
+## The state file
+
+The first `enclave register` or `enclave run` against a state path creates the enclave's two keys, the Ed25519 signing key and the X25519 encryption key, and writes them to the state file, encrypted with AES-256-GCM under `DEV_SEALING_KEY`. Every later command with the same path and key is the same enclave. `enclave status` reads the file and never creates or writes it. The file also holds the enclave's grants, the calls it is answering and the transactions it has signed and is still following, so a restart continues where the runtime stopped.
+
+A state file belongs to one chain and one pair of program ids.
+
+## voynich enclave register
+
+```bash
+voynich enclave register
+```
+
+Attests and registers the enclave, then exits. It runs no listener.
+
+<Steps>
+<Step title="Follow what was in flight">
+
+Transactions the state file holds as signed and not landed are sent again.
+
+</Step>
+<Step title="Fund the signing key">
+
+When the enclave's signing key holds less than the rent-exempt minimum, the operator's wallet sends it the difference.
+
+</Step>
+<Step title="Attest">
+
+A report is submitted to the attestation program when the enclave has no attestation record, when the record expires within a third of a record's lifetime, or when it states another measurement than the runtime's.
+
+</Step>
+<Step title="Register or refresh">
+
+An enclave that has no Enclave account is registered with `register_enclave`: its two keys, the operator and the endpoint. One that has an account is refreshed with `refresh_enclave` when the record's expiry, the endpoint or the measurement has changed.
+
+</Step>
+</Steps>
+
+It then reads the enclave as [`voynich enclave status`](#voynich-enclave-status) does and prints that object on stdout: `enclave` (the Enclave account, which owners grant to), `signingKey`, `measurement` (the SHA-384 of the runtime's built file, which owners allow with `voynich seal --measurement`), `registered`, `expiresAtSlot`, `openWeightsSeconds`, `grantToFirstAnswerSeconds` and `bases`.
+
+## voynich enclave run
+
+```bash
+voynich enclave run
+```
+
+Runs the enclave runtime until the process is stopped. It starts with the four steps of `register`, then listens on `ENCLAVE_HOST` and `ENCLAVE_PORT` and repeats this every `ENCLAVE_POLL_MS`:
+
+- attest again and refresh the Enclave before the record expires
+- read the enclave's grants; for each new one, validate all 56-byte Weights headers in one batch, fetch ciphertext in concurrent 8-chunk (~512 KiB) `dataSlice` ranges splicing across Weights accounts, unwrap the model key, decrypt each 64 KiB chunk in place with `openWeightsChunk`, verify the complete Merkle root (`hash_version = 1`) or SHA-256 (`hash_version = 0`) against the Model, and load the model into memory (also triggered on demand when an input arrives for a newly granted model). When the Model names a `base` (`format: "onnx"`), the runtime fetches and SHA-256-verifies the open base file into `ENCLAVE_BASE_CACHE_DIR` (strictly capped at `base.sizeBytes`), merges the decrypted `voynich/adapter/v1` adapter onto the base strictly in memory via `applyOnnxAdapter` (never writing adapter or merged weights to disk), and loads the merged graph into ONNX Runtime; per-model load errors are isolated so one failing base never blocks other granted models
+- grant each loaded, live model to every other registered enclave whose measurement the model allows, whose record is in force and which has no Grant for it, with `grant_by_enclave`
+- take up calls that were waiting when the runtime last stopped
+
+A pass that fails writes an `enclave.sync.failed` line and the next pass runs after `ENCLAVE_POLL_MS`. The listener keeps answering meanwhile.
+
+A call arrives as an encrypted input. The runtime checks it against the Call on chain, runs the model, encrypts the output to the caller, signs the receipt message and sends `settle_call`. A call is told from the caller's side in [Calls and receipts](/docs/concepts/calls-and-receipts).
+
+The listener serves three routes:
+
+| Route | Returns |
+| --- | --- |
+| `GET /health` | `status` (`ready`), `enclave`, `measurement`, `models` (the addresses of the models loaded), `openWeightsSeconds` (seconds spent fetching, verifying and decrypting each model's ciphertext), `grantToFirstAnswerSeconds` (seconds from grant load to first settled answer per model, or `null` before the first settled call) and `bases` (per-model base metadata and `openBaseSeconds` for loaded adapter models). The Voynich API reads it to tell whether the enclave is [reachable](/docs/api/enclaves#reachability). |
+| `POST /v1/calls/{call}/input` | Takes `{ "envelope": "<base64>" }`, the encrypted input, and returns `call` and `status` (`accepted`). |
+| `GET /v1/calls/{call}/answer` | `status` (`waiting`, `answered` or `failed`), `outputEnvelope`, `outputHash`, `signature`, `settleTransaction`, `receiptAddress` and `failure`. |
+
+It writes one line of JSON per event, all on stderr:
+
+| Line | When |
+| --- | --- |
+| `event` `listening`, with `host` and `port` | The listener is up. |
+| `event` `http`, with `method`, `route`, `status` and `ms` | A request to the listener is answered. |
+| `event` `model.loaded`, with `model` and `name` | A granted model is decrypted and loaded. |
+| `event` `call.failed`, with `call` and `error` | A call could not be completed. |
+| `event` `enclave.sync.failed`, with `error` and `message` | A pass of the loop failed. |
+| `event` `rpc`, with `service`, `method`, `status` and `ms` | Each request to the RPC. `register` and `status` write these lines too. |
+
+The three commands keep stdout for their result alone: the JSON object of `register` and `status`. `run` writes nothing on stdout.
+
+## voynich enclave status
+
+```bash
+voynich enclave status
+```
+
+Reads the state file and the Enclave account. It sends no transaction, creates no keys and writes no file, and it takes no keypair: it reads `DEV_SEALING_KEY`, `ENCLAVE_STATE_PATH`, `SOLANA_RPC_URL` and the two program ids. It prints:
+
+<Fields>
+<Field name="enclave" type="address or null">
+The Enclave account's address, derived from the signing key. `null` when no state file exists.
+</Field>
+<Field name="signingKey" type="address or null">
+The enclave's signing key. `null` when no state file exists.
+</Field>
+<Field name="measurement" type="96 hex characters">
+The runtime's measurement.
+</Field>
+<Field name="registered" type="boolean">
+Whether the Enclave account exists on chain. `false` when no state file exists.
+</Field>
+<Field name="expiresAtSlot" type="integer string or null">
+The slot the enclave's attestation record expires at, as the Enclave account holds it. `null` when the enclave is not registered.
+</Field>
+<Field name="openWeightsSeconds" type="Record<string, number | null>">
+Per-model seconds spent reading Weights headers, fetching ciphertext slices in parallel, authenticating and decrypting every chunk and verifying the on-chain hash before loading ONNX Runtime (`null` if not recorded; `{}` when no state file exists or no grant has loaded).
+</Field>
+<Field name="grantToFirstAnswerSeconds" type="Record<string, number | null>">
+Per-model seconds elapsed between the enclave loading a model's grant and settling its first call (`null` until that model settles a call; `{}` when no state file exists or no grant has loaded).
+</Field>
+<Field name="bases" type="Record<string, { sha256, sizeBytes, format, source, openBaseSeconds: number | null }>">
+Per-model open base metadata (`sha256`, `sizeBytes`, `format`, `source`) and `openBaseSeconds` (seconds spent fetching and verifying the base model) for loaded models carrying a `ModelBase`. `{}` when no adapter models have loaded.
+</Field>
+</Fields>
+
+## Failures
+
+A failing command prints the message to stderr and exits with code `1`.
+
+| Message | Cause |
+| --- | --- |
+| `Use enclave register, enclave run, or enclave status.` | The word after `enclave` is not one of the three. |
+| `SOLANA_RPC_URL is required for the development enclave.` | A required variable is unset. The message names it. |
+| `OPERATOR_KEYPAIR must contain a valid 64-byte Solana keypair.` | The variable named holds neither a keypair file's path nor a 64-byte array. |
+| `DEV_SEALING_KEY must be a 32-byte hexadecimal development sealing key.` | The sealing key is unset or is not 64 hex characters. |
+| `voynich-enclave: set rps and scanIntervalMs. A remote endpoint is a budget shared with every service on its key.` | `ENCLAVE_RPC_RPS` or `ENCLAVE_SCAN_INTERVAL_MS` is unset with a remote `SOLANA_RPC_URL`. |
+| `Unsupported enclave state version.` | The state file was written in another format. |
+| `The sealed enclave state belongs to another chain. Choose a separate ENCLAVE_STATE_PATH.` | The state file was made against another cluster or other program ids. |
+| `DEV_ATTESTATION_ROOT_KEYPAIR does not match the configured development root.` | The attestation program's config names another root. |
+| `The on-chain enclave registration does not match its sealed keys and operator.` | The Enclave account at this signing key has another operator or encryption key. |

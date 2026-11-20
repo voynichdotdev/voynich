@@ -1,0 +1,56 @@
+[
+  {
+    "field": "digest",
+    "type": "[u8; 48]",
+    "offset": "8",
+    "meaning": "The 48-byte SHA-384 software measurement digest, non-zero."
+  },
+  {
+    "field": "publisher",
+    "type": "pubkey",
+    "offset": "56",
+    "meaning": "The wallet that published this measurement record and paid its rent."
+  },
+  {
+    "field": "source_repo",
+    "type": "string",
+    "offset": "88",
+    "meaning": "Source repository URL or identifier, 1 to 128 bytes with no whitespace or control characters."
+  },
+  {
+    "field": "commit_sha",
+    "type": "string",
+    "offset": "",
+    "meaning": "Source commit SHA, 7 to 64 hex characters."
+  },
+  {
+    "field": "recipe_hash",
+    "type": "[u8; 32]",
+    "offset": "",
+    "meaning": "The 32-byte SHA-256 hash of the reproducible build recipe (`voynich/enclave-recipe/v1`), non-zero."
+  },
+  {
+    "field": "version",
+    "type": "string",
+    "offset": "",
+    "meaning": "Release version label, 1 to 32 bytes with no whitespace or control characters."
+  },
+  {
+    "field": "created_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot the measurement record was published in."
+  },
+  {
+    "field": "status",
+    "type": "MeasurementStatus",
+    "offset": "",
+    "meaning": "`Active` (`0`) or `Deprecated` (`1`)."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "",
+    "meaning": "The PDA bump."
+  }
+]

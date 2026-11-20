@@ -1,0 +1,22 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "price",
+    "type": "u64"
+  },
+  {
+    "field": "price_mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "operator_share_bps",
+    "type": "u16"
+  },
+  {
+    "field": "price_unit",
+    "type": "PriceUnit"
+  }
+]

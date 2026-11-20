@@ -1,0 +1,22 @@
+[
+  {
+    "argument": "nonce",
+    "type": "u64"
+  },
+  {
+    "argument": "input_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "argument": "answer_mode",
+    "type": "AnswerMode"
+  },
+  {
+    "argument": "callback",
+    "type": "Option<CallbackSpec>"
+  },
+  {
+    "argument": "ceiling",
+    "type": "u64"
+  }
+]

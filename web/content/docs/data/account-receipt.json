@@ -1,0 +1,116 @@
+[
+  {
+    "field": "call",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Call this receipt settles."
+  },
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The Model that was called."
+  },
+  {
+    "field": "enclave",
+    "type": "pubkey",
+    "offset": "72",
+    "meaning": "The Enclave that answered."
+  },
+  {
+    "field": "input_hash",
+    "type": "[u8; 32]",
+    "offset": "104",
+    "meaning": "SHA-256 of the input envelope."
+  },
+  {
+    "field": "output_hash",
+    "type": "[u8; 32]",
+    "offset": "136",
+    "meaning": "SHA-256 of the output envelope for a `Sealed` call, or of `open_answer` for an `Open` call."
+  },
+  {
+    "field": "signature",
+    "type": "[u8; 64]",
+    "offset": "168",
+    "meaning": "The enclave's Ed25519 signature over the receipt message."
+  },
+  {
+    "field": "slot",
+    "type": "u64",
+    "offset": "232",
+    "meaning": "The slot the call settled in."
+  },
+  {
+    "field": "price_mint",
+    "type": "pubkey",
+    "offset": "240",
+    "meaning": "The mint that was paid. The default address means SOL."
+  },
+  {
+    "field": "total",
+    "type": "u64",
+    "offset": "272",
+    "meaning": "The whole price paid out."
+  },
+  {
+    "field": "owner",
+    "type": "pubkey",
+    "offset": "280",
+    "meaning": "The wallet paid the owner's part."
+  },
+  {
+    "field": "operator",
+    "type": "pubkey",
+    "offset": "312",
+    "meaning": "The wallet paid the operator share."
+  },
+  {
+    "field": "fee_recipient",
+    "type": "pubkey",
+    "offset": "344",
+    "meaning": "The wallet paid the protocol share."
+  },
+  {
+    "field": "owner_amount",
+    "type": "u64",
+    "offset": "376",
+    "meaning": "What the owner received."
+  },
+  {
+    "field": "operator_amount",
+    "type": "u64",
+    "offset": "384",
+    "meaning": "What the operator received."
+  },
+  {
+    "field": "protocol_amount",
+    "type": "u64",
+    "offset": "392",
+    "meaning": "What the fee recipient received."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "400",
+    "meaning": "The PDA bump."
+  },
+  {
+    "field": "answer_mode",
+    "type": "AnswerMode",
+    "offset": "401",
+    "meaning": "`Sealed` or `Open`, matching the Call."
+  },
+  {
+    "field": "open_answer",
+    "type": "bytes",
+    "offset": "402",
+    "meaning": "Plaintext answer bytes stored on chain for an `Open` call (SHA-256 equals `output_hash`). Empty for a `Sealed` call."
+  },
+  {
+    "field": "caller_is_program",
+    "type": "bool",
+    "offset": "",
+    "meaning": "True when the settled Call was opened through CPI by another Solana program."
+  }
+]

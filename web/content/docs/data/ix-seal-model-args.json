@@ -1,0 +1,6 @@
+[
+  {
+    "argument": "ciphertext_sha256",
+    "type": "[u8; 32]"
+  }
+]

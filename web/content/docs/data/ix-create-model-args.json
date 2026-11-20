@@ -1,0 +1,54 @@
+[
+  {
+    "argument": "name",
+    "type": "string"
+  },
+  {
+    "argument": "manifest",
+    "type": "bytes"
+  },
+  {
+    "argument": "size_bytes",
+    "type": "u64"
+  },
+  {
+    "argument": "cipher",
+    "type": "string"
+  },
+  {
+    "argument": "nonce_prefix",
+    "type": "[u8; 16]"
+  },
+  {
+    "argument": "allowed_measurements",
+    "type": "Vec<[u8; 48]>"
+  },
+  {
+    "argument": "price",
+    "type": "u64"
+  },
+  {
+    "argument": "price_mint",
+    "type": "pubkey"
+  },
+  {
+    "argument": "operator_share_bps",
+    "type": "u16"
+  },
+  {
+    "argument": "upload_funding_lamports",
+    "type": "u64"
+  },
+  {
+    "argument": "extra_upload_key_count",
+    "type": "u8"
+  },
+  {
+    "argument": "base",
+    "type": "Option<ModelBase>"
+  },
+  {
+    "argument": "price_unit",
+    "type": "PriceUnit"
+  }
+]

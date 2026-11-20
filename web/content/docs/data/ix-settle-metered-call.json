@@ -1,0 +1,170 @@
+[
+  {
+    "account": "payer",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Pays the 423-byte metered Receipt's rent and transaction fee. Must be either `call.operator` (enclave runtime) or `call.caller` (caller self-settlement), else `Unauthorized`."
+  },
+  {
+    "account": "config",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"config\"]`",
+    "is": "The protocol's Config."
+  },
+  {
+    "account": "model",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "enclave",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"enclave\", enclave.signing_key]`",
+    "is": "The Enclave that streamed the pieces."
+  },
+  {
+    "account": "attestation_record",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The enclave's attestation record."
+  },
+  {
+    "account": "call",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"call\", call.caller, call.nonce]`",
+    "is": "The per-token Call being settled."
+  },
+  {
+    "account": "receipt",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"receipt\", call]`",
+    "is": "The 423-byte metered Receipt PDA, initialized here (handles pre-funded lamports cleanly)."
+  },
+  {
+    "account": "caller",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The call's caller. Receives any unspent ceiling (`returned_amount`) and closed SPL escrow rent."
+  },
+  {
+    "account": "owner",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The owner recorded in the call."
+  },
+  {
+    "account": "operator",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The operator recorded in the call."
+  },
+  {
+    "account": "fee_recipient",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The fee recipient recorded in the call."
+  },
+  {
+    "account": "instructions",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`Sysvar1nstructions1111111111111111111111111`",
+    "is": "The Instructions sysvar."
+  },
+  {
+    "account": "escrow_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The Call's associated token account. Only for a price in a mint."
+  },
+  {
+    "account": "owner_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The owner's associated token account. Only for a price in a mint."
+  },
+  {
+    "account": "operator_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The operator's associated token account. Only for a price in a mint."
+  },
+  {
+    "account": "protocol_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The fee recipient's associated token account. Only for a price in a mint."
+  },
+  {
+    "account": "caller_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "A token account of the caller's for the mint. Receives any unspent SPL ceiling. Only for a price in a mint."
+  },
+  {
+    "account": "token_program",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`",
+    "is": "The SPL Token program. Only for a price in a mint."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

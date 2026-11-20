@@ -1,0 +1,22 @@
+[
+  {
+    "argument": "digest",
+    "type": "[u8; 48]"
+  },
+  {
+    "argument": "source_repo",
+    "type": "string"
+  },
+  {
+    "argument": "commit_sha",
+    "type": "string"
+  },
+  {
+    "argument": "recipe_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "argument": "version",
+    "type": "string"
+  }
+]

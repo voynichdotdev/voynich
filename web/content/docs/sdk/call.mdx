@@ -1,0 +1,180 @@
+---
+title: call
+description: Call a sealed model from code and get the output, its receipt and the result of every check.
+---
+
+`call` sends one input to a sealed model and returns the answer once it has been verified. It chooses the enclave, encrypts the input, opens the call, relays the input, waits for the answer, checks the receipt against the chain and decrypts the output.
+
+```ts
+import voynich from 'voynich'
+
+const pixels: number[] = new Array(784).fill(0)
+const { output, receipt, verified } = await voynich.call('sketch-32', pixels)
+```
+
+## Signature
+
+```ts
+call(model: string, input: SketchInput | number[] | string, options?: CallOptions)
+```
+
+<Fields>
+<Field name="model" type="string" required>
+The model's name, such as `sketch-32`, or its address.
+</Field>
+<Field name="input" type="SketchInput | number[] | string" required>
+The input, in the form the model's manifest asks for: a drawing (`sketch`), a flat number array (`tensor`), or a prompt string (`text`). See [Input](#input).
+</Field>
+<Field name="options.onStep" type="(step: CallStep) => void">
+Called as the call moves through its [steps](#steps).
+</Field>
+<Field name="options.enclave" type="string">
+The enclave that answers, by its address or its signing key. Without it the client takes the first enclave in [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves) that is live and reachable and holds a live grant for the model. That list puts live and reachable enclaves first.
+</Field>
+<Field name="options.answerMode" type="'sealed' | 'open'">
+`'sealed'` by default. Pass `'open'` to have the enclave write the plaintext answer bytes into the Receipt on chain (verified against `outputHash`).
+</Field>
+<Field name="options.maxTokens" type="number">
+Optional maximum output token cap for generative `text` models (clamped to the manifest's `tokenizer.maxOutputTokens` and, in `open` mode, `Config.max_open_answer_bytes`).
+</Field>
+<Field name="options.ceiling" type="string">
+Maximum escrow in base units of the model's price mint (decimal string). Required for per-token (`priceUnit: 'token'`) models, where `POST /v1/calls/build` routes to `open_metered_call`; omitted for per-call models.
+</Field>
+<Field name="options.signal" type="AbortSignal">
+Aborts the call. An abort after the price is in escrow leaves a call that settles or becomes refundable.
+</Field>
+</Fields>
+
+## Input
+
+For a model whose manifest says `inputKind: "sketch"`, the input is a drawing in any of these forms:
+
+| Form | Shape |
+| --- | --- |
+| Flat array | 784 numbers, the 28×28 drawing row by row. Also a `Float32Array` or `Float64Array` of 784. |
+| Matrix | 28 rows of 28 numbers. |
+| Strokes | `{ strokes, width, height }`: each stroke is an array of `[x, y]` points inside a canvas of `width` by `height` pixels, at most 4,194,304 pixels in all. |
+
+Pixel values run from 0 (background) to 1 (ink). Every form goes through `preprocessSketch`, which crops the drawing to its ink, scales the longer side to 24 pixels keeping the aspect, and centers it in 28×28, as the manifest of `sketch-32` describes. Strokes are drawn 3 pixels wide before that.
+
+For a model whose manifest says `inputKind: "tensor"`, the input is a flat array of numbers in the order of the manifest's `inputShape`, as many as its dimensions multiply to.
+
+For a model whose manifest says `inputKind: "text"`, the input is a UTF-8 `string` prompt. The enclave tokenizes it using the manifest's `tokenizer` (`byte-level`, `bpe` or `word-piece`), runs inference inside the enclave, and returns either a classification object (when `manifest.labels` is set) or generated text (when `manifest.labels` is omitted).
+
+## What comes back
+
+<Fields>
+<Field name="output" type="CallOutput">
+The verified answer. For classification (`sketch`, `tensor`, or a `text` model with `labels`): `{ label, probability?, scores? }`, where `scores` lists up to five `{ label, probability }` entries highest first. For generative `text` models: `{ text, tokens, finishReason }` where `finishReason` is `'eos'` or `'length'`.
+</Field>
+<Field name="receipt" type="Receipt">
+The call's receipt: its address, the call, the model and its name, the enclave, both hashes, the signature, the slot, the settling transaction and the payments. The fields are in [HTTP API: Calls and receipts](/docs/api/calls-and-receipts).
+</Field>
+<Field name="verified" type="boolean">
+True when all five checks passed. `call` throws instead of returning an answer whose checks failed.
+</Field>
+<Field name="checks" type="{ signature, record, expiry, answer, base }">
+The result of each check, as booleans. What each proves is in [Calls and receipts](/docs/concepts/calls-and-receipts#what-the-checks-prove).
+</Field>
+<Field name="fixture" type="boolean">
+False against a cluster. True only against an API in fixture mode, where `verified` is false.
+</Field>
+</Fields>
+
+## Steps
+
+```ts
+const result = await voynich.call('sketch-32', drawing, {
+  onStep: step => console.log(step),
+})
+```
+
+| Step | What has happened |
+| --- | --- |
+| `encrypting` | A live, reachable enclave holding a live grant is chosen, the one in `options.enclave` when it is given. The client has read the Config, the Model, the Enclave, its attestation record and its Grant from the chain and found the record in force, the measurement allowed and the grant active. Only then is the input encrypted to the enclave's key. |
+| `awaiting-signature` | The transaction that opens the call is built and waiting for the wallet. |
+| `escrowed` | The call is open on chain with the price in escrow. |
+| `answering` | The encrypted input is with the enclave. |
+| `verified` | The answer is back, the receipt passed its checks and the output is decrypted. |
+
+The wallet signs once, at `awaiting-signature`.
+
+## Failures
+
+`call` throws a `VoynichError` with a `code`. After the price is in escrow the error also carries the `call` and its `refundState`.
+
+| Code | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `ENCLAVE_UNAVAILABLE` | No live, reachable enclave holds a live grant for the model, or the enclave named in `options.enclave` is not one. |
+| `ENCLAVE_MISMATCH` | With `options.enclave`: the enclave on chain is not the one named. |
+| `PROGRAM_MISMATCH` | The API names a program other than the one the SDK is built for. |
+| `INVALID_CHAIN_ACCOUNT` | The Config, the Model or the Enclave is missing on chain or is not owned by the program. |
+| `MODEL_MISMATCH` | The accounts on chain are not the model and enclave that were asked for. |
+| `MODEL_NOT_LIVE` | The model is not `live`. |
+| `INVALID_ATTESTATION` | The enclave's record is at the wrong address, has the wrong owner or layout, names another key, is expired, or states a measurement the model does not allow. |
+| `GRANT_REQUIRED` | The enclave has no active grant for the model on chain. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction that opens the call did not land. Nothing is in escrow. |
+| `CALL_FAILED`, or the failure's own code | The call did not settle. `refundState` says whether it can be refunded yet. |
+| `INVALID_ANSWER` | The answer is missing its envelope, hash, signature, receipt or transaction. |
+| `RECEIPT_MISMATCH` | The answer or the receipt belongs to another call, input, model or enclave. |
+| `VERIFICATION_FAILED` | A check on the receipt failed. The message says which part. |
+| `CALL_INTERRUPTED`, or an API error code | The connection or the API failed after escrow. `refundState` is `pending-deadline`, or `refundable` for `CALL_DEADLINE_PASSED`. |
+
+A failure before the wallet signs can also be an `ApiClientError` with an [API error code](/docs/api/overview#errors), such as `MODEL_NOT_FOUND`, or an `Error` from `preprocessSketch` for an input that is not a drawing.
+
+```ts
+import { createVoynich, VoynichError } from 'voynich'
+
+const voynich = createVoynich({ apiUrl: 'https://api.voynich.dev', signer: wallet })
+
+try {
+  const { output } = await voynich.call('sketch-32', drawing)
+} catch (error) {
+  if (error instanceof VoynichError && error.call && error.refundState === 'refundable') {
+    await voynich.refund(error.call.address)
+  } else throw error
+}
+```
+
+## What it costs
+
+The model's price (or escrow `ceiling` for a per-token model), the transaction fee of `open_call` or `open_metered_call`, and the rent of the Call account. See [Fees and the token](/docs/concepts/fees-and-the-token).
+
+## Streaming signed pieces
+
+For a per-token (`priceUnit: 'token'`) `text` model, use [`voynich.stream`](/docs/sdk/stream) to stream verified pieces with live `spentAmount`/`remainingAmount`, cooperative `stop()`, and `final()` receipt verification.
+
+For lower-level control, `openStream` opens a metered call with an explicit `ceiling`, relays the encrypted prompt (with a 16-byte `stopToken`), and returns the raw handle and piece generator:
+
+```ts
+const opened = await voynich.openStream('text-1m', 'Write one line.', {
+  ceiling: '200000',
+  maxTokens: 64,
+})
+
+for await (const piece of opened.pieces) {
+  process.stdout.write(piece.text)
+}
+```
+
+```ts
+openStream(model: string, input: string, options: OpenStreamOptions): Promise<{
+  call: Call
+  model: Model
+  enclave: Enclave
+  inputHash: string
+  baseSha256: string | null
+  enclaveSigningKey: string
+  replySecretKey: Uint8Array
+  stopToken: string
+  stop: () => Promise<void>
+  pieces: AsyncGenerator<VerifiedStreamPiece>
+}>
+```
+
+`OpenStreamOptions` takes `ceiling` (required decimal base-unit string), optional `enclave`, `maxTokens`, `onStep` (`'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming'`), and `signal`.
+
+`voynich.streamPieces(callAddress, options)` subscribes to `GET /v1/calls/{id}/stream` (with automatic `?after=<index>` reconnect catch-up against `GET /v1/calls/{id}/pieces`) and verifies every piece through `verifyStreamPiece` before yielding `VerifiedStreamPiece` (`{ piece, payload, text, tokens, count, runningHash, finishReason, spentAmount?, remainingAmount? }`). `verifyStreamPiece` checks sequential `index`, monotonic `count`, non-zero `deltaTokens` on intermediate pieces (`deltaTokens === 0` is allowed only on terminal pieces with a non-null `finishReason`, such as `'stopped'` or `'eos'`), `SHA-256(envelope) === pieceHash`, the `streamNextHash` running hash chain, and the Ed25519 signature over `voynich/piece/v1` (120 bytes) or `voynich/piece/v2` (152 bytes with `baseSha256`) before decrypting the piece envelope.
+
+For a complete autonomous agent script that calls a model with a keypair, enforces all receipt checks and forwards the receipt proof downstream, see [Calling from an agent](/docs/sdk/from-an-agent).

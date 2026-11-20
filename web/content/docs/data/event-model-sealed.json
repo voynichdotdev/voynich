@@ -1,0 +1,18 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "ciphertext_sha256",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  },
+  {
+    "field": "base_sha256",
+    "type": "Option<[u8; 32]>"
+  }
+]

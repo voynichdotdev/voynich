@@ -1,0 +1,42 @@
+[
+  {
+    "account": "authority",
+    "writable": "",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Either `measurement.publisher` or `config.admin`."
+  },
+  {
+    "account": "config",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"config\"]`",
+    "is": "The protocol's Config."
+  },
+  {
+    "account": "measurement",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The active Measurement PDA to mark `Deprecated`."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

@@ -1,0 +1,166 @@
+---
+title: Calling from an agent
+description: Run an autonomous agent that calls a sealed model with its own Solana keypair, verifies all four receipt checks before acting, and forwards the receipt proof downstream.
+---
+
+An autonomous agent can call any live sealed model on Voynich with its own funded Solana keypair, verify the returned on-chain Receipt before trusting the model's answer, and pass the receipt id downstream so any other service or human can verify the exact inference independently.
+
+The worked Node.js example lives at `backend/sdk/examples/agent-caller.mjs` (with a quick reference in `backend/sdk/examples/README.md`).
+
+## Running the example
+
+Fund a 64-byte Solana JSON keypair with SOL for call fees and Call account rent, then run the script from the `backend/` workspace:
+
+```bash
+VOYNICH_KEYPAIR=./agent.json \
+VOYNICH_MODEL=sketch-32 \
+VOYNICH_ANSWER_MODE=open \
+node sdk/examples/agent-caller.mjs
+```
+
+On PowerShell:
+
+```powershell
+$env:VOYNICH_KEYPAIR = ".\agent.json"
+$env:VOYNICH_MODEL = "sketch-32"
+$env:VOYNICH_ANSWER_MODE = "open"
+node sdk/examples/agent-caller.mjs
+```
+
+### Environment variables
+
+| Variable | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `VOYNICH_KEYPAIR` | yes | | Path to a 64-byte Solana JSON keypair file funded for call fees and rent. |
+| `VOYNICH_API_URL` | no | `https://api.voynich.dev` | Voynich HTTP API base URL. |
+| `VOYNICH_SITE_URL` | no | `https://voynich.dev` | Web base URL used when formatting `receiptUrl` and `accountUrl`. |
+| `VOYNICH_MODEL` | no | `sketch-32` | Live model slug or address to call. |
+| `VOYNICH_ANSWER_MODE` | no | `open` | `open` (stores plaintext answer bytes in the on-chain Receipt) or `sealed` (encrypted to the caller). |
+| `REPORT_WEBHOOK_URL` | no | | Optional HTTP(S) endpoint that receives the verified JSON report via `POST`. |
+
+## Call, verify, then act
+
+`agent-caller.mjs` builds a `voynich` client from the keypair, runs `client.call`, and runs an independent on-chain `client.verify` pass before producing a report or touching `REPORT_WEBHOOK_URL`:
+
+```js
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { Keypair } from '@solana/web3.js'
+import { createVoynich } from 'voynich'
+
+const secret = JSON.parse(await readFile(resolve(process.env.VOYNICH_KEYPAIR), 'utf8'))
+const signer = Keypair.fromSecretKey(Uint8Array.from(secret))
+const client = createVoynich({
+  apiUrl: process.env.VOYNICH_API_URL || 'https://api.voynich.dev',
+  signer,
+})
+
+const result = await client.call('sketch-32', drawing, { answerMode: 'open' })
+const verification = await client.verify(result.receipt.address)
+
+if (verification.verified !== true) {
+  throw new Error(`Receipt verification failed: ${verification.reason || 'checks did not pass'}`)
+}
+```
+
+Pass a custom Solana `Connection` to `createVoynich({ apiUrl, signer, connection })` when your agent should read the Receipt and attestation accounts through its own RPC node independently of the API.
+
+### Enforcing all four checks
+
+Never act on `result.output` or forward a webhook unless `verification.verified === true`. That flag requires all four checks in `verification` to pass:
+
+| Check | What it proves |
+| --- | --- |
+| `signature` | The enclave's Ed25519 key signed the 114-byte `voynich/receipt/v1` message binding the Call address, `input_hash`, and `output_hash`. |
+| `record` | That signing key sits in an on-chain attestation record owned by the configured attestation program, with a measurement the model allows. |
+| `expiry` | The settling slot sits inside the attestation record's valid slot window (`recordedSlot <= slot < expiresAtSlot`). |
+| `answer` | For an `open` receipt, the raw on-chain `Receipt.open_answer` bytes hash (SHA-256) to `output_hash`. For a `sealed` receipt, no open bytes are stored and the check passes. |
+
+In `agent-caller.mjs`, any failed check throws before stdout output or `REPORT_WEBHOOK_URL` delivery and exits with status `1`.
+
+## Forwarding the receipt downstream
+
+Once all four checks pass, `agent-caller.mjs` prints a JSON report to stdout and, when `REPORT_WEBHOOK_URL` is set, POSTs the same JSON body with `content-type: application/json`:
+
+```json
+{
+  "agent": "<agent-wallet-pubkey>",
+  "model": "sketch-32",
+  "answerMode": "open",
+  "output": {
+    "label": "clock",
+    "probability": 0.97
+  },
+  "receiptAddress": "<receipt-pda>",
+  "receiptUrl": "https://voynich.dev/receipts/<receipt-pda>",
+  "accountUrl": "https://voynich.dev/account?wallet=<agent-wallet-pubkey>",
+  "slot": "419284102",
+  "transactionSignature": "<settle-tx-signature>",
+  "verified": true,
+  "checks": {
+    "signature": true,
+    "record": true,
+    "expiry": true,
+    "answer": true
+  }
+}
+```
+
+<Fields>
+<Field name="agent" type="address" required>
+Base58 public key of the agent keypair that paid for and opened the call.
+</Field>
+<Field name="model" type="string" required>
+Model slug returned on the verified Receipt.
+</Field>
+<Field name="answerMode" type="'open' | 'sealed'" required>
+Answer mode recorded on the Receipt.
+</Field>
+<Field name="output" type="unknown" required>
+Model output returned by `client.call`.
+</Field>
+<Field name="receiptAddress" type="address" required>
+Canonical Receipt PDA on Solana. Downstream services pass this id to `client.verify(receiptAddress)` or [`GET /v1/receipts/{id}`](/docs/api/calls-and-receipts#get-v1receiptsid) without needing the agent's keypair.
+</Field>
+<Field name="receiptUrl" type="string" required>
+Direct link to the receipt verification page at `/receipts/<receiptAddress>`.
+</Field>
+<Field name="accountUrl" type="string" required>
+Direct link to the agent wallet's account view at `/account?wallet=<agent>`.
+</Field>
+<Field name="slot" type="decimal string" required>
+Solana slot the call settled in.
+</Field>
+<Field name="transactionSignature" type="signature" required>
+Solana transaction signature of `settle_call`.
+</Field>
+<Field name="verified" type="true" required>
+Always `true` in an emitted report; any failure aborts non-zero before emitting.
+</Field>
+<Field name="checks" type="{ signature, record, expiry, answer }" required>
+Boolean outcome of each of the four verification checks.
+</Field>
+</Fields>
+
+A downstream consumer does not need to trust the agent's report body on its own: passing `report.receiptAddress` to `verify(report.receiptAddress)` (SDK, CLI, or `/receipts/<receiptAddress>`) re-runs all four checks directly against Solana and, for `open` calls, reads the signed answer bytes straight from the on-chain Receipt.
+
+## Inspecting an agent's calls and receipts
+
+Every call opened by the agent's keypair appears under its public key in two places:
+
+- **Web:** open `https://voynich.dev/account?wallet=<agent-wallet-pubkey>` (or [/account](/account)) to see the agent's calls, settled receipts, and any refundable expired calls.
+- **HTTP API:** call [`GET /v1/accounts/{wallet}`](/docs/api/accounts-and-stats#get-v1accountswallet) (or `client.account(agentPubkey)` in the SDK) to fetch the agent wallet's `calls` array, each carrying its `status`, `receipt` address, `answerMode`, and `refundState`.
+
+## Read next
+
+<Cards>
+<Card href="/docs/sdk/call" title="SDK: call">
+Every option, input shape, step callback and error code for calling a sealed model.
+</Card>
+<Card href="/docs/sdk/verify" title="SDK: verify">
+Re-verify any receipt address or transaction signature from a downstream service.
+</Card>
+<Card href="/docs/api/accounts-and-stats" title="HTTP API: Accounts and stats">
+Read an agent wallet's calls and receipts programmatically via GET /v1/accounts/&#123;wallet&#125;.
+</Card>
+</Cards>

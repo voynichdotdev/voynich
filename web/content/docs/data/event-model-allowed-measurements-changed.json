@@ -1,0 +1,10 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "allowed_measurements",
+    "type": "Vec<[u8; 48]>"
+  }
+]

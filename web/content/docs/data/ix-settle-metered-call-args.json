@@ -1,0 +1,18 @@
+[
+  {
+    "argument": "count",
+    "type": "u64"
+  },
+  {
+    "argument": "running_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "argument": "signature",
+    "type": "[u8; 64]"
+  },
+  {
+    "argument": "ed25519_instruction_index",
+    "type": "u16"
+  }
+]

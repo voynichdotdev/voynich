@@ -1,0 +1,18 @@
+[
+  {
+    "argument": "price",
+    "type": "u64"
+  },
+  {
+    "argument": "price_mint",
+    "type": "pubkey"
+  },
+  {
+    "argument": "operator_share_bps",
+    "type": "u16"
+  },
+  {
+    "argument": "price_unit",
+    "type": "PriceUnit"
+  }
+]

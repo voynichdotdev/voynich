@@ -1,0 +1,58 @@
+[
+  {
+    "account": "owner",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The model's owner. Pays the Model's rent and the upload funding."
+  },
+  {
+    "account": "upload_key",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The primary fresh key that will write the ciphertext: system-owned, holding no data, different from the owner. Up to 7 additional upload keys may follow the Weights accounts in remaining accounts."
+  },
+  {
+    "account": "config",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"config\"]`",
+    "is": "The protocol's Config."
+  },
+  {
+    "account": "model",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", args.name]`",
+    "is": "The Model, created here."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

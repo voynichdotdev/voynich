@@ -1,0 +1,42 @@
+[
+  {
+    "account": "publisher",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The wallet publishing the measurement. Pays the 366-byte Measurement PDA's rent."
+  },
+  {
+    "account": "measurement",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Measurement PDA at `[\"measurement\", digest[..32], digest[32..]]`, created here."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

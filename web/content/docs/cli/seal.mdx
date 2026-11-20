@@ -1,0 +1,288 @@
+---
+title: seal
+description: voynich seal, flag by flag, with the owner key file, pricing, resuming an upload, the progress lines, what it prints and what fails.
+---
+
+`voynich seal` takes a weights file and a manifest to a sealed model on chain. It encrypts the weights on this machine, writes the ciphertext into the model's Weights accounts, fixes its hash and, with `--enclave`, grants a first enclave so the model is live. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models). The same from code is [seal](/docs/sdk/seal).
+
+```bash
+voynich seal model.onnx \
+  --manifest manifest.json \
+  --price 100000 \
+  --operator-share-bps 2500 \
+  --measurement <measurement> \
+  --upload-funding <lamports> \
+  --enclave <enclave>
+```
+
+## Arguments and flags
+
+<Fields>
+<Field name="weights file" type="file path, first argument">
+The model's weights, an ONNX file. Required for a new sealing and for zero-state-file `--resume`; left out only when resuming from a `--state` owner key file that holds the ciphertext.
+</Field>
+<Field name="--manifest" type="file path">
+The model's manifest as JSON. Required for a new sealing; optional when resuming with `--model` (loaded from the on-chain Model). Its `name` is the model's name, and the model's address is derived from it. The manifest's fields are told in [Sealed models](/docs/concepts/sealed-models#the-manifest). A `sketch` manifest may leave out the fields that take the sketch defaults.
+</Field>
+<Field name="--model" type="model name or address">
+Existing uploading model to resume with `--resume` when no `--state` file or `--manifest` file is present.
+</Field>
+<Field name="--state" type="file path">
+Optional password-encrypted [owner key file](#the-owner-key-file). Omitted by default when deriving secrets deterministically from the owner keypair; pass it to save an encrypted backup or to resume a pre-Step-6 random-key sealing.
+</Field>
+<Field name="--price" type="integer string">
+The unit price of the model (per call when `--price-unit` is `call`, or per output token when `token`), in base units of the price's unit: lamports for SOL, the mint's smallest unit for a mint. Required for a new sealing; read from the on-chain Model when resuming with `--model`.
+</Field>
+<Field name="--price-unit" type="'call' | 'token'">
+Whether `--price` is charged per `call` (default) or per output `token`.
+</Field>
+<Field name="--mint" type="SOL or address">
+The unit of the price: `SOL`, in any case, or the address of the SPL Token mint the price is in. Without it the price is in SOL.
+</Field>
+<Field name="--decimals" type="integer">
+The decimals of the price's unit. Required with a mint address. `9` for SOL.
+</Field>
+<Field name="--symbol" type="string">
+The label shown beside the price. `SOL` for SOL, the mint's address for a mint.
+</Field>
+<Field name="--operator-share-bps" type="integer, 0 to 10000" required>
+The operator's share of each settled call, in basis points. The split is told in [Fees and the token](/docs/concepts/fees-and-the-token).
+</Field>
+<Field name="--measurement" type="96 hex characters, repeatable" required>
+A measurement the model allows: enclaves whose attestation record states it can be granted the key. Give the flag once per measurement, 1 to 8 times.
+</Field>
+<Field name="--upload-funding" type="integer string, lamports" required>
+What moves from the owner's wallet across the upload keys when the model is created. Each key pays the fee of its writes from its share. The amount for a model is told in [Upload funding](#upload-funding).
+</Field>
+<Field name="--upload-keys" type="integer, 1 to 8">
+Number of one-time upload keys to write ciphertext in parallel. When omitted, `seal` auto-sizes from 8 downward until `create_model` fits within 1,104 bytes.
+</Field>
+<Field name="--base" type="file path or URI">
+Base model specification for sealing a `voynich/adapter/v1` adapter: either a JSON file containing `{ source, sha256, sizeBytes, format }` or a source URI starting with `https://`, `http://`, `ipfs://` or `hf://`.
+</Field>
+<Field name="--base-file" type="file path">
+Local copy of the base weights file. Automatically computes `sha256` and `sizeBytes`, infers `format` from `.onnx`, `.safetensors` or `.gguf`, checks consistency with any explicit `--base-sha256`/`--base-size`, and verifies ONNX adapter tensor names and dimensions via `verifyOnnxAdapterCompatibility` before spending lamports.
+</Field>
+<Field name="--base-sha256" type="64 lowercase hex characters">
+Expected SHA-256 of the base model weights (optional when `--base-file` or a `--base` JSON file supplies it).
+</Field>
+<Field name="--base-size" type="integer string">
+Exact byte length of the base model weights (optional when `--base-file` or a `--base` JSON file supplies it).
+</Field>
+<Field name="--base-format" type="'onnx' | 'safetensors' | 'gguf'">
+Weight container format of the base model (inferred from `--base-file` or read from `--base` JSON when omitted).
+</Field>
+<Field name="--enclave" type="enclave address or signing key">
+The enclave to grant when the model is sealed. With it the command ends on a live model, without it on a sealed one.
+</Field>
+<Field name="--resume" type="flag">
+Continue a sealing from the owner key file. See [Resuming](#resuming).
+</Field>
+</Fields>
+
+The global flags `--api-url` and `--keypair` are in [Install](/docs/cli/install#global-flags). The wallet the command signs with becomes the model's owner.
+
+## Sealing an adapter
+
+To seal a compact `voynich/adapter/v1` (`.voya`) adapter pinned to a public open base model, pass `--base` (either a URI or a `base.json` file) and optionally `--base-file` to hash and pre-check the local base file before any transaction is signed:
+
+```bash
+voynich seal adapter.voya \
+  --base https://example.org/models/base.onnx \
+  --base-file ./base.onnx \
+  --manifest manifest.json \
+  --price 100000 \
+  --operator-share-bps 2500 \
+  --measurement <measurement> \
+  --upload-funding <lamports> \
+  --enclave <enclave>
+```
+
+Before quoting or allocating any chain accounts, `seal` validates the `ModelBase` fields, decodes the `.voya` file with `decodeAdapter` to enforce `decoded.baseSha256 === base.sha256`, and (when `--base-file` is passed for an ONNX base) runs `verifyOnnxAdapterCompatibility` to verify every adapter tensor exists in the base graph as `FLOAT` with matching dimensions. On zero-state-file `--resume` (`voynich seal adapter.voya --model <name> --resume`), the CLI inherits `existingModel.base` automatically with no `--base*` flags needed.
+
+## Pricing
+
+A price in SOL needs `--price` alone:
+
+```bash
+--price 100000
+```
+
+`--mint SOL` gives the same price. A price in an SPL Token mint names the mint and its decimals:
+
+```bash
+--price 100000 --mint <mint address> --decimals <decimals> --symbol <symbol>
+```
+
+The price, price unit (`--price-unit call` or `--price-unit token`) and operator share are recorded on the Model when it is created.
+
+## Measurements
+
+`--measurement` is repeatable. Each value is the 48-byte measurement of an enclave build, as 96 lowercase hex characters:
+
+```bash
+--measurement <measurement of one build> --measurement <measurement of another>
+```
+
+An operator reads the measurement of a runtime with [`voynich enclave status`](/docs/cli/enclave#voynich-enclave-status), and every registered enclave's measurement is in [`voynich enclaves`](/docs/cli/models#voynich-enclaves). What a measurement is is told in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+
+## Upload funding
+
+Writes are signed by up to 8 one-time upload keys made for this sealing, so the owner's wallet signs nothing while the ciphertext goes up in parallel. `--upload-funding` is split evenly across all upload keys in `create_model` (remainder to the primary key). Each write carries up to 888 bytes of ciphertext in one transaction, and a write stops at the end of a Weights account, so a model of `n` ciphertext bytes takes about `n / 888` writes. Before `seal_model`, extra upload keys self-sweep their remaining lamports (`balance - 5,000`) back to the owner in parallel with no owner wallet signature, and `seal_model` sweeps the primary key.
+
+[`POST /v1/models/quote`](/docs/api/models#post-v1modelsquote) computes the amount for a ciphertext size: its `uploadFundingLamports` is the value to pass, and its `requiredUpfrontLamports` is what the owner's wallet needs for the whole sealing.
+
+`seal` asks the same route for a quote with the model's create metadata before it allocates anything. Unless the quote's `canCreate` is `true`, the command stops with `CREATE_MODEL_TOO_LARGE`, and nothing is sent.
+
+## The owner key file
+
+The file at `--state` holds everything the sealing needs to finish and the key the owner grants with later:
+
+- the model's address
+- the ciphertext
+- the model key
+- the upload keys' secrets (primary and any extra parallel upload keys)
+- the secrets of the Weights accounts' keys
+- the plaintext size and the cipher's nonce prefix
+
+It is written before the first transaction is sent, and again once the creating transaction is built.
+
+The file is encrypted under one password. The key is derived with scrypt (`N` 131072, `r` 8, `p` 1) over a random 16-byte salt, and the contents are encrypted with XChaCha20-Poly1305 under a random 24-byte nonce. On disk it is one line of JSON with `version`, `kdf`, `salt`, `nonce` and `ciphertext`. Each write goes to `<file>.tmp` with mode `0600` and is then renamed over the file.
+
+<Callout kind="important">
+Keep the owner key file and its password. `voynich grant` reads the model key from it.
+</Callout>
+
+### The password
+
+`seal` asks for the password once, on stderr, before it reads anything else:
+
+```text
+Owner key file password: 
+```
+
+The typing is not shown. Enter ends it, Backspace removes a character, Ctrl+C cancels.
+
+Where no terminal is attached, set `VOYNICH_PASSWORD`:
+
+```bash
+VOYNICH_PASSWORD=<password> voynich seal model.onnx --manifest manifest.json --state owner.enc.json ...
+```
+
+## What the wallet signs
+
+After the quote, the owner's wallet signs these transactions, in order:
+
+| Transaction | How many |
+| --- | --- |
+| Allocate a Weights account | One per Weights account. An account holds up to 10 MiB less a 56-byte header, and a model has 1 to 64 (~640 MiB). |
+| `create_model` | One. It creates the Model in `uploading`, binds the initial Weights accounts (up to 8) and funds the upload keys. Any further Weights accounts are bound in upload-key-signed `attach_weights` batches of 16. |
+| `seal_model` | One. For models over 8 chunks (~512 KiB), the upload key folds 65,552-byte ciphertext chunks into the Merkle frontier in 8-chunk `seal_range` batches first; `seal_model` finalizes the 64 KiB chunk Merkle root. |
+| `grant_by_owner` | One, with `--enclave`. |
+
+A model whose ciphertext fits one Weights account takes three owner signatures, four with `--enclave`. Every `attach_weights`, `write_weights`, `seal_range` and extra-key self-sweep transaction is signed by the upload keys with no wallet prompt. The instructions are told in [Instructions](/docs/program/instructions).
+
+## Progress
+
+Progress is written to stderr, one line per step and one per upload write:
+
+```text
+<step>: <bytes written>/<total bytes> bytes, <transactions sent> tx (<writes> writes), <elapsed>s, <fees> lamports fees
+```
+
+When the command completes, it writes a summary line to stderr:
+
+```text
+sealed: <bytes written> bytes, <transactions sent> tx (<txPerMiB> tx/MiB), <elapsedSeconds>s (<secondsPerMiB> s/MiB), <feesLamports> lamports fees
+```
+
+| Step | Written |
+| --- | --- |
+| `create` | Before the Weights accounts are allocated and the model is created. |
+| `upload` | After each write, with the bytes written so far, total transactions sent, upload writes landed, elapsed seconds and fees in lamports. |
+| `seal` | When every byte is written, before `seal_model`. |
+| `grant` | Before the grant, with `--enclave`. |
+| `done` | When the model has reached its final status. |
+
+## What it prints
+
+The Model as JSON on stdout, with the status it reached (`live` with `--enclave`, `sealed` without), alongside six sealing measurement fields: `bytesWritten`, `transactionsSent`, `elapsedSeconds`, `feesLamports`, `txPerMiB` and `secondsPerMiB`. Model fields are listed in [Model fields](/docs/cli/models#model-fields). The model key and the upload key are never printed.
+
+## Resuming
+
+### From any device (no state file)
+
+Because sealing secrets (`modelKey`, `noncePrefix`, up to 8 `uploadKeys`, and `weightsKeys`) are derived deterministically from one canonical Ed25519 signature (`voynich/seal/v1`) by the owner wallet, any interrupted upload (including one started in the browser on `/seal`) resumes from any terminal holding only the owner keypair and the weights file:
+
+```bash
+voynich seal model.onnx \
+  --model <name or address> \
+  --resume \
+  --enclave <enclave>
+```
+
+No `--state`, `--manifest`, `--price` or password is required. `seal` fetches the on-chain Model, re-derives the exact deterministic keys via `signSealDerivation`, inspects attached on-chain Weights accounts via `findUnwrittenRangesFromChain` (validating 64 KiB chunks with `openWeightsChunk`), attaches any missing Weights accounts, writes only missing or incomplete byte ranges, resumes `seal_range` from `model.sealedChunks`, sweeps every funded deterministic upload key back to the owner with zero stranded lamports, and seals. (`voynich grant <model> <enclave>` likewise derives `modelKey` directly from `--keypair` when `--state` is omitted.)
+
+### From an encrypted owner key file
+
+A legacy random-key sealing saved with `--state` continues from its owner key file:
+
+```bash
+voynich seal --resume \
+  --manifest manifest.json \
+  --state owner.enc.json \
+  --price 100000 \
+  --operator-share-bps 2500 \
+  --measurement <measurement> \
+  --upload-funding <lamports> \
+  --enclave <enclave>
+```
+
+Pass the flags of the first run and the same password. `--resume --state` reads the ciphertext, the model key, the upload keys and the Weights accounts' keys from the file, so it takes no weights file and encrypts nothing. Both resume modes skip whatever the chain already holds:
+
+| Already on chain | Skipped |
+| --- | --- |
+| A Weights account | Its allocation. The account has to be owned by the program and have the expected size. |
+| The Model | `create_model`. |
+| A range of ciphertext bytes | The writes for that range. Only the missing ranges are written. |
+| A status of `sealed` or `live` | Every write and `seal_model`. |
+| A status of `live` | The grant. |
+
+The wallet has to be the model's owner, and the file's ciphertext size and upload key have to match the Model.
+
+## Failures
+
+The command prints one line to stderr, `<code>: <message>`, or the message alone where the tables show no code, and exits with code `1`. The code is the one the SDK raises for the same failure.
+
+### Before anything is sent
+
+| Message | Cause |
+| --- | --- |
+| `Supply --state.` | A required flag or the weights file is missing. The message names it: `--manifest`, `--price`, `--operator-share-bps`, `--upload-funding`, `weights file`. |
+| `Supply --decimals for an SPL mint.` | `--mint` with a mint address, without `--decimals`. |
+| `Set VOYNICH_PASSWORD when no interactive terminal is available` | No terminal to prompt on and no `VOYNICH_PASSWORD`. |
+| `The password cannot be empty` | Enter on an empty password. |
+| `Cancelled` | Ctrl+C at the prompt. |
+| `Unsupported owner key file format` | With `--resume`: the file at `--state` has another `version` or `kdf`. |
+| A list of fields, as JSON | The manifest does not have the manifest's shape. Each entry names the field in `path` and what is wrong in `message`. |
+
+### While sealing
+
+| Code | Message | Cause |
+| --- | --- | --- |
+| `INVALID_BASE` | Validation error details | The `base` model specification failed `ModelBase` validation before anything was sent. |
+| `INVALID_ADAPTER` | `decodeAdapter` error message | Weights supplied with `--base` are not a valid `voynich/adapter/v1` (`VOYA`) payload. |
+| `BASE_MISMATCH` | Hash mismatch details | The adapter's `baseSha256` does not match `base.sha256`. |
+| `MODEL_TOO_LARGE` | `A model can use at most 64 weights accounts.` | The ciphertext needs more than 64 Weights accounts (~640 MiB). |
+| `CREATE_MODEL_TOO_LARGE` | `The create_model transaction is <bytes> bytes; the wallet-safe maximum is 1104. Reduce the manifest or measurements before allocating accounts.` | The quote's `canCreate` is not `true`. Nothing was sent. |
+| `CONFIGURATION_REQUIRED` | `The Voynich program is not configured.` | The API names no program. |
+| `INVALID_WEIGHTS` | `A resumed weights allocation does not match this model.` | A Weights account of the file exists with another owner or size. |
+| `ALLOCATION_FAILED` | `The weights allocation transaction failed.` | The transaction that allocates a Weights account failed on chain. |
+| `TRANSACTION_EXPIRED` | `The weights allocation expired. Resume using the saved sealing state.` | An allocation did not land before its blockhash expired. Run again with `--resume`. |
+| `RESUME_MISMATCH` | `The sealing state does not match the on-chain model.` | The Model has another owner, another ciphertext size or another upload key than this run. A model of this name already exists, or `--resume` was left out. |
+| `INVALID_WEIGHTS` | `The model weights accounts do not cover this byte range.` | The Model's Weights accounts do not span the ciphertext. |
+| `INSUFFICIENT_FUNDS` | The API's message, with the amounts | The owner's wallet cannot pay `create_model` or `seal_model`, or the upload key cannot pay a write. The amounts are in [Funding](/docs/api/transactions#funding). |
+| `TRANSACTION_FAILED` | The failure's own message, or `The transaction did not land.` | A transaction was refused. A refusal by the program carries one of its [errors](/docs/program/errors). |
+| `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | A transaction did not land before its blockhash expired. Run again with `--resume`. |
+
+With `--enclave`, the failures of [grant](/docs/cli/grant#failures) apply to the last step. A refusal by the API prints the API's code and message; the codes are in the [HTTP API overview](/docs/api/overview#errors).

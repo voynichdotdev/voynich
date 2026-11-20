@@ -1,0 +1,30 @@
+[
+  {
+    "field": "grant",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "enclave",
+    "type": "pubkey"
+  },
+  {
+    "field": "wrapped_key",
+    "type": "bytes"
+  },
+  {
+    "field": "granted_by",
+    "type": "pubkey"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  },
+  {
+    "field": "revoked",
+    "type": "bool"
+  }
+]

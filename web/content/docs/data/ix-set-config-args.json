@@ -1,0 +1,26 @@
+[
+  {
+    "argument": "attestation_program",
+    "type": "pubkey"
+  },
+  {
+    "argument": "record_layout_version",
+    "type": "u8"
+  },
+  {
+    "argument": "fee_recipient",
+    "type": "pubkey"
+  },
+  {
+    "argument": "protocol_share_bps",
+    "type": "u16"
+  },
+  {
+    "argument": "call_deadline_slots",
+    "type": "u64"
+  },
+  {
+    "argument": "max_open_answer_bytes",
+    "type": "u16"
+  }
+]

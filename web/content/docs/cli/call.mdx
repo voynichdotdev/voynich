@@ -1,0 +1,238 @@
+---
+title: call
+description: voynich call sends a JSON input to a sealed model and prints the output, the receipt and the checks. With the input file's forms, the failures, and voynich refund.
+---
+
+`voynich call` makes one call to a sealed model: it picks a live, reachable enclave that holds a grant, encrypts the input to it, opens the call with the price in escrow, waits for the answer, checks the receipt and decrypts the output. The path of a call is told in [Calls and receipts](/docs/concepts/calls-and-receipts). The same from code is [call](/docs/sdk/call).
+
+```bash
+voynich call sketch-32 drawing.json
+voynich call my-text-model --text "Ask:" --max-tokens 64 --open
+voynich call my-metered-model --text "Ask:" --ceiling 500000 --stream
+```
+
+## Arguments
+
+<Fields>
+<Field name="model" type="name or address, first argument" required>
+The model to call.
+</Field>
+<Field name="input.json" type="file path, second argument">
+A JSON file holding the input. Required unless `--text` is passed for a `text` model. Its form depends on the model's `inputKind`, which is in the manifest that [`voynich models`](/docs/cli/models) prints.
+</Field>
+<Field name="--text" type="string">
+Prompt string for a model with `inputKind: "text"`. Replaces the `input.json` file argument. Required with `--stream`.
+</Field>
+<Field name="--max-tokens" type="integer">
+Maximum number of tokens to generate on a generative `text` model.
+</Field>
+<Field name="--ceiling" type="integer string, base units">
+Maximum escrow in base units of the model's price mint. Required for per-token (`priceUnit: "token"`) models on unary `call`; optional with `--stream` (when omitted, `voynich.stream` defaults to `maxTokens * price`, using `manifest.tokenizer.maxOutputTokens` or `64`). Routes the transaction to `open_metered_call` and must be at least the per-token price; omitted for per-call models.
+</Field>
+<Field name="--stream" type="flag">
+Opens a metered stream via [`voynich.stream`](/docs/sdk/stream) (`--text` required; `--ceiling` optional). Verifies every signed `voynich/piece/v1` or `v2` piece as it arrives, writes verified text live to stderr, hooks `SIGINT` (`Ctrl+C`) to call `stream.stop()` and settle immediately at the current count, waits for `stream.final()` to verify all five checks on the 423-byte metered Receipt, and prints `{ call, receipt, transactionSignature, model, enclave, text, count, finishReason, spentAmount, returnedAmount, verified, checks }` as JSON on stdout.
+</Field>
+<Field name="--enclave" type="enclave address or signing key">
+Pin a specific live granted enclave instead of letting the CLI pick the first reachable one.
+</Field>
+<Field name="--open" type="flag">
+Opens the call in `open` answer mode so the enclave writes the verified plaintext answer bytes into the Receipt on chain instead of encrypting the output envelope.
+</Field>
+</Fields>
+
+The caller is the signing wallet, chosen as told in [Install](/docs/cli/install#the-signing-wallet). It signs one transaction (`open_call` or `open_metered_call`) and deposits the model's price (or `--ceiling` for a per-token model) into the call's escrow.
+
+## The input file
+
+### A `sketch` model
+
+A `sketch` model takes a drawing. The file holds it in one of three forms.
+
+**Strokes.** The lines as they were drawn, on a canvas of any size:
+
+```json
+{
+  "strokes": [
+    [[40, 60], [120, 60], [120, 140]],
+    [[60, 100], [100, 100]]
+  ],
+  "width": 200,
+  "height": 200
+}
+```
+
+`strokes` is a list of strokes, each a list of `[x, y]` points. `width` and `height` are positive integers whose product is at most 4,194,304. Every point lies from 0 to `width` across and from 0 to `height` down. Consecutive points of a stroke are joined by a line three pixels thick.
+
+**A matrix.** 28 rows of 28 numbers:
+
+```json
+[[0, 0, 0.5, 1, …], …]
+```
+
+**A flat array.** 784 numbers, the 28 by 28 drawing row by row:
+
+```json
+[0, 0, 0.5, 1, …]
+```
+
+In the matrix and the flat array every number is from 0 to 1, with the background at 0 and ink at 1.
+
+In all three forms the CLI prepares the drawing before it is encrypted: it crops to the ink, scales the longer side to 24 pixels keeping the proportions, and centers the result in 28 by 28. A drawing does not have to be centered or sized by hand.
+
+### A `tensor` model
+
+The file's JSON is sent as it is. It is a flat array of numbers in the order of the manifest's `inputShape`, with as many numbers as the shape's dimensions multiply to.
+
+### A `text` model
+
+Pass the prompt inline with `--text "<prompt>"` (and optional `--max-tokens <n>`), or supply a JSON file containing a JSON string. The enclave tokenizes the prompt with the model's declared tokenizer and runs text classification (when `manifest.labels` is set) or greedy autoregressive generation.
+
+## What it prints
+
+One JSON object on stdout, once the receipt has passed its checks:
+
+<Fields>
+<Field name="output" type="object">
+The model's answer, decrypted on this machine (or read from the Receipt in `--open` mode). For classification models: `{ label, scores }` (up to five `{ label, probability }` entries, highest first). For generative `text` models: `{ text, tokens, finishReason }` (`"eos"` or `"length"`).
+</Field>
+<Field name="receipt" type="object">
+The call's receipt. Its fields are listed in [verify](/docs/cli/verify#the-receipt).
+</Field>
+<Field name="verified" type="boolean">
+`true`: all four checks passed. A call whose receipt fails a check prints no output and fails with `VERIFICATION_FAILED`.
+</Field>
+<Field name="checks.signature" type="boolean">
+The enclave's signing key signed this call, input hash and output hash, and the output received hashes to the receipt's output hash.
+</Field>
+<Field name="checks.record" type="boolean">
+The signing key is the one in the enclave's attestation record, the record's measurement is allowed by the model, and the receipt on chain matches the one read.
+</Field>
+<Field name="checks.expiry" type="boolean">
+The record was in force at the slot the call settled.
+</Field>
+<Field name="checks.answer" type="boolean">
+For an `open` receipt, the on-chain `open_answer` bytes hash to `output_hash`. Passes automatically for a `sealed` receipt.
+</Field>
+<Field name="fixture" type="boolean">
+`false` against a cluster.
+</Field>
+</Fields>
+
+The checks are the ones [`voynich verify`](/docs/cli/verify) runs. What each proves is told in [Calls and receipts](/docs/concepts/calls-and-receipts#what-the-checks-prove).
+
+## Failures
+
+The command prints one line to stderr, `<code>: <message>`, or the message alone where the tables show no code, and exits with code `1`. The code is the one the SDK raises for the same failure.
+
+### Before the call opens
+
+Nothing has been paid.
+
+| Code | Message | Cause |
+| --- | --- | --- |
+|  | `Supply model.` or `Supply input JSON file.` | A missing argument. |
+| `MODEL_NOT_FOUND` | The API's message | No model has this name or address. |
+| `ENCLAVE_UNAVAILABLE` | `No live, reachable granted enclave is available.` | No enclave with status `live` and `reachable` `true` holds a live grant for the model. |
+| `PROGRAM_MISMATCH` | `The API does not name the canonical Voynich program.` | The API names another program than the CLI was built with. |
+| `INVALID_CHAIN_ACCOUNT` | `The model, enclave or configuration account is missing or has an invalid owner.` | One of the three accounts is not on chain under the program. |
+| `MODEL_MISMATCH` | `The chain accounts do not match the requested model and enclave.` | The Model or the Enclave is not at its derived address. |
+| `MODEL_NOT_LIVE` | `The model is not ready for this action.` | The Model's status on chain is not `live`. |
+| `INVALID_ATTESTATION` | `The enclave points to an invalid attestation record.` | The Enclave names a record that is not at the address derived from its signing key. |
+| `INVALID_ATTESTATION` | `The attestation record owner does not match the chain configuration.` | The record is not owned by the attestation program the Config names. |
+| `INVALID_ATTESTATION` | `The enclave record is expired or does not match the registered and allowed software.` | The record is out of force at the current slot, differs from the Enclave, or states a measurement the model does not allow. |
+| `GRANT_REQUIRED` | `The enclave has no chain grant for this model.` | There is no Grant account for this model and enclave. |
+| `GRANT_REQUIRED` | `The enclave has no active chain grant for this model.` | The Grant is revoked. |
+|  | `A sketch tensor must contain 784 values` | A flat array of another length. |
+|  | `A sketch matrix must be 28 by 28` | A matrix of another size. |
+|  | `Sketch values must be finite floats from 0 (background) to 1 (ink)` | A number outside 0 to 1. |
+|  | `Drawing dimensions must be positive and at most 4 megapixels` | `width` or `height` is not a positive integer, or their product is above 4,194,304. |
+|  | `Stroke coordinates must be finite and inside the drawing dimensions` | A point outside the canvas. |
+| `INSUFFICIENT_FUNDS` | The API's message, with the amounts | The wallet cannot pay the price, the Call's rent and the fee. The amounts are in [Funding](/docs/api/transactions#funding). |
+| `TRANSACTION_FAILED` | The failure's own message, or `The transaction did not land.` | `open_call` was refused. A refusal by the program carries one of its [errors](/docs/program/errors). |
+| `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `open_call` did not land before its blockhash expired. |
+
+### After the call opens
+
+The price is in escrow. A call that ends here without a receipt is refunded in full once its deadline has passed: see [`voynich refund`](#voynich-refund).
+
+| Code | Message | Cause |
+| --- | --- | --- |
+| `INPUT_HASH_MISMATCH`, `INVALID_ENVELOPE`, `CALL_NOT_OPEN`, `CALL_DEADLINE_PASSED` | The enclave's message | The enclave refused the encrypted input when it was relayed. |
+| `ENCLAVE_EXPIRED`, `PROGRAM_REFUSED`, `CALL_DEADLINE_PASSED` | The failure's message | The answer reported that the call failed: the enclave's record expired before it answered, the enclave could not complete the call, or the deadline passed and the call is `refundable` or `refunded`. |
+| `CALL_FAILED` | `The call did not settle.` | The answer reported a failed call without a failure of its own. |
+| `INVALID_ANSWER` | `The enclave answer is incomplete.` | The answer lacks the output, its hash, the signature, the receipt's address or the settling transaction. |
+| `RECEIPT_MISMATCH` | `The answer does not belong to this call.` | The answer names another call, input hash, model or enclave. |
+| `RECEIPT_MISMATCH` | `The receipt does not belong to this call.` | The receipt names another call, input hash, model or enclave. |
+| `VERIFICATION_FAILED` | `Encrypted output hash does not match the receipt.` | The output received does not hash to the receipt's output hash. |
+| `VERIFICATION_FAILED` | One of the [reasons](/docs/cli/verify#reasons) of `verify` | The receipt failed a check. |
+| `CALL_INTERRUPTED` | The underlying message | The connection or the process failed while the call was waiting. |
+
+A refusal by the API prints the API's message under its own code; the codes are in the [HTTP API overview](/docs/api/overview).
+
+## voynich settle
+
+`voynich settle` lets a caller (or operator) holding a signed stream piece settle an open per-token call directly before `deadlineSlot`, paying `count * unitPrice` across owner, operator, and protocol and returning `ceiling - total` to the caller in the same transaction.
+
+```bash
+voynich settle <call> --from-pieces
+voynich settle <call> --count <tokens> --running-hash <hex64> --signature <base64>
+```
+
+<Fields>
+<Field name="call" type="address, first argument" required>
+The open per-token Call account to settle.
+</Field>
+<Field name="--from-pieces" type="flag">
+Fetches `GET /v1/calls/{id}/pieces`, verifies the sequential hash chain and Ed25519 signatures against the enclave's on-chain signing key (and `Model.base.sha256` when present), and settles at the last valid signed piece.
+</Field>
+<Field name="--count" type="integer string">
+Cumulative output token count of the signed piece. Required unless `--from-pieces` is passed.
+</Field>
+<Field name="--running-hash" type="64-character hex string">
+Running hash of the signed piece. Required unless `--from-pieces` is passed.
+</Field>
+<Field name="--signature" type="base64 string">
+Enclave Ed25519 signature of the signed piece. Required unless `--from-pieces` is passed.
+</Field>
+</Fields>
+
+The signing wallet must be either `call.caller` or `call.operator`. On success it verifies all five checks on the 423-byte metered Receipt and prints `{ call, receipt, transactionSignature, deliveredCount, spentAmount, returnedAmount, verified, checks }` as JSON on stdout.
+
+## voynich refund
+
+`voynich refund` returns the escrow of a call that passed its deadline without a receipt. The whole price goes back to the caller. When a call can be refunded is told in [Calls and receipts](/docs/concepts/calls-and-receipts#refunds).
+
+```bash
+voynich refund <call>
+```
+
+<Fields>
+<Field name="call" type="address, first argument" required>
+The call to refund. A wallet's calls and their statuses are in [`voynich account`](/docs/cli/account): a call to refund has the status `refundable`.
+</Field>
+</Fields>
+
+The signing wallet signs `refund_call` and pays its fee. The escrow goes to the call's caller whichever wallet signs.
+
+It prints the status of the refunding transaction:
+
+<Fields>
+<Field name="id" type="string">
+The transaction's id at the API.
+</Field>
+<Field name="status" type="string">
+`confirmed` or `finalized`.
+</Field>
+<Field name="signature" type="base58 signature">
+The transaction's signature.
+</Field>
+</Fields>
+
+| Code | Message | Cause |
+| --- | --- | --- |
+|  | `Supply call address.` | The argument is missing. |
+| `CALL_NOT_FOUND` | The API's message | No call has this address. |
+| `CALL_NOT_REFUNDABLE` | The API's message | The call's deadline has not passed. |
+| `CALL_NOT_OPEN` | The API's message | The call is settled or refunded. |
+| `TRANSACTION_FAILED` | The failure's own message, or `The transaction did not land.` | `refund_call` was refused. |
+| `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `refund_call` did not land before its blockhash expired. |

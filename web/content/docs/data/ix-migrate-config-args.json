@@ -1,0 +1,6 @@
+[
+  {
+    "argument": "max_open_answer_bytes",
+    "type": "u16"
+  }
+]

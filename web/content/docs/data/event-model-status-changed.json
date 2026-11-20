@@ -1,0 +1,10 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "status",
+    "type": "ModelStatus"
+  }
+]

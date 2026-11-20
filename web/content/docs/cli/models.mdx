@@ -1,0 +1,351 @@
+---
+title: models
+description: voynich models and voynich enclaves, the two list commands, with every field they print, and voynich model price and voynich model retire, the owner's commands.
+---
+
+Two commands list what is on chain: `voynich models` lists sealed models and `voynich enclaves` lists registered enclaves. Both read public state through the API and need no wallet. The same from code is [Models and enclaves](/docs/sdk/models-and-enclaves).
+
+Two more commands change a model as its owner: [`voynich model price`](#voynich-model-price) and [`voynich model retire`](#voynich-model-retire).
+
+## voynich models
+
+```bash
+voynich models
+```
+
+It takes no arguments. It prints one page of models, up to 24, ordered by calls:
+
+<Fields>
+<Field name="items" type="array of Model">
+The models. Each has the fields below.
+</Field>
+<Field name="page.nextCursor" type="string or null">
+The position of the next page, or `null` on the last one.
+</Field>
+<Field name="page.hasMore" type="boolean">
+Whether more models follow this page.
+</Field>
+<Field name="asOf" type="ISO 8601 time">
+When the API read this state.
+</Field>
+</Fields>
+
+The output:
+
+```json
+{
+  "items": [
+    {
+      "address": "431poxuxU5h5BE4nxazgLfxVEdg1xjipQWknyVN8ZobW",
+      "name": "sketch-32",
+      "owner": "D2af6GLQbPYVeXJE8hsrwmsyeJrnbkbgFxha3zM6TxJx",
+      "createdSlot": "107",
+      "sealedSlot": "876",
+      "sizeBytes": 252145,
+      "plaintextSizeBytes": 252081,
+      "ciphertextSha256": "ac7ab9c9ef38…59d8a3bc6b",
+      "cipher": {
+        "id": "xchacha20poly1305-64k-v1",
+        "chunkSizeBytes": 65536,
+        "noncePrefix": "oLJ6yV0e3e1FPcl7lfDCyg=="
+      },
+      "allowedMeasurements": [
+        "5e7dc39b4770…d82100256b"
+      ],
+      "price": {
+        "amount": "100000",
+        "mint": null,
+        "decimals": 9,
+        "symbol": "SOL"
+      },
+      "operatorShareBps": 2500,
+      "protocolShareBps": 500,
+      "status": "live",
+      "manifest": {
+        "name": "sketch-32",
+        "inputKind": "sketch",
+        "inputShape": [
+          1,
+          1,
+          28,
+          28
+        ],
+        "labels": [
+          "airplane",
+          "apple",
+          "banana",
+          …
+        ],
+        "inputName": "input",
+        "outputName": "logits",
+        "preprocess": "Crop the drawing to its ink, scale the longer side to 24 px keeping aspect, center it in 28x28; float32, background 0, ink 1."
+      },
+      "weights": [
+        {
+          "address": "714ovNrHqQ4k6C1sMR6segvFd9cQcNEgdFQuMtoKfJg5",
+          "model": "431poxuxU5h5BE4nxazgLfxVEdg1xjipQWknyVN8ZobW",
+          "index": 0,
+          "offset": 0,
+          "sizeBytes": 252145,
+          "writtenRanges": [
+            {
+              "offset": 0,
+              "length": 252145
+            }
+          ]
+        }
+      ],
+      "upload": null,
+      "enclavesHolding": 1,
+      "callsSettled": "3"
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  },
+  "asOf": "2026-11-18T14:22:10.735Z"
+}
+```
+
+### Model fields
+
+What each field means on chain is told in [Sealed models](/docs/concepts/sealed-models).
+
+<Fields>
+<Field name="address" type="address">
+The Model account.
+</Field>
+<Field name="name" type="string">
+The model's name, such as `sketch-32`. Commands take the name or the address.
+</Field>
+<Field name="owner" type="address">
+The wallet that sealed the model.
+</Field>
+<Field name="createdSlot" type="integer string">
+The slot the Model was created in.
+</Field>
+<Field name="sealedSlot" type="integer string or null">
+The slot the ciphertext hash was fixed in. `null` while the model is `uploading`.
+</Field>
+<Field name="sizeBytes" type="integer">
+The ciphertext's size.
+</Field>
+<Field name="plaintextSizeBytes" type="integer">
+The weights file's size before encryption.
+</Field>
+<Field name="ciphertextSha256" type="64 hex characters or null">
+The SHA-256 of the ciphertext. `null` while the model is `uploading`.
+</Field>
+<Field name="cipher" type="object">
+`id` (`xchacha20poly1305-64k-v1`), `chunkSizeBytes` (`65536`) and `noncePrefix` (16 bytes, base64).
+</Field>
+<Field name="allowedMeasurements" type="array of 96 hex characters">
+The measurements whose enclaves can be granted the model key.
+</Field>
+<Field name="price" type="object">
+The unit price of the model (per call when `priceUnit` is `call`, or per output token when `token`): `amount` in base units as a string, `mint` (an address, or `null` for SOL), `decimals` and `symbol`.
+</Field>
+<Field name="priceUnit" type="'call' | 'token'">
+Whether `price` is charged per `call` or per output `token`.
+</Field>
+<Field name="operatorShareBps" type="integer">
+The operator's share of each settled call, in basis points.
+</Field>
+<Field name="protocolShareBps" type="integer or null">
+The protocol share, in basis points.
+</Field>
+<Field name="status" type="string">
+`uploading`, `sealed`, `live` or `retired`.
+</Field>
+<Field name="manifest" type="object">
+`name`, `inputKind` (`sketch` or `tensor`), `inputShape`, `labels`, and `inputName`, `outputName` and `preprocess`: always for a `sketch` model, where the model states them for a `tensor` model.
+</Field>
+<Field name="weights" type="array">
+The model's Weights accounts in order. Each has `address`, `model`, `index`, `offset` (where its bytes start in the ciphertext), `sizeBytes` and `writtenRanges` (a list of `offset` and `length`).
+</Field>
+<Field name="upload" type="object or null">
+The upload: `uploadKey`, `bytesWritten`, `transactionsWritten`, `writtenRanges` and `closed`. `upload` is `null` from sealing on.
+</Field>
+<Field name="enclavesHolding" type="integer">
+How many enclaves hold a grant for the model that is not revoked, with an attestation record in force.
+</Field>
+<Field name="callsSettled" type="integer string">
+How many calls to the model have settled.
+</Field>
+</Fields>
+
+## voynich enclaves
+
+```bash
+voynich enclaves
+```
+
+It takes no arguments. It prints one page of enclaves, up to 24, live and reachable ones first, in the same envelope as `voynich models`: `items`, `page.nextCursor`, `page.hasMore` and `asOf`.
+
+The output:
+
+```json
+{
+  "items": [
+    {
+      "address": "5pTHrf9HYoq7unNVbvsL4kd6zWcwWXqH4HQ7JPQi5Ft6",
+      "signingKey": "8kgSuH3dc4GSKonVRzzm8aFkpLaVhETp6CkapFFSSCYw",
+      "encryptionKey": "gSVLLAd5h2nbrc00+ABwNfAq7xO5RLq/Rv5Vy5wak1U=",
+      "hardwareType": "dev",
+      "measurement": "5e7dc39b4770…d82100256b",
+      "expiresAtSlot": "3391",
+      "operator": "A4rxgQ3uAJpNMCMhX4UiESkDUBgQ2dAQ828dT4h1uTcV",
+      "endpoint": "https://<enclave host>",
+      "relayPath": "/v1/calls/{call}/input",
+      "status": "live",
+      "reachable": true,
+      "lastSeen": "2026-11-18T14:21:59.190Z",
+      "modelsHeld": 1,
+      "callsSettled": "3",
+      "attestation": {
+        "address": "28rrLu5p3xtXXAsRLBoq8cNvQvHzaeb7QUoDWfmV8dyS",
+        "signingKey": "8kgSuH3dc4GSKonVRzzm8aFkpLaVhETp6CkapFFSSCYw",
+        "encryptionKey": "gSVLLAd5h2nbrc00+ABwNfAq7xO5RLq/Rv5Vy5wak1U=",
+        "hardwareType": "dev",
+        "measurement": "5e7dc39b4770…d82100256b",
+        "recordedSlot": "1891",
+        "expiresAtSlot": "3391",
+        "layoutVersion": 1
+      }
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  },
+  "asOf": "2026-11-18T14:22:10.215Z"
+}
+```
+
+### Enclave fields
+
+What each field means is told in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+
+<Fields>
+<Field name="address" type="address">
+The Enclave account. `voynich grant` and `voynich seal --enclave` take it.
+</Field>
+<Field name="signingKey" type="address">
+The enclave's Ed25519 key. It signs every receipt.
+</Field>
+<Field name="encryptionKey" type="32 bytes, base64">
+The enclave's X25519 key. Inputs and the model key are encrypted to it.
+</Field>
+<Field name="hardwareType" type="string">
+`dev`, `tdx` or `sev-snp`.
+</Field>
+<Field name="measurement" type="96 hex characters">
+The measurement of the software the enclave runs. An owner allows it with `voynich seal --measurement`.
+</Field>
+<Field name="expiresAtSlot" type="integer string">
+The slot the enclave's attestation record expires at.
+</Field>
+<Field name="operator" type="address">
+The operator's wallet. It receives the operator share.
+</Field>
+<Field name="endpoint" type="URL">
+Where the enclave runtime listens.
+</Field>
+<Field name="relayPath" type="string">
+`/v1/calls/{call}/input`: the path, on the API and on the enclave's `endpoint` alike, that takes a call's encrypted input.
+</Field>
+<Field name="status" type="string">
+`live` or `expired`.
+</Field>
+<Field name="reachable" type="boolean">
+Whether the enclave's endpoint answered the API's last health request as this enclave. Callers are sent to live, reachable enclaves. See [Reachability](/docs/api/enclaves#reachability).
+</Field>
+<Field name="lastSeen" type="ISO 8601 time or null">
+When the endpoint last answered as this enclave. `null` until it first does.
+</Field>
+<Field name="modelsHeld" type="integer">
+How many models the enclave holds a grant for.
+</Field>
+<Field name="callsSettled" type="integer string">
+How many calls the enclave has settled.
+</Field>
+<Field name="attestation" type="object">
+The enclave's attestation record: `address`, `signingKey`, `encryptionKey`, `hardwareType`, `measurement`, `recordedSlot`, `expiresAtSlot` and `layoutVersion`.
+</Field>
+</Fields>
+
+## voynich model price
+
+```bash
+voynich model price <model> --price <base units> [--price-unit <call|token>]
+```
+
+Sets a model's price, price unit and operator share with `set_price`, signed by the owner's wallet. Calls that open after it pay the new price and unit. The same from code is [setPrice](/docs/sdk/grant-and-refund#setprice).
+
+<Fields>
+<Field name="model" type="name or address, argument" required>
+The model to price.
+</Field>
+<Field name="--price" type="integer string" required>
+The unit price (per call or per output token), in base units of the price's unit: lamports for SOL, the mint's smallest unit for a mint.
+</Field>
+<Field name="--price-unit" type="'call' | 'token'">
+Whether `--price` is charged per `call` or per output `token`. Left out, the model keeps its current `priceUnit`.
+</Field>
+<Field name="--operator-share-bps" type="integer, 0 to 10000">
+The operator's share of each settled call, in basis points. Left out, the model keeps its share.
+</Field>
+<Field name="--mint" type="SOL or address">
+The unit of the price: `SOL`, or the address of an SPL Token mint. Left out, the model keeps its unit.
+</Field>
+<Field name="--decimals" type="integer">
+The decimals of the price's unit. Required with a mint other than the model's. Left out, it is `9` for SOL and the model's decimals when the mint stays.
+</Field>
+<Field name="--symbol" type="string">
+The label shown beside the price. Left out, it is the model's symbol when the mint stays, `SOL` for SOL, and the mint's address for another mint.
+</Field>
+</Fields>
+
+The wallet is chosen as told in [Install](/docs/cli/install#the-signing-wallet) and has to be the model's owner. The command reads the model first to fill in what the flags leave out.
+
+It prints the status of the transaction, as JSON on stdout: `id`, `status` (`confirmed` or `finalized`) and `signature`.
+
+| Code | Message | Cause |
+| --- | --- | --- |
+|  | `Supply model.` or `Supply --price.` | A missing argument or flag. |
+|  | `--price-unit must be call or token.` | `--price-unit` is neither `call` nor `token`. |
+|  | `Supply --decimals for a new SPL mint.` | `--mint` names a mint other than the model's, without `--decimals`. |
+| `MODEL_NOT_FOUND` | The API's message | No model has this name or address. |
+| `VALIDATION_ERROR` | The API's message | A value is not what its flag takes. |
+| `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner, or the operator share plus the protocol share is above 10,000. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `set_price` was refused, or did not land before its blockhash expired. |
+
+## voynich model retire
+
+```bash
+voynich model retire <model>
+```
+
+Retires a model with `retire_model`, signed by the owner's wallet. A retired model takes no new calls and no new grants. The same from code is [retire](/docs/sdk/grant-and-refund#retire).
+
+<Fields>
+<Field name="model" type="name or address, argument" required>
+The model to retire.
+</Field>
+</Fields>
+
+It prints the status of the transaction: `id`, `status` and `signature`.
+
+| Code | Message | Cause |
+| --- | --- | --- |
+|  | `Supply model.` | The argument is missing. |
+| `MODEL_NOT_FOUND` | The API's message | No model has this name or address. |
+| `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `retire_model` was refused, or did not land before its blockhash expired. |
+
+`voynich model` followed by another word fails with `Use model price, model retire, or model revoke.` The third of them, `voynich model revoke`, is on [grant](/docs/cli/grant#voynich-model-revoke).
+
+## Failures
+
+The two list commands exit with code `1` and print the API's code and message when the API refuses the request. The API's codes are in the [HTTP API overview](/docs/api/overview).

@@ -1,0 +1,197 @@
+[
+  {
+    "code": "VALIDATION_ERROR",
+    "status": "400",
+    "meaning": "The request's path, query or body does not match the route's schema. `fieldErrors` names each field."
+  },
+  {
+    "code": "UNAUTHORIZED",
+    "status": "401",
+    "meaning": "The request is not allowed for this caller."
+  },
+  {
+    "code": "ORIGIN_NOT_ALLOWED",
+    "status": "403",
+    "meaning": "The browser origin is not on the API's allow list."
+  },
+  {
+    "code": "NOT_FOUND",
+    "status": "404",
+    "meaning": "No route at this path, or no transaction build has this id."
+  },
+  {
+    "code": "PROGRAM_UNAVAILABLE",
+    "status": "409",
+    "meaning": "The API cannot reach the program on its cluster yet."
+  },
+  {
+    "code": "CONFIGURATION_REQUIRED",
+    "status": "409",
+    "meaning": "A value the route needs is not configured on this deployment."
+  },
+  {
+    "code": "IDEMPOTENCY_CONFLICT",
+    "status": "409",
+    "meaning": "The build was already submitted with another idempotency key."
+  },
+  {
+    "code": "TRANSACTION_EXPIRED",
+    "status": "409",
+    "meaning": "The transaction's blockhash expired before it landed. Build again."
+  },
+  {
+    "code": "PAYLOAD_TOO_LARGE",
+    "status": "413",
+    "meaning": "The request body is larger than the route accepts."
+  },
+  {
+    "code": "UNSUPPORTED_MEDIA_TYPE",
+    "status": "415",
+    "meaning": "The request body is not `application/json`."
+  },
+  {
+    "code": "SIMULATION_FAILED",
+    "status": "422",
+    "meaning": "The transaction failed in simulation."
+  },
+  {
+    "code": "CHAIN_REFUSED",
+    "status": "422",
+    "meaning": "The cluster refused the transaction."
+  },
+  {
+    "code": "RATE_LIMITED",
+    "status": "429",
+    "meaning": "Too many requests. `retryAfterSeconds` says when to try again."
+  },
+  {
+    "code": "INTERNAL_ERROR",
+    "status": "500",
+    "meaning": "The API failed."
+  },
+  {
+    "code": "UPSTREAM_UNAVAILABLE",
+    "status": "502",
+    "meaning": "The RPC or the enclave behind the API did not answer."
+  },
+  {
+    "code": "MODEL_NOT_FOUND",
+    "status": "404",
+    "meaning": "No model has this name or address."
+  },
+  {
+    "code": "MODEL_NOT_LIVE",
+    "status": "409",
+    "meaning": "The model is not `live`, so it takes no new call."
+  },
+  {
+    "code": "MODEL_NOT_UPLOADING",
+    "status": "409",
+    "meaning": "The model is already sealed, so it takes no write and no second seal."
+  },
+  {
+    "code": "ENCLAVE_NOT_FOUND",
+    "status": "404",
+    "meaning": "No enclave has this address or signing key."
+  },
+  {
+    "code": "ENCLAVE_EXPIRED",
+    "status": "409",
+    "meaning": "The enclave's attestation record has expired."
+  },
+  {
+    "code": "MEASUREMENT_NOT_ALLOWED",
+    "status": "422",
+    "meaning": "The enclave's measurement is not in the model's allowed measurements."
+  },
+  {
+    "code": "MEASUREMENT_NOT_FOUND",
+    "status": "404",
+    "meaning": "No on-chain measurement record exists for this 48-byte digest."
+  },
+  {
+    "code": "MEASUREMENT_ALREADY_EXISTS",
+    "status": "409",
+    "meaning": "A measurement record for this 48-byte digest is already published on chain."
+  },
+  {
+    "code": "MEASUREMENT_DEPRECATED",
+    "status": "409",
+    "meaning": "This measurement record is already marked deprecated."
+  },
+  {
+    "code": "INVALID_MEASUREMENT",
+    "status": "422",
+    "meaning": "The measurement digest, recipe hash, source repository, commit SHA, or version is invalid."
+  },
+  {
+    "code": "GRANT_REQUIRED",
+    "status": "409",
+    "meaning": "The enclave holds no live grant for the model."
+  },
+  {
+    "code": "CALL_NOT_FOUND",
+    "status": "404",
+    "meaning": "No call has this address."
+  },
+  {
+    "code": "CALL_NOT_OPEN",
+    "status": "409",
+    "meaning": "The call already settled or was refunded."
+  },
+  {
+    "code": "CALL_NOT_REFUNDABLE",
+    "status": "409",
+    "meaning": "The call's deadline has not passed."
+  },
+  {
+    "code": "CALL_DEADLINE_PASSED",
+    "status": "409",
+    "meaning": "The call's deadline has passed, so it takes no input."
+  },
+  {
+    "code": "RECEIPT_NOT_FOUND",
+    "status": "404",
+    "meaning": "No receipt matches this receipt address, call address or transaction signature."
+  },
+  {
+    "code": "INPUT_HASH_MISMATCH",
+    "status": "422",
+    "meaning": "The envelope sent does not hash to the call's input hash."
+  },
+  {
+    "code": "INVALID_ENVELOPE",
+    "status": "422",
+    "meaning": "The envelope is not a version 1 envelope."
+  },
+  {
+    "code": "UPLOAD_INCOMPLETE",
+    "status": "409",
+    "meaning": "Not every ciphertext byte is written yet."
+  },
+  {
+    "code": "CIPHERTEXT_HASH_MISMATCH",
+    "status": "422",
+    "meaning": "The hash sent is not the SHA-256 of the bytes written."
+  },
+  {
+    "code": "PROGRAM_REFUSED",
+    "status": "422",
+    "meaning": "The Voynich program refused the transaction. `programError` names the program error."
+  },
+  {
+    "code": "INSUFFICIENT_FUNDS",
+    "status": "422",
+    "meaning": "The wallet holds less than the transaction needs. `funding` gives the mint and the required, available and shortfall amounts."
+  },
+  {
+    "code": "BOUNTY_NOT_FOUND",
+    "status": "404",
+    "meaning": "No bounty has this address."
+  },
+  {
+    "code": "BOUNTY_NOT_OPEN",
+    "status": "409",
+    "meaning": "The bounty is already claimed or cancelled."
+  }
+]

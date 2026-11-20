@@ -1,0 +1,134 @@
+[
+  {
+    "field": "caller",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The wallet that opened the call and paid the escrow."
+  },
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The Model called."
+  },
+  {
+    "field": "enclave",
+    "type": "pubkey",
+    "offset": "72",
+    "meaning": "The Enclave chosen to answer."
+  },
+  {
+    "field": "nonce",
+    "type": "u64",
+    "offset": "104",
+    "meaning": "A number the caller chose. With the caller it gives the call its address."
+  },
+  {
+    "field": "input_hash",
+    "type": "[u8; 32]",
+    "offset": "112",
+    "meaning": "SHA-256 of the input envelope."
+  },
+  {
+    "field": "price",
+    "type": "u64",
+    "offset": "144",
+    "meaning": "The model's unit price when the call opened (one call for `Call`, or one output token for `Token`)."
+  },
+  {
+    "field": "price_mint",
+    "type": "pubkey",
+    "offset": "152",
+    "meaning": "The mint of the escrow. The default address means SOL."
+  },
+  {
+    "field": "owner",
+    "type": "pubkey",
+    "offset": "184",
+    "meaning": "The model's owner when the call opened. Receives the owner's part."
+  },
+  {
+    "field": "operator",
+    "type": "pubkey",
+    "offset": "216",
+    "meaning": "The enclave's operator when the call opened. Receives the operator share."
+  },
+  {
+    "field": "fee_recipient",
+    "type": "pubkey",
+    "offset": "248",
+    "meaning": "The protocol's fee recipient when the call opened. Receives the protocol share."
+  },
+  {
+    "field": "operator_share_bps",
+    "type": "u16",
+    "offset": "280",
+    "meaning": "The model's operator share when the call opened."
+  },
+  {
+    "field": "protocol_share_bps",
+    "type": "u16",
+    "offset": "282",
+    "meaning": "The protocol share when the call opened."
+  },
+  {
+    "field": "opened_slot",
+    "type": "u64",
+    "offset": "284",
+    "meaning": "The slot the call opened in."
+  },
+  {
+    "field": "deadline_slot",
+    "type": "u64",
+    "offset": "292",
+    "meaning": "The last slot the call can settle in. After it the call can be refunded."
+  },
+  {
+    "field": "status",
+    "type": "CallStatus",
+    "offset": "300",
+    "meaning": "`Open`, `Settled` or `Refunded`."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "301",
+    "meaning": "The PDA bump."
+  },
+  {
+    "field": "answer_mode",
+    "type": "AnswerMode",
+    "offset": "302",
+    "meaning": "`Sealed` or `Open`. An open call stores its answer bytes on chain in the Receipt."
+  },
+  {
+    "field": "caller_is_program",
+    "type": "bool",
+    "offset": "303",
+    "meaning": "True when `open_call` or `open_metered_call` was invoked by another Solana program through CPI."
+  },
+  {
+    "field": "callback_program",
+    "type": "pubkey",
+    "offset": "304",
+    "meaning": "Program invoked on `on_receipt` inside `settle_call`. The default (all-zero) address means no callback."
+  },
+  {
+    "field": "callback_accounts",
+    "type": "Vec<CallbackAccount>",
+    "offset": "336",
+    "meaning": "Up to 8 `CallbackAccount` entries (`pubkey`, `is_writable`) passed to `callback_program::on_receipt` after `[receipt, call, model]`."
+  },
+  {
+    "field": "price_unit",
+    "type": "PriceUnit",
+    "offset": "",
+    "meaning": "Whether the call is priced per `Call` (`0`) or per output `Token` (`1`), snapshotted from the model."
+  },
+  {
+    "field": "ceiling",
+    "type": "u64",
+    "offset": "",
+    "meaning": "Escrow ceiling in base units of `price_mint`. Equals `price` for `Call` calls; for `Token` calls it is the caller-supplied maximum escrow deposited by `open_metered_call`."
+  }
+]

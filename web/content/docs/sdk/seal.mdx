@@ -1,0 +1,229 @@
+---
+title: seal
+description: Encrypt a model on the device, write its ciphertext to chain, seal it and grant a first enclave, with progress and resume.
+---
+
+`seal` takes a model's weights and its manifest and leaves a sealed model on chain. The weights are encrypted on the device that calls it. The model key never leaves that device except wrapped to an enclave.
+
+```ts
+const price = { amount: '100000', mint: null, decimals: 9, symbol: 'SOL' }
+
+const { model, resume } = await voynich.seal({
+  weights: onnxBytes,
+  manifest,
+  price,
+  operatorShareBps: 2500,
+  allowedMeasurements: [measurement],
+  uploadFundingLamports: '5000000',
+  grantEnclave: enclave,
+  onPrepared: state => save(state),
+  onProgress: progress => console.log(progress.step, progress.bytesWritten, progress.totalBytes),
+})
+```
+
+## Options
+
+<Fields>
+<Field name="weights" type="Uint8Array">
+The ONNX file's bytes. Required for a new sealing, left out when resuming.
+</Field>
+<Field name="manifest" type="Manifest" required>
+The model's manifest. Its fields are in [Sealed models](/docs/concepts/sealed-models#the-manifest).
+</Field>
+<Field name="name" type="string">
+The model's name. The manifest's `name` by default. 1 to 32 characters: lowercase letters and digits in groups joined by single hyphens.
+</Field>
+<Field name="price" type="Money" required>
+The unit price of the model (per call when `priceUnit` is `'call'`, or per output token when `'token'`): `amount` in base units as a decimal string, `mint` (an SPL Token mint address, or `null` for SOL), and the mint's `decimals` and `symbol`.
+</Field>
+<Field name="priceUnit" type="PriceUnit">
+Optional pricing unit: `'call'` (default) or `'token'`.
+</Field>
+<Field name="operatorShareBps" type="number" required>
+The operator's share of the price, in basis points, 0 to 10,000. With the protocol share it is at most 10,000.
+</Field>
+<Field name="allowedMeasurements" type="string[]" required>
+1 to 8 measurements, each 96 hex characters: the enclave software that may open the model.
+</Field>
+<Field name="uploadFundingLamports" type="string" required>
+Lamports moved from the owner across the upload keys when the model is created. It pays the fees of the upload's transactions (one per 888 bytes of ciphertext), per-key reserves and extra-key self-sweep fees. `voynich.api.quoteModel({ sizeBytes, uploadKeyCount })` returns the amount as `uploadFundingLamports`.
+</Field>
+<Field name="uploadKeyCount" type="number">
+Number of parallel upload keys to generate, 1 to 8. When omitted, `seal` auto-sizes from 8 downward until `create_model` fits within 1,104 bytes.
+</Field>
+<Field name="base" type="ModelBase">
+Optional public open-weight base model (`{ sha256, sizeBytes, format, source }`) pinned on chain at `create_model` and emitted as `base_sha256` on `ModelSealed`. Before signing, quoting or allocating accounts, `seal()` validates `ModelBase` (`INVALID_BASE`), decodes `weights` with `decodeAdapter()` (`INVALID_ADAPTER`), and checks `decoded.baseSha256 === base.sha256` (`BASE_MISMATCH`). On zero-state-file resume without `base`, `seal()` inherits `existing.base` from chain automatically and rejects a conflicting `base` with `RESUME_MISMATCH`.
+</Field>
+<Field name="grantEnclave" type="string">
+An enclave's address or signing key. When given, the sealed model is granted to it and becomes `live`.
+</Field>
+<Field name="resume" type="SealResume">
+The state of a sealing that was interrupted. See [Resuming](#resuming).
+</Field>
+<Field name="onPrepared" type="(resume: SealResume) => void | Promise<void>">
+Called with the sealing's state before anything is written to chain, and again once the model's address is known. Save the state here.
+</Field>
+<Field name="onProgress" type="(progress: SealProgress) => void">
+Called as the sealing moves on.
+</Field>
+<Field name="signal" type="AbortSignal">
+Aborts the sealing. It can be resumed.
+</Field>
+</Fields>
+
+## What it does
+
+| Step | What happens | Signed by |
+| --- | --- | --- |
+| Encrypt | Signs the canonical derivation message (`voynich/seal/v1`, via `Keypair` or `WalletSigner.signMessage`), derives deterministic `modelKey`, `noncePrefix`, 8 `uploadKeys` and `weightsKeys` via HKDF-SHA256 (`voynich/seal-secrets/v1`), and encrypts the weights in 64 KiB chunks. Nothing is sent. | the owner (`signMessage`) |
+| Quote | [`POST /v1/models/quote`](/docs/api/models#post-v1modelsquote) with the model's create metadata and the addresses the Weights accounts will have. Unless `canCreate` is `true`, the sealing stops with `CREATE_MODEL_TOO_LARGE` and no account is allocated. | nobody |
+| Allocate | The Weights accounts are created: one for every 10,485,704 bytes of ciphertext, at most 64 (~640 MiB). One transaction each. | the owner, once per account |
+| Create | `create_model`: the Model exists in `uploading` (`hash_version = 1`), binds up to 8 initial Weights accounts, and funds up to 8 upload keys evenly. Any additional Weights accounts are attached in batches of 16 via `attach_weights` (signed by `uploadKey`). | the owner and the primary upload key |
+| Upload | Unwritten chunks are partitioned across all upload keys and written up to 888 bytes per transaction in independent parallel worker loops (2 lanes per key). | the upload keys, with no wallet prompt |
+| Seal | For models over 8 chunks (~512 KiB), the primary upload key folds 65,552-byte chunks into the Merkle frontier in 8-chunk `seal_range` batches (leaving up to 8 chunks inline for `seal_model`), and extra upload keys self-sweep their unused lamports back to the owner. Then `seal_model` finalizes the 64 KiB chunk Merkle root, clears all upload keys, sets `sealed`, and returns the primary upload key's remaining lamports to the owner. | `seal_range` / sweeps by upload keys; `seal_model` by the owner and primary upload key |
+| Grant | With `grantEnclave`: the model key is wrapped to the enclave and `grant_by_owner` makes the model `live`. | the owner |
+
+Before wrapping the key for the grant, the client checks the enclave on chain the way [grant](/docs/sdk/grant-and-refund#grant) does.
+
+### Progress
+
+`onProgress` receives:
+
+<Fields>
+<Field name="step" type="'create' | 'upload' | 'seal' | 'grant' | 'done'">
+Where the sealing is. `upload` is reported after every write.
+</Field>
+<Field name="bytesWritten" type="number">
+Ciphertext bytes on chain so far.
+</Field>
+<Field name="totalBytes" type="number">
+The length of the ciphertext.
+</Field>
+<Field name="transactionsWritten" type="number">
+Upload transactions that have landed for the model.
+</Field>
+<Field name="transactionsSent" type="number">
+Total transactions sent across allocation, `create_model`, upload writes, `seal_model` and `grant_by_owner`.
+</Field>
+<Field name="elapsedMs" type="number">
+Milliseconds elapsed since `seal()` started.
+</Field>
+<Field name="feesLamports" type="string">
+Exact transaction fees paid across every sent transaction, in lamports as a decimal string.
+</Field>
+</Fields>
+
+## What comes back
+
+<Fields>
+<Field name="model" type="Model">
+The model as the API reads it after the last step: `sealed`, or `live` when a grant was made. The fields are in [HTTP API: Models](/docs/api/models).
+</Field>
+<Field name="resume" type="SealResume">
+The sealing's state, including the model key. Keep it: the model key is what every later grant by the owner wraps.
+</Field>
+<Field name="uploadKeyCount" type="number">
+Number of upload keys used for the sealing (`1` to `8`).
+</Field>
+<Field name="bytesWritten" type="number">
+Total ciphertext bytes written on chain.
+</Field>
+<Field name="totalBytes" type="number">
+Total ciphertext length in bytes.
+</Field>
+<Field name="transactionsSent" type="number">
+Total transactions sent across every sealing step.
+</Field>
+<Field name="elapsedMs" type="number">
+Total elapsed sealing time in milliseconds.
+</Field>
+<Field name="feesLamports" type="string">
+Total transaction fees paid across every sealing transaction, in lamports as a decimal string.
+</Field>
+</Fields>
+
+## Resuming
+
+### Zero-state-file cross-device resume
+
+When `signer` is a `Keypair` or a `WalletSigner` implementing `signMessage`, `seal()` derives `(modelKey, noncePrefix, uploadKeys, weightsKeys)` deterministically via `signSealDerivation(signer, programId, modelAddress)` using canonical Ed25519 verification (`verifySealDerivationSignature`) and HKDF-SHA256 (`deriveSealSecrets`, salt `voynich/seal-secrets/v1`).
+
+Calling `voynich.seal({ weights, manifest, ... })` again on any device with the same owner signer and weights file re-derives the exact same secrets and ciphertext without any saved `resume` object. When the Model already exists on chain in `uploading`, `seal()` inspects its attached `Weights` accounts via `findUnwrittenRangesFromChain` (batched 56-byte headers + concurrent 8-chunk `dataSlice` reads authenticated with `openWeightsChunk`), attaches any missing deterministic `weightsKeys`, uploads only missing or partial ranges, resumes `seal_range` from `model.sealedChunks`, sweeps every funded deterministic upload key back to `owner` (leaving zero stranded lamports), and calls `seal_model`.
+
+### Explicit `SealResume` state
+
+For legacy random-key sealings (or wallets without `signMessage`), a `SealResume` holds everything the device needs to carry a sealing on, or to grant the model later:
+
+<Fields>
+<Field name="model" type="string">
+The model's address.
+</Field>
+<Field name="ciphertext" type="Uint8Array">
+The complete ciphertext.
+</Field>
+<Field name="modelKey" type="Uint8Array">
+The 32-byte model key.
+</Field>
+<Field name="uploadKey" type="Keypair">
+The primary one-time key that signs `create_model`, `seal_model` and writes ciphertext.
+</Field>
+<Field name="uploadKeys" type="Keypair[], optional">
+All one-time upload keys (1 to 8, starting with `uploadKey`) authorized to write ciphertext in parallel.
+</Field>
+<Field name="plaintextSizeBytes" type="number">
+The length of the weights before encryption.
+</Field>
+<Field name="noncePrefix" type="Uint8Array">
+The 16-byte nonce prefix of the weights cipher.
+</Field>
+<Field name="weightsKeys" type="Keypair[], optional">
+The keys of the Weights accounts.
+</Field>
+</Fields>
+
+To resume, pass the saved state as `resume` with the same manifest and settings, and no `weights`:
+
+```ts
+const resumed = await voynich.seal({
+  manifest,
+  price,
+  operatorShareBps: 2500,
+  allowedMeasurements: [measurement],
+  uploadFundingLamports: '5000000',
+  grantEnclave: enclave,
+  resume: saved,
+})
+```
+
+A resumed sealing reads the model from chain, skips the Weights accounts that exist and the byte ranges already written, writes the rest, seals, and grants when asked. A sealing interrupted at any step picks up at that step.
+
+<Callout kind="important">
+The state holds the model key and two kinds of signing key. Store it encrypted and never log it. The CLI keeps it in a password-encrypted file: see [CLI: seal](/docs/cli/seal).
+</Callout>
+
+## Failures
+
+| Code or error | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `Error`, `Weights are required for a new sealing` | Neither `weights` nor `resume` was given. |
+| `INVALID_BASE` | `base` failed `ModelBase` schema validation before any transaction was built. |
+| `INVALID_ADAPTER` | `weights` supplied with `base` is not a valid `voynich/adapter/v1` payload. |
+| `BASE_MISMATCH` | The adapter's `baseSha256` does not match `base.sha256`. |
+| `MODEL_TOO_LARGE` | The ciphertext needs more than 64 Weights accounts (~640 MiB). |
+| `CREATE_MODEL_TOO_LARGE` | The quote's `canCreate` is not `true`: the `create_model` transaction is larger than 1,104 bytes or the stored manifest larger than 4,096. The message gives the transaction's size. Fewer measurements or a shorter manifest make it smaller. |
+| `CONFIGURATION_REQUIRED` | The API does not name the program. |
+| `ALLOCATION_FAILED` | A transaction creating a Weights account failed. |
+| `TRANSACTION_EXPIRED` | A transaction creating a Weights account expired before it landed. Resume with the saved state. |
+| `INVALID_WEIGHTS` | On resume: a Weights account exists with another owner or size, or the model's accounts do not cover a byte range. |
+| `RESUME_MISMATCH` | On resume: the model on chain has another owner, another size or another upload key. |
+| `TRANSACTION_FAILED` | A create, write, seal or grant transaction was refused. The message carries the reason. |
+| `ApiClientError` | The API refused the quote or a build, with an [API error code](/docs/api/overview#errors). An invalid name, or one that differs from the manifest's, is refused at the quote. A build its signer cannot pay is refused with `INSUFFICIENT_FUNDS`. A name that is taken by another model fails with `RESUME_MISMATCH`. |
+
+The grant step can also fail with the codes of [grant](/docs/sdk/grant-and-refund#grant).
+
+## What it costs
+
+The rent of the Model account and of the Weights accounts, the fees of the owner's transactions, and the fees of the upload's transactions, paid from the upload funding. The sealing transaction returns what is left of the upload funding to the owner. `voynich.api.quoteModel({ sizeBytes })` computes each part before anything is sent: see [`POST /v1/models/quote`](/docs/api/models#post-v1modelsquote).
+
+The whole task, with the site and the CLI beside the SDK, is in [Seal a model in ten minutes](/docs/start/seal-a-model).

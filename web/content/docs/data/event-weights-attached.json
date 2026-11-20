@@ -1,0 +1,10 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "weights",
+    "type": "Vec<pubkey>"
+  }
+]

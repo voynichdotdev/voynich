@@ -1,0 +1,146 @@
+[
+  {
+    "instruction": "initialize",
+    "arguments": "`args: ConfigArgs`",
+    "signers": "`admin`",
+    "does": "Creates the Config. Sent once by the program's upgrade authority."
+  },
+  {
+    "instruction": "set_config",
+    "arguments": "`args: ConfigArgs`",
+    "signers": "`admin`",
+    "does": "Changes the Config."
+  },
+  {
+    "instruction": "migrate_config",
+    "arguments": "`max_open_answer_bytes: u16`",
+    "signers": "`admin`",
+    "does": "Reallocates a legacy 116-byte Config to 118 bytes and sets `max_open_answer_bytes`."
+  },
+  {
+    "instruction": "migrate_model",
+    "arguments": "",
+    "signers": "`authority`",
+    "does": "Zeroes trailing pre-Build-4 padding bytes in a Model account so trailing `price_unit` decodes cleanly as `Call`."
+  },
+  {
+    "instruction": "create_model",
+    "arguments": "`args: CreateModelArgs`",
+    "signers": "`owner`, `upload_key`",
+    "does": "Creates a Model in `Uploading`, binds its initial Weights accounts and funds its upload keys."
+  },
+  {
+    "instruction": "attach_weights",
+    "arguments": "",
+    "signers": "`upload_key`",
+    "does": "Binds additional preallocated Weights accounts to an uploading model, up to 64 total."
+  },
+  {
+    "instruction": "write_weights",
+    "arguments": "`offset: u32`, `bytes: bytes`",
+    "signers": "`upload_key`",
+    "does": "Writes ciphertext bytes into one Weights account."
+  },
+  {
+    "instruction": "seal_range",
+    "arguments": "`chunk_count: u32`",
+    "signers": "`upload_key`",
+    "does": "Hashes 1 to 8 consecutive 65,552-byte ciphertext chunks into the model's Merkle frontier."
+  },
+  {
+    "instruction": "seal_model",
+    "arguments": "`ciphertext_sha256: [u8; 32]`",
+    "signers": "`owner`",
+    "does": "Finalizes the ciphertext root hash and moves the model to `Sealed`."
+  },
+  {
+    "instruction": "set_price",
+    "arguments": "`price: u64`, `price_mint: pubkey`, `operator_share_bps: u16`, `price_unit: PriceUnit`",
+    "signers": "`owner`",
+    "does": "Sets a model's price, price mint, operator share and price unit."
+  },
+  {
+    "instruction": "set_allowed_measurements",
+    "arguments": "`allowed_measurements: Vec<[u8; 48]>`",
+    "signers": "`owner`",
+    "does": "Replaces a model's allowed measurements list (1 to 8)."
+  },
+  {
+    "instruction": "retire_model",
+    "arguments": "",
+    "signers": "`owner`",
+    "does": "Moves a model to `Retired`. No new calls open."
+  },
+  {
+    "instruction": "register_enclave",
+    "arguments": "`encryption_key: [u8; 32]`, `endpoint: string`",
+    "signers": "`operator`, `signing_key`",
+    "does": "Creates an Enclave from a current attestation record."
+  },
+  {
+    "instruction": "refresh_enclave",
+    "arguments": "`endpoint: string`",
+    "signers": "`signing_key`",
+    "does": "Copies the enclave's current attestation record into its Enclave account and sets its endpoint."
+  },
+  {
+    "instruction": "grant_by_owner",
+    "arguments": "`wrapped_key: bytes`",
+    "signers": "`owner`, `payer`",
+    "does": "Writes a Grant from the owner to an enclave and moves the model to `Live`."
+  },
+  {
+    "instruction": "grant_by_enclave",
+    "arguments": "`wrapped_key: bytes`",
+    "signers": "`signing_key`, `payer`",
+    "does": "Writes a Grant from an enclave that holds one to another enclave."
+  },
+  {
+    "instruction": "revoke_grant",
+    "arguments": "",
+    "signers": "`owner`",
+    "does": "Marks a Grant revoked. No new calls open on it."
+  },
+  {
+    "instruction": "open_call",
+    "arguments": "`nonce: u64`, `input_hash: [u8; 32]`, `answer_mode: AnswerMode`, `callback: Option<CallbackSpec>`",
+    "signers": "`payer`, `caller`",
+    "does": "Creates a per-call Call and moves the model's price into its escrow."
+  },
+  {
+    "instruction": "open_metered_call",
+    "arguments": "`nonce: u64`, `input_hash: [u8; 32]`, `answer_mode: AnswerMode`, `callback: Option<CallbackSpec>`, `ceiling: u64`",
+    "signers": "`payer`, `caller`",
+    "does": "Creates a per-token metered Call and moves the caller's escrow ceiling into its escrow."
+  },
+  {
+    "instruction": "settle_call",
+    "arguments": "`output_hash: [u8; 32]`, `signature: [u8; 64]`, `ed25519_instruction_index: u16`, `open_answer: bytes`",
+    "signers": "`payer`",
+    "does": "Checks the enclave's signature, writes the Receipt and pays out the escrow."
+  },
+  {
+    "instruction": "settle_metered_call",
+    "arguments": "`count: u64`, `running_hash: [u8; 32]`, `signature: [u8; 64]`, `ed25519_instruction_index: u16`",
+    "signers": "`payer`",
+    "does": "Checks the enclave's piece signature, writes a 423-byte metered Receipt, pays out count * price and returns the unspent ceiling to the caller."
+  },
+  {
+    "instruction": "refund_call",
+    "arguments": "",
+    "signers": "`actor`",
+    "does": "Returns the escrow of a call past its deadline to the caller."
+  },
+  {
+    "instruction": "publish_measurement",
+    "arguments": "`digest: [u8; 48]`, `source_repo: string`, `commit_sha: string`, `recipe_hash: [u8; 32]`, `version: string`",
+    "signers": "`publisher`",
+    "does": "Creates an immutable Measurement PDA binding a 48-byte SHA-384 digest to its source repo, commit SHA, recipe hash and version."
+  },
+  {
+    "instruction": "deprecate_measurement",
+    "arguments": "",
+    "signers": "`authority`",
+    "does": "Marks a published Measurement PDA as `Deprecated`. Callable only by its publisher or `Config.admin`."
+  }
+]

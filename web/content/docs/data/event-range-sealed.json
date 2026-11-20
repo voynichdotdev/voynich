@@ -1,0 +1,18 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "start_chunk",
+    "type": "u32"
+  },
+  {
+    "field": "chunk_count",
+    "type": "u32"
+  },
+  {
+    "field": "sealed_chunks",
+    "type": "u32"
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "field": "call",
+    "type": "pubkey"
+  },
+  {
+    "field": "receipt",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "enclave",
+    "type": "pubkey"
+  },
+  {
+    "field": "input_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "output_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "signature",
+    "type": "[u8; 64]"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  },
+  {
+    "field": "price_mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "total",
+    "type": "u64"
+  },
+  {
+    "field": "owner",
+    "type": "pubkey"
+  },
+  {
+    "field": "operator",
+    "type": "pubkey"
+  },
+  {
+    "field": "fee_recipient",
+    "type": "pubkey"
+  },
+  {
+    "field": "owner_amount",
+    "type": "u64"
+  },
+  {
+    "field": "operator_amount",
+    "type": "u64"
+  },
+  {
+    "field": "protocol_amount",
+    "type": "u64"
+  },
+  {
+    "field": "answer_mode",
+    "type": "AnswerMode"
+  },
+  {
+    "field": "open_answer",
+    "type": "bytes"
+  },
+  {
+    "field": "caller_is_program",
+    "type": "bool"
+  },
+  {
+    "field": "delivered_count",
+    "type": "Option<u64>"
+  },
+  {
+    "field": "returned_amount",
+    "type": "Option<u64>"
+  }
+]

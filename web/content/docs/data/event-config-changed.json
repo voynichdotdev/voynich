@@ -1,0 +1,10 @@
+[
+  {
+    "field": "admin",
+    "type": "pubkey"
+  },
+  {
+    "field": "config",
+    "type": "ConfigArgs"
+  }
+]

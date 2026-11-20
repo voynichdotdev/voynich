@@ -1,0 +1,98 @@
+[
+  {
+    "event": "ConfigChanged",
+    "discriminator": "`93195662624d4ec0`",
+    "emittedBy": "`initialize`, `set_config`, `migrate_config`",
+    "says": "The Config was created, migrated or changed."
+  },
+  {
+    "event": "ModelCreated",
+    "discriminator": "`e9f49d99d3fc4c18`",
+    "emittedBy": "`create_model`",
+    "says": "A model was created in `Uploading`."
+  },
+  {
+    "event": "WeightsAttached",
+    "discriminator": "`e15ffce501cfe95f`",
+    "emittedBy": "`attach_weights`",
+    "says": "Additional Weights accounts were bound to an uploading model."
+  },
+  {
+    "event": "WeightsWritten",
+    "discriminator": "`e7301788eab9562d`",
+    "emittedBy": "`write_weights`",
+    "says": "Ciphertext bytes were written."
+  },
+  {
+    "event": "RangeSealed",
+    "discriminator": "`86b003e5b58cdc1b`",
+    "emittedBy": "`seal_range`",
+    "says": "A batch of 65,552-byte ciphertext chunks was hashed into the model's Merkle frontier."
+  },
+  {
+    "event": "ModelSealed",
+    "discriminator": "`0fd7ee0fb84bb7eb`",
+    "emittedBy": "`seal_model`",
+    "says": "A model's ciphertext root hash was fixed."
+  },
+  {
+    "event": "ModelPriceChanged",
+    "discriminator": "`75239d6d3b3e2323`",
+    "emittedBy": "`set_price`",
+    "says": "A model's price, mint, operator share or price unit changed."
+  },
+  {
+    "event": "ModelAllowedMeasurementsChanged",
+    "discriminator": "`7e9e0f9c35e8e845`",
+    "emittedBy": "`set_allowed_measurements`",
+    "says": "A model's allowed measurements list changed."
+  },
+  {
+    "event": "ModelStatusChanged",
+    "discriminator": "`eaf662525af01335`",
+    "emittedBy": "`grant_by_owner`, `retire_model`",
+    "says": "A model became `Live` or `Retired`."
+  },
+  {
+    "event": "EnclaveChanged",
+    "discriminator": "`acde9d6e2520f224`",
+    "emittedBy": "`register_enclave`, `refresh_enclave`",
+    "says": "An enclave was registered or refreshed."
+  },
+  {
+    "event": "GrantChanged",
+    "discriminator": "`f93e2aae3432e2a1`",
+    "emittedBy": "`grant_by_owner`, `grant_by_enclave`, `revoke_grant`",
+    "says": "A grant was written or revoked."
+  },
+  {
+    "event": "CallOpened",
+    "discriminator": "`506153da2e718033`",
+    "emittedBy": "`open_call`, `open_metered_call`",
+    "says": "A call opened with its escrow."
+  },
+  {
+    "event": "CallSettled",
+    "discriminator": "`f0c936c5842196d5`",
+    "emittedBy": "`settle_call`, `settle_metered_call`",
+    "says": "A call settled and its receipt was written."
+  },
+  {
+    "event": "CallRefunded",
+    "discriminator": "`fb870e47620e2437`",
+    "emittedBy": "`refund_call`",
+    "says": "A call's escrow returned to the caller."
+  },
+  {
+    "event": "MeasurementPublished",
+    "discriminator": "`ac66369501834c23`",
+    "emittedBy": "`publish_measurement`",
+    "says": "A 48-byte enclave measurement was published with its source commit and recipe hash."
+  },
+  {
+    "event": "MeasurementDeprecated",
+    "discriminator": "`25ec9b5b86d0d0c9`",
+    "emittedBy": "`deprecate_measurement`",
+    "says": "A published measurement was marked `Deprecated`."
+  }
+]

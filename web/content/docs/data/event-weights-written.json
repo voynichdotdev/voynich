@@ -1,0 +1,22 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "weights",
+    "type": "pubkey"
+  },
+  {
+    "field": "offset",
+    "type": "u32"
+  },
+  {
+    "field": "length",
+    "type": "u32"
+  },
+  {
+    "field": "written_bytes",
+    "type": "u32"
+  }
+]

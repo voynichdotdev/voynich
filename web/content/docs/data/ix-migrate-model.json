@@ -1,0 +1,26 @@
+[
+  {
+    "account": "authority",
+    "writable": "",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Either the model's owner or the Config's admin."
+  },
+  {
+    "account": "config",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"config\"]`",
+    "is": "The protocol's Config."
+  },
+  {
+    "account": "model",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Model account whose trailing tail bytes are repaired and re-validated."
+  }
+]

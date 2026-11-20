@@ -1,0 +1,74 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "owner",
+    "type": "pubkey"
+  },
+  {
+    "field": "name",
+    "type": "string"
+  },
+  {
+    "field": "manifest",
+    "type": "bytes"
+  },
+  {
+    "field": "weights",
+    "type": "Vec<pubkey>"
+  },
+  {
+    "field": "size_bytes",
+    "type": "u64"
+  },
+  {
+    "field": "cipher",
+    "type": "string"
+  },
+  {
+    "field": "nonce_prefix",
+    "type": "[u8; 16]"
+  },
+  {
+    "field": "allowed_measurements",
+    "type": "Vec<[u8; 48]>"
+  },
+  {
+    "field": "price",
+    "type": "u64"
+  },
+  {
+    "field": "price_mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "operator_share_bps",
+    "type": "u16"
+  },
+  {
+    "field": "upload_key",
+    "type": "pubkey"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  },
+  {
+    "field": "upload_keys",
+    "type": "Vec<pubkey>"
+  },
+  {
+    "field": "hash_version",
+    "type": "u8"
+  },
+  {
+    "field": "base",
+    "type": "Option<ModelBase>"
+  },
+  {
+    "field": "price_unit",
+    "type": "PriceUnit"
+  }
+]

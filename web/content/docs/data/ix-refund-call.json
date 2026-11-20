@@ -1,0 +1,66 @@
+[
+  {
+    "account": "actor",
+    "writable": "",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Whoever sends the refund: the caller or anyone else."
+  },
+  {
+    "account": "call",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"call\", call.caller, call.nonce]`",
+    "is": "The Call being refunded."
+  },
+  {
+    "account": "caller",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The call's caller. Receives the escrow."
+  },
+  {
+    "account": "escrow_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The Call's associated token account. Only for a price in a mint."
+  },
+  {
+    "account": "caller_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "A token account of the caller's for the mint. Only for a price in a mint."
+  },
+  {
+    "account": "token_program",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`",
+    "is": "The SPL Token program. Only for a price in a mint."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

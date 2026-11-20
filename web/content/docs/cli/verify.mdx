@@ -1,0 +1,189 @@
+---
+title: verify
+description: voynich verify checks a receipt from its address, its call's address or its settling transaction's signature, and prints each check, the receipt and the reason.
+---
+
+`voynich verify` checks one receipt against the chain. It needs no wallet and can be run by anyone, at any time after the call settled. What a receipt is and what each check proves is told in [Calls and receipts](/docs/concepts/calls-and-receipts#what-the-checks-prove). The same from code is [verify](/docs/sdk/verify), and the checks by hand are in [Verify a receipt](/docs/guides/verify-a-receipt).
+
+```bash
+voynich verify <receipt address | call address | transaction signature>
+```
+
+## Argument
+
+<Fields>
+<Field name="id" type="address or signature, first argument" required>
+One of three values, all base58: the Receipt's address, the address of its Call, or the signature of the transaction that settled the call.
+</Field>
+</Fields>
+
+## What it checks
+
+The CLI reads the receipt from the API, then reads the accounts themselves through the RPC the API names and compares.
+
+1. **The identifier.** The receipt returned is the one asked for: its address, its call or its settling transaction equals the value given.
+2. **The signature.** The receipt's Ed25519 signature is the enclave's signing key over `voynich/receipt/v1` (standalone per-call), `voynich/receipt/v2` with `base.sha256` (adapter per-call), `voynich/piece/v1` with `deliveredCount` and running hash (standalone metered stream), or `voynich/piece/v2` with `deliveredCount`, running hash and `base.sha256` (adapter metered stream).
+3. **The settling transaction**, when a transaction signature was given. The transaction succeeded in the receipt's slot and carries the program's `CallSettled` event for this receipt, with the same call, model, enclave, hashes, signature and slot.
+4. **The accounts.** The Config, the Receipt, the Enclave and the Model exist and are owned by the program. The attestation record exists and is owned by the attestation program the Config names.
+5. **The receipt on chain.** The Receipt is at the address derived from its call, and its call, model, enclave, hashes, signature, slot, payments, and (for 423-byte metered receipts) `deliveredCount` and `returnedAmount` equal the ones the API returned.
+6. **The attestation record.** The record is at the address derived from the enclave's signing key, the Enclave names it, it names that signing key, it has the Config's layout, and its measurement is one of the model's allowed measurements.
+7. **The expiry.** The record was recorded at or before the receipt's slot and expires after it.
+8. **The base model.** Decodes `Model.base` from the on-chain Model account via `decodeModelBaseBytes`, confirms `ReceiptView.modelBase` matches, and checks that an adapter model's signature commits to `base.sha256` under `voynich/receipt/v2` or `voynich/piece/v2` (passes for standalone models where `Model.base` is `None`).
+
+Checks 6 and 7 use the record as it stood when the call settled. When the enclave has attested again since, the CLI reads the record's earlier state from the attestation program's `RecordUpdated` events in the RPC's transaction history.
+
+## What it prints
+
+One JSON object on stdout. The command exits with code `0` when `verified` is `true` and with code `1` when it is `false`, so a script reads the exit code or `verified`.
+
+```json
+{
+  "verified": true,
+  "signature": true,
+  "record": true,
+  "expiry": true,
+  "answer": true,
+  "base": true,
+  "receipt": {
+    "address": "D949kMCmdYwMXvjYTM6BY9WUxuhjpz6bWVmZ4FxrpGnQ",
+    "call": "GyLvqRCFTWcsEcEr4jt8vuHZVKDvnyVwwW3Wwcav373U",
+    "model": "431poxuxU5h5BE4nxazgLfxVEdg1xjipQWknyVN8ZobW",
+    "modelName": "sketch-32",
+    "enclave": "5pTHrf9HYoq7unNVbvsL4kd6zWcwWXqH4HQ7JPQi5Ft6",
+    "inputHash": "ee79690984ab…87b7bba43a",
+    "outputHash": "f159b9fd5830…49b1197cfa",
+    "signature": "TUUH5Iw+2yGx…sk1+5lBCA==",
+    "slot": "2328",
+    "transactionSignature": "5hDTWzCChJEN84pugp9MJFZuuY7RDpa1k63gvJVQA2tapUabBgcHkPfJto2Hsg9e9QxTzgfkSLFz1c4HWUHjkK9W",
+    "payments": {
+      "mint": null,
+      "total": "100000",
+      "owner": {
+        "recipient": "D2af6GLQbPYVeXJE8hsrwmsyeJrnbkbgFxha3zM6TxJx",
+        "amount": "70000"
+      },
+      "operator": {
+        "recipient": "A4rxgQ3uAJpNMCMhX4UiESkDUBgQ2dAQ828dT4h1uTcV",
+        "amount": "25000"
+      },
+      "protocol": {
+        "recipient": "BTYUmEuEigyj7dugV8KnwTXDtAEww3U1Ya4Y3CiNACFq",
+        "amount": "5000"
+      }
+    }
+  },
+  "fixture": false
+}
+```
+
+<Fields>
+<Field name="verified" type="boolean">
+`true` when `signature`, `record`, `expiry`, `answer` and `base` are all `true`.
+</Field>
+<Field name="signature" type="boolean">
+Check 2.
+</Field>
+<Field name="record" type="boolean">
+Checks 5 and 6.
+</Field>
+<Field name="expiry" type="boolean">
+Check 7.
+</Field>
+<Field name="answer" type="boolean">
+For an `open` receipt, the on-chain `open_answer` bytes match `receipt.openAnswer` and hash (SHA-256) to `receipt.outputHash`. For a 423-byte metered stream receipt, on-chain `deliveredCount`, `returnedAmount` and `total` match the receipt. `true` for a flat `sealed` receipt.
+</Field>
+<Field name="base" type="boolean">
+Check 8: for adapter models, confirms `ReceiptView.modelBase` matches on-chain `Model.base` and the signature commits to `base.sha256` under `voynich/receipt/v2` (per-call) or `voynich/piece/v2` (metered). `true` for standalone models.
+</Field>
+<Field name="receipt" type="object">
+The receipt that was checked.
+</Field>
+<Field name="reason" type="string">
+Why the receipt is not verified. Present only when `verified` is `false`.
+</Field>
+<Field name="fixture" type="boolean">
+`false` against a cluster.
+</Field>
+</Fields>
+
+### The receipt
+
+<Fields>
+<Field name="address" type="address">
+The Receipt account.
+</Field>
+<Field name="call" type="address">
+The Call it settles.
+</Field>
+<Field name="caller" type="address">
+The wallet or program PDA that opened the call.
+</Field>
+<Field name="callerIsProgram" type="boolean">
+`true` when the call was opened by another Solana program through CPI.
+</Field>
+<Field name="model" type="address">
+The model that answered.
+</Field>
+<Field name="modelName" type="string">
+The model's name.
+</Field>
+<Field name="enclave" type="address">
+The enclave that answered.
+</Field>
+<Field name="inputHash" type="64 hex characters">
+The SHA-256 of the encrypted input.
+</Field>
+<Field name="outputHash" type="64 hex characters">
+The SHA-256 of the encrypted output (`sealed`), `openAnswer` bytes (`open`), or the final `runningHash` of a metered piece stream.
+</Field>
+<Field name="signature" type="64 bytes, base64">
+The enclave's Ed25519 signature.
+</Field>
+<Field name="answerMode" type="string">
+`sealed` or `open`.
+</Field>
+<Field name="openAnswer" type="base64 or null">
+For an `open` receipt, the verified answer bytes stored on chain, base64-encoded. `null` for a `sealed` receipt.
+</Field>
+<Field name="deliveredCount" type="integer string or null">
+Delivered output token count settled by `settle_metered_call` on a 423-byte metered receipt, or `null` on a per-call receipt.
+</Field>
+<Field name="returnedAmount" type="integer string or null">
+Unspent escrow ceiling (`ceiling - total`) returned to `caller` in the settling transaction on a 423-byte metered receipt, or `null` on a per-call receipt.
+</Field>
+<Field name="slot" type="integer string">
+The slot the call settled in.
+</Field>
+<Field name="transactionSignature" type="base58 signature">
+The settling transaction.
+</Field>
+<Field name="payments" type="object">
+`mint` (an address, or `null` for SOL), `total`, and `owner`, `operator` and `protocol`, each with `recipient` and `amount`. Amounts are strings in base units.
+</Field>
+</Fields>
+
+### Reasons
+
+| `reason` | The check that failed |
+| --- | --- |
+| `The returned receipt does not match the requested identifier.` | Check 1. `signature`, `record` and `expiry` are all `false`. |
+| `The requested transaction did not settle this receipt.` | Check 3. `record` and `expiry` are `false`. |
+| `A required chain account is missing.` | Check 4: one of the five accounts does not exist. |
+| `A chain account owner does not match its program.` | Check 4: the Config, the Receipt, the Enclave or the Model is not owned by the program. |
+| `The attestation owner does not match the chain configuration.` | Check 4: the record is not owned by the attestation program the Config names. |
+| `The signature, attestation binding or expiry check failed.` | Check 2, 5, 6 or 7. The three booleans say which. |
+
+## Failures
+
+These end the command with code `1` and one line on stderr, without printing the object.
+
+| Message | Cause |
+| --- | --- |
+| `Supply receipt address, call address or transaction signature.` | The argument is missing. |
+| `RECEIPT_NOT_FOUND: This receipt was not found.` | No receipt has this address, call or transaction. |
+| `PROGRAM_MISMATCH: The API does not name the canonical Voynich program.` | The API names another program than the CLI was built with. |
+| `The RPC could not read the settlement transaction` | The RPC refused the read of the transaction given. |
+| `The RPC did not retain the settlement transaction` | The RPC's history does not hold the transaction given. |
+| `The RPC has no retained attestation history for this receipt` | The record changed after the call settled and the RPC's history does not reach back to the receipt's slot. |
+| `The RPC could not read historical attestation evidence` | The RPC refused the read of an earlier attestation transaction. |
+| `The RPC did not retain a required attestation transaction` | The RPC's history does not hold an earlier attestation transaction. |

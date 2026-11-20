@@ -1,0 +1,191 @@
+[
+  {
+    "name": "Unauthorized",
+    "code": "6000",
+    "hex": "`0x1770`",
+    "message": "Only the configured authority may perform this action.",
+    "raisedWhen": "The signer is not the one the account names: the Config's admin, the program's upgrade authority, the model's owner, the model's upload key, the enclave's signing key, neither `call.operator` nor `call.caller` in `settle_metered_call`, or neither `measurement.publisher` nor `config.admin` in `deprecate_measurement`."
+  },
+  {
+    "name": "InvalidConfig",
+    "code": "6001",
+    "hex": "`0x1771`",
+    "message": "Protocol configuration is invalid.",
+    "raisedWhen": "A Config value is out of range: a default address for the attestation program or fee recipient, layout version 0, a protocol share above 10,000, a deadline of 0 slots, or `max_open_answer_bytes` outside 1 to 4,096. In `open_call` and `open_metered_call`: the model's operator share plus the protocol share exceeds 10,000."
+  },
+  {
+    "name": "InvalidModel",
+    "code": "6002",
+    "hex": "`0x1772`",
+    "message": "Model metadata or cipher format is invalid.",
+    "raisedWhen": "In `create_model`: a name that is empty, longer than 32 bytes or not lowercase groups joined by hyphens; an empty manifest or one above 4,096 bytes; a size of 16 bytes or less; an unknown cipher id; no measurement or more than 8; an invalid `base` (`sha256` all zero, `size_bytes` 0, `format` outside `onnx`, `safetensors` or `gguf`, or `source` empty, above 256 bytes, containing whitespace/control characters, or not starting with `https://`, `http://`, `ipfs://` or `hf://`); an upload key (primary or extra) that is the owner, duplicates another upload key, holds data, is not system-owned, or (for extra keys) is not writable; more than 8 total upload keys (`1 + extra_upload_key_count`). In `create_model` and `set_price`: operator share plus protocol share above 10,000. In `set_allowed_measurements`: no measurement or more than 8."
+  },
+  {
+    "name": "ModelNotUploading",
+    "code": "6003",
+    "hex": "`0x1773`",
+    "message": "The model is not uploading.",
+    "raisedWhen": "`attach_weights`, `write_weights`, `seal_range` or `seal_model` on a model that is already sealed."
+  },
+  {
+    "name": "ModelNotSealed",
+    "code": "6004",
+    "hex": "`0x1774`",
+    "message": "Seal the model before granting it.",
+    "raisedWhen": "`grant_by_owner` on a model that is `Uploading` or `Retired`."
+  },
+  {
+    "name": "ModelNotLive",
+    "code": "6005",
+    "hex": "`0x1775`",
+    "message": "The model does not accept new calls.",
+    "raisedWhen": "`open_call`, `open_metered_call` or `grant_by_enclave` on a model that is not `Live`."
+  },
+  {
+    "name": "InvalidWeights",
+    "code": "6006",
+    "hex": "`0x1776`",
+    "message": "The weights accounts do not match the model.",
+    "raisedWhen": "In `create_model` and `attach_weights`: no Weights account or more than 64 total; one that is not owned by the program, not writable, not rent-exempt, listed twice, larger than 10 MiB, or whose first 56 bytes are not zero; cumulative sizes exceeding `size_bytes`. In `write_weights`, `seal_range` and `seal_model`: an account that does not match the model's Weights accounts or expected range."
+  },
+  {
+    "name": "InvalidWrite",
+    "code": "6007",
+    "hex": "`0x1777`",
+    "message": "The upload has a gap or an out-of-range write.",
+    "raisedWhen": "In `write_weights`: no bytes, or an end past the account's size."
+  },
+  {
+    "name": "UploadIncomplete",
+    "code": "6008",
+    "hex": "`0x1778`",
+    "message": "Every weights byte must be written before sealing.",
+    "raisedWhen": "`seal_model` while a Weights account has not been written to its end."
+  },
+  {
+    "name": "CiphertextHashMismatch",
+    "code": "6009",
+    "hex": "`0x1779`",
+    "message": "The ciphertext hash does not match.",
+    "raisedWhen": "`seal_model` with a hash that is not the SHA-256 of the bytes on chain."
+  },
+  {
+    "name": "InvalidAttestation",
+    "code": "6010",
+    "hex": "`0x177a`",
+    "message": "The attestation record is invalid or expired.",
+    "raisedWhen": "The attestation record is not owned by the configured attestation program, is not at the address derived from the signing key, has another layout, names another key, or is expired at the current slot."
+  },
+  {
+    "name": "MeasurementNotAllowed",
+    "code": "6011",
+    "hex": "`0x177b`",
+    "message": "The enclave measurement is not allowed by this model.",
+    "raisedWhen": "The enclave's measurement is not in the model's allowed measurements."
+  },
+  {
+    "name": "InvalidEnclave",
+    "code": "6012",
+    "hex": "`0x177c`",
+    "message": "The enclave registration does not match its attestation.",
+    "raisedWhen": "In `register_enclave` and `refresh_enclave`: an endpoint that is empty, above 256 bytes or not `http://` or `https://`; an all-zero encryption key. In grants and calls: a record account that is not the one the Enclave names, or whose hardware type or measurement differs from the Enclave's. In `grant_by_enclave`: source and target are the same enclave."
+  },
+  {
+    "name": "InvalidWrappedKey",
+    "code": "6013",
+    "hex": "`0x177d`",
+    "message": "The wrapped key must be a version 1 envelope of 105 bytes.",
+    "raisedWhen": "A wrapped key that is not 105 bytes or does not start with version byte 1."
+  },
+  {
+    "name": "GrantRequired",
+    "code": "6014",
+    "hex": "`0x177e`",
+    "message": "The enclave does not hold an active grant.",
+    "raisedWhen": "`open_call` or `open_metered_call` on a revoked grant, or `grant_by_enclave` from an enclave whose own grant is revoked."
+  },
+  {
+    "name": "CallNotOpen",
+    "code": "6015",
+    "hex": "`0x177f`",
+    "message": "The call has already settled or been refunded.",
+    "raisedWhen": "`settle_call`, `settle_metered_call` or `refund_call` on a call that already settled or was refunded."
+  },
+  {
+    "name": "CallDeadlinePassed",
+    "code": "6016",
+    "hex": "`0x1780`",
+    "message": "The call settlement deadline has passed.",
+    "raisedWhen": "`settle_call` or `settle_metered_call` after the call's deadline slot."
+  },
+  {
+    "name": "CallNotRefundable",
+    "code": "6017",
+    "hex": "`0x1781`",
+    "message": "The call deadline has not passed.",
+    "raisedWhen": "`refund_call` at or before the call's deadline slot."
+  },
+  {
+    "name": "InvalidSignature",
+    "code": "6018",
+    "hex": "`0x1782`",
+    "message": "The required Ed25519 verification instruction is missing or does not match.",
+    "raisedWhen": "In `settle_call` or `settle_metered_call`: the Ed25519 instruction at the given index is missing, or does not carry this signature, the enclave's signing key and the expected receipt or piece message."
+  },
+  {
+    "name": "InvalidTokenAccount",
+    "code": "6019",
+    "hex": "`0x1783`",
+    "message": "The escrow mint or token accounts are invalid.",
+    "raisedWhen": "A token account, mint or token program is missing for a price in a mint, has the wrong owner or mint, or is not the associated token account where one is required."
+  },
+  {
+    "name": "InvalidRecipient",
+    "code": "6020",
+    "hex": "`0x1784`",
+    "message": "A payment recipient does not match the call snapshot.",
+    "raisedWhen": "In `settle_call`, `settle_metered_call` and `refund_call`: the caller, owner, operator or fee recipient passed is not the one recorded in the call."
+  },
+  {
+    "name": "InsufficientEscrow",
+    "code": "6021",
+    "hex": "`0x1785`",
+    "message": "The escrow cannot cover the requested payment.",
+    "raisedWhen": "The call's escrow holds less than its required payout (`price` for `Call`, `ceiling` for `Token`, or `count * price > ceiling` in `settle_metered_call`)."
+  },
+  {
+    "name": "ArithmeticOverflow",
+    "code": "6022",
+    "hex": "`0x1786`",
+    "message": "An arithmetic limit was exceeded.",
+    "raisedWhen": "A slot, counter or `count * price` passed the 64-bit limit."
+  },
+  {
+    "name": "InvalidOpenAnswer",
+    "code": "6023",
+    "hex": "`0x1787`",
+    "message": "The open answer bytes are empty, exceed the configured limit, or do not match the output hash.",
+    "raisedWhen": "In `settle_call`: `open_answer` is non-empty on a `Sealed` call, or on an `Open` call is empty, exceeds `Config.max_open_answer_bytes`, or does not hash to `output_hash`. In `settle_metered_call`: the call is not `AnswerMode::Sealed`."
+  },
+  {
+    "name": "InvalidCallback",
+    "code": "6024",
+    "hex": "`0x1788`",
+    "message": "The callback specification or remaining accounts are invalid.",
+    "raisedWhen": "In `open_call` or `open_metered_call`: `callback.program` is the default address or the `voynich` program itself, or `callback.accounts` has more than 8 entries. In `settle_call` or `settle_metered_call`: remaining accounts do not match `[callback_program, ...callback_accounts]`, the callback program is not executable, or a writable callback account is passed read-only."
+  },
+  {
+    "name": "InvalidCall",
+    "code": "6025",
+    "hex": "`0x1789`",
+    "message": "The call pricing unit or escrow ceiling is invalid for this instruction.",
+    "raisedWhen": "In `open_call`: the model is priced per `Token`. In `open_metered_call`: the model is priced per `Call`, `ceiling` is below `model.price`, or `ceiling` is `0` when `model.price > 0`. In `settle_call`: the call is priced per `Token`. In `settle_metered_call`: the call is not priced per `Token` or the receipt PDA is already initialized."
+  },
+  {
+    "name": "InvalidMeasurement",
+    "code": "6026",
+    "hex": "`0x178a`",
+    "message": "The measurement digest, source metadata, or status is invalid.",
+    "raisedWhen": "In `publish_measurement`: an all-zero `digest` or `recipe_hash`, an empty/oversized/whitespace `source_repo` (max 128) or `version` (max 32), or a `commit_sha` outside 7 to 64 hex characters. In `deprecate_measurement`: the measurement is already `Deprecated`."
+  }
+]

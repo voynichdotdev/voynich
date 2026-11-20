@@ -1,0 +1,130 @@
+[
+  {
+    "account": "payer",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Pays the Call's rent and, for a price in a mint, the escrow token account rent. Equals `caller` for a wallet call, or a transaction fee payer when `caller` is a program-derived address signed via CPI."
+  },
+  {
+    "account": "caller",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The wallet or program-derived address that opens the call and funds the escrow. Receives any refund."
+  },
+  {
+    "account": "config",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"config\"]`",
+    "is": "The protocol's Config."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "enclave",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"enclave\", enclave.signing_key]`",
+    "is": "The Enclave chosen to answer."
+  },
+  {
+    "account": "attestation_record",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The enclave's attestation record."
+  },
+  {
+    "account": "grant",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"grant\", model, enclave]`",
+    "is": "That enclave's Grant for the model, not revoked."
+  },
+  {
+    "account": "call",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"call\", caller, nonce]`",
+    "is": "The Call, created here."
+  },
+  {
+    "account": "mint",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The model's price mint. Only for a price in a mint."
+  },
+  {
+    "account": "caller_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The caller's token account for the mint. Only for a price in a mint."
+  },
+  {
+    "account": "escrow_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The Call's associated token account for the mint, created here. Only for a price in a mint."
+  },
+  {
+    "account": "token_program",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`",
+    "is": "The SPL Token program. Only for a price in a mint."
+  },
+  {
+    "account": "associated_token_program",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "`ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL`",
+    "is": "The Associated Token program. Only for a price in a mint."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

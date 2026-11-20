@@ -1,0 +1,10 @@
+[
+  {
+    "argument": "offset",
+    "type": "u32"
+  },
+  {
+    "argument": "bytes",
+    "type": "bytes"
+  }
+]

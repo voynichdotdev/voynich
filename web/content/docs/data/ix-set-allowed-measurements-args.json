@@ -1,0 +1,6 @@
+[
+  {
+    "argument": "allowed_measurements",
+    "type": "Vec<[u8; 48]>"
+  }
+]

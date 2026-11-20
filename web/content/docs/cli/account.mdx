@@ -1,0 +1,137 @@
+---
+title: account
+description: voynich account prints one wallet's side of the protocol, the models it owns, the enclaves it operates, the calls it made and what it earned, field by field.
+---
+
+`voynich account` prints everything one wallet has on the protocol, in its three roles: the models it owns and what they earned, the enclaves it operates and what they earned, and the calls it made.
+
+```bash
+voynich account <wallet>
+```
+
+## Argument
+
+<Fields>
+<Field name="wallet" type="address, first argument" required>
+The wallet to read. Any wallet can be read, and the command needs no keypair.
+</Field>
+</Fields>
+
+## What it prints
+
+One JSON object on stdout. For a wallet that made calls, with one call shown:
+
+```json
+{
+  "wallet": "89K627XNg94bDEETsQ6viQjCDB25iSYGDq1xKuqHB3jv",
+  "models": [],
+  "ownerEarnings": [],
+  "enclaves": [],
+  "operatorEarnings": [],
+  "calls": [
+    {
+      "address": "GyLvqRCFTWcsEcEr4jt8vuHZVKDvnyVwwW3Wwcav373U",
+      "caller": "89K627XNg94bDEETsQ6viQjCDB25iSYGDq1xKuqHB3jv",
+      "model": "431poxuxU5h5BE4nxazgLfxVEdg1xjipQWknyVN8ZobW",
+      "modelName": "sketch-32",
+      "enclave": "5pTHrf9HYoq7unNVbvsL4kd6zWcwWXqH4HQ7JPQi5Ft6",
+      "inputHash": "ee79690984ab…87b7bba43a",
+      "price": {
+        "amount": "100000",
+        "mint": null,
+        "decimals": 9,
+        "symbol": "SOL"
+      },
+      "openedSlot": "2325",
+      "deadlineSlot": "2625",
+      "status": "settled",
+      "receipt": "D949kMCmdYwMXvjYTM6BY9WUxuhjpz6bWVmZ4FxrpGnQ",
+      "failure": null
+    },
+    …
+  ]
+}
+```
+
+<Fields>
+<Field name="wallet" type="address">
+The wallet that was read.
+</Field>
+<Field name="models" type="array of Model">
+The models this wallet owns, in every status. The fields are in [Model fields](/docs/cli/models#model-fields).
+</Field>
+<Field name="ownerEarnings" type="array">
+What the wallet received as an owner, one entry per unit it was paid in. Each entry has `amount` in base units as a string, `mint` (an address, or `null` for SOL), `decimals` and `symbol`.
+</Field>
+<Field name="enclaves" type="array of Enclave">
+The enclaves this wallet operates. The fields are in [Enclave fields](/docs/cli/models#enclave-fields).
+</Field>
+<Field name="operatorEarnings" type="array">
+What the wallet received as an operator across every enclave it operates, in the same form as `ownerEarnings`.
+</Field>
+<Field name="calls" type="array of Call">
+The calls this wallet made. Each has the fields below.
+</Field>
+</Fields>
+
+How a settled call's price is split between the owner, the operator and the protocol share is told in [Fees and the token](/docs/concepts/fees-and-the-token).
+
+### Call fields
+
+<Fields>
+<Field name="address" type="address">
+The Call account. `voynich refund` and `voynich verify` take it.
+</Field>
+<Field name="caller" type="address">
+The wallet or program PDA that opened the call.
+</Field>
+<Field name="callerIsProgram" type="boolean">
+`true` when the call was opened by another Solana program through CPI.
+</Field>
+<Field name="model" type="address">
+The model that was called.
+</Field>
+<Field name="modelName" type="string">
+The model's name.
+</Field>
+<Field name="enclave" type="address">
+The enclave chosen to answer.
+</Field>
+<Field name="inputHash" type="64 hex characters">
+The SHA-256 of the encrypted input.
+</Field>
+<Field name="answerMode" type="string">
+`sealed` or `open`.
+</Field>
+<Field name="price" type="object">
+What the call put in escrow: `amount`, `mint`, `decimals` and `symbol`.
+</Field>
+<Field name="openedSlot" type="integer string">
+The slot the call opened in.
+</Field>
+<Field name="deadlineSlot" type="integer string">
+The slot after which the call can be refunded.
+</Field>
+<Field name="status" type="string">
+`open`, `settled`, `refundable` or `refunded`.
+</Field>
+<Field name="receipt" type="address or null">
+The call's receipt, once it has settled.
+</Field>
+<Field name="failure" type="object or null">
+For a call that is `refundable` or `refunded`: `code`, `message` and `refundState` (`refundable` or `refunded`). `null` for a call that is `open` or `settled`.
+</Field>
+</Fields>
+
+## From the account to the next command
+
+| In the output | Next |
+| --- | --- |
+| A call with the status `refundable` | [`voynich refund <call>`](/docs/cli/call#voynich-refund) returns its escrow. |
+| A call with a `receipt` | [`voynich verify <call>`](/docs/cli/verify) checks it. |
+| A model with the status `sealed` | [`voynich grant <model> <enclave>`](/docs/cli/grant) makes it live. |
+| A model with the status `live` | [`voynich model price <model>`](/docs/cli/models#voynich-model-price) sets its price, [`voynich model retire <model>`](/docs/cli/models#voynich-model-retire) retires it. |
+
+## Failures
+
+The command prints one line to stderr and exits with code `1`: `Supply wallet address for account.` without the argument, and the API's code and message when the API refuses the request, `VALIDATION_ERROR` for a value that is not an address.
