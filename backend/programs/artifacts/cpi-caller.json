@@ -1,0 +1,349 @@
+{
+  "address": "5niikRYqdGcR4KJd9aXfQaYdoQHzdrF1sDyiwrTvbEoa",
+  "metadata": {
+    "name": "cpi_caller",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "open_call",
+      "discriminator": [
+        153,
+        26,
+        89,
+        45,
+        252,
+        243,
+        183,
+        62
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "model"
+        },
+        {
+          "name": "enclave"
+        },
+        {
+          "name": "attestation_record"
+        },
+        {
+          "name": "grant"
+        },
+        {
+          "name": "call",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "caller_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "escrow_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true
+        },
+        {
+          "name": "associated_token_program",
+          "optional": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "voynich_program",
+          "address": "65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "input_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "open_answer",
+          "type": "bool"
+        },
+        {
+          "name": "fund_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "refund_call",
+      "discriminator": [
+        46,
+        165,
+        96,
+        9,
+        152,
+        224,
+        25,
+        51
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call",
+          "writable": true
+        },
+        {
+          "name": "escrow_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "caller_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "voynich_program",
+          "address": "65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "verify_receipt",
+      "discriminator": [
+        202,
+        144,
+        21,
+        149,
+        181,
+        189,
+        23,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "receipt"
+        },
+        {
+          "name": "model"
+        },
+        {
+          "name": "call"
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_open_answer",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_sol",
+      "discriminator": [
+        145,
+        131,
+        74,
+        136,
+        65,
+        137,
+        42,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "caller",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_tokens",
+      "discriminator": [
+        2,
+        4,
+        225,
+        61,
+        19,
+        182,
+        106,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "caller",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller_tokens",
+          "writable": true
+        },
+        {
+          "name": "authority_tokens",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "AnswerMismatch",
+      "msg": "Receipt open answer does not match the expected payload."
+    }
+  ]
+}

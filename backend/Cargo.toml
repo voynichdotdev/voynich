@@ -2,6 +2,7 @@
 members = [
     "programs/attest",
     "programs/voynich",
+    "programs/cpi-caller",
     "voynich-cpi",
 ]
 resolver = "2"
