@@ -1,0 +1,25 @@
+---
+title: Errors
+description: Every error code of the voynich program, its name, its message and what raises it.
+---
+
+The program defines 27 errors, numbered from 6000. A failed transaction's logs carry the number in hex as `custom program error: 0x…` on the line where the `voynich` program fails.
+
+<Rows data="program-errors" columns="name,code,hex,message,raisedWhen" />
+
+## Errors from Anchor
+
+Some refusals come from Anchor's own account checks and carry Anchor's numbers:
+
+| Code | Name | Raised when |
+| --- | --- | --- |
+| 2001 | `ConstraintHasOne` | A Grant passed to `revoke_grant` or `open_call` belongs to another model or enclave, or a Call passed to `settle_call` names another model or enclave. |
+| 2006 | `ConstraintSeeds` | An account is not at the address its seeds give. |
+| 2012 | `ConstraintAddress` | The Instructions sysvar or a program account is not the expected one. |
+| 3012 | `AccountNotInitialized` | A Model, Enclave, Grant or Call passed does not exist. |
+
+Creating an account that already exists (a model name that is taken, an enclave already registered, a call nonce used before, a call already settled) fails in the System program with `custom program error: 0x0`.
+
+## Through the API
+
+When a transaction built by the API is refused by the program, the API's error names the program error in `programError`: the program's address, the error's name and its number. Which API code each program error arrives under is in [HTTP API: Transactions](/docs/api/transactions).

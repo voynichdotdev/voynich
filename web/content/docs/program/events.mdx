@@ -1,0 +1,101 @@
+---
+title: Events
+description: Every event the voynich program emits, its fields and how to decode it from a transaction.
+---
+
+The program emits an event for every change of state. There are 16.
+
+<Rows data="program-events" columns="event,emittedBy,says,discriminator" />
+
+## How an event is carried
+
+Events are emitted with Anchor's event CPI: the program calls itself, and the event is the data of that inner instruction. They are not in the transaction's log messages, so a full or truncated log never hides one.
+
+To read the events of a transaction:
+
+1. Take the transaction's inner instructions whose program is the `voynich` program.
+2. Keep those whose data starts with the 8 bytes `e445a52e51cb9a1d`. Their only account is the event authority, the PDA `["__event_authority"]`, as a signer.
+3. The next 8 bytes are the event's discriminator from the table above.
+4. The rest is the event's fields in order, Borsh-encoded.
+
+Addresses are 32 bytes, integers are little-endian, a `string` or `bytes` or `Vec` starts with its length as a `u32`, and `ModelStatus`, `CallStatus` and `PriceUnit` are one byte with the values in [Accounts](/docs/program/accounts#model).
+
+The API reads the same events and serves them as a stream: see [HTTP API: Overview](/docs/api/overview).
+
+## ConfigChanged
+
+<Rows data="event-config-changed" />
+
+`ConfigArgs` is `attestation_program: pubkey`, `record_layout_version: u8`, `fee_recipient: pubkey`, `protocol_share_bps: u16`, `call_deadline_slots: u64`, `max_open_answer_bytes: u16`, in that order.
+
+## ModelCreated
+
+<Rows data="event-model-created" />
+
+`ModelBase` is `sha256: [u8; 32]`, `size_bytes: u64`, `format: string`, `source: string`.
+
+## WeightsAttached
+
+<Rows data="event-weights-attached" />
+
+## WeightsWritten
+
+<Rows data="event-weights-written" />
+
+`offset` and `length` describe the write. `written_bytes` is the account's total after it.
+
+## RangeSealed
+
+<Rows data="event-range-sealed" />
+
+## ModelSealed
+
+<Rows data="event-model-sealed" />
+
+`base_sha256` is `Some(base.sha256)` when the model was created with a `ModelBase` and `None` for standalone models.
+
+## ModelPriceChanged
+
+<Rows data="event-model-price-changed" />
+
+## ModelAllowedMeasurementsChanged
+
+<Rows data="event-model-allowed-measurements-changed" />
+
+## ModelStatusChanged
+
+<Rows data="event-model-status-changed" />
+
+## EnclaveChanged
+
+<Rows data="event-enclave-changed" />
+
+## GrantChanged
+
+<Rows data="event-grant-changed" />
+
+`slot` is the slot of this change. `revoked` is false for a grant written and true for a grant revoked.
+
+## CallOpened
+
+<Rows data="event-call-opened" />
+
+`CallbackAccount` is `pubkey: pubkey`, `is_writable: bool`.
+
+## CallSettled
+
+<Rows data="event-call-settled" />
+
+The fields are the Receipt's, with the Receipt's address as `receipt`, plus optional `delivered_count` and `returned_amount` (`None` on `settle_call`; `Some(count)` and `Some(returned_amount)` on `settle_metered_call`).
+
+## CallRefunded
+
+<Rows data="event-call-refunded" />
+
+## MeasurementPublished
+
+<Rows data="event-measurement-published" />
+
+## MeasurementDeprecated
+
+<Rows data="event-measurement-deprecated" />

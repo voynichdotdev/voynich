@@ -1,0 +1,282 @@
+---
+title: Instructions
+description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
+---
+
+The program has 24 instructions.
+
+<Rows data="program-instructions" columns="instruction,arguments,signers,does" />
+
+Every instruction except `migrate_model` ends with two accounts that Anchor's event CPI needs: `event_authority`, the PDA `["__event_authority"]`, and `program`, the `voynich` program itself. Accounts are passed in the order of each table. An optional account that is left out is passed as the program's own address.
+
+The errors named below are in [Errors](/docs/program/errors). The events are in [Events](/docs/program/events).
+
+## initialize
+
+Creates the Config. It can be sent once, by the program's upgrade authority.
+
+<Rows data="ix-initialize-args" />
+
+<Rows data="ix-initialize" />
+
+- **Checks.** The signer is the program's upgrade authority (`Unauthorized`). The attestation program and the fee recipient are not the default address, the layout version is above 0, the protocol share is at most 10,000, the deadline is above 0 slots and `max_open_answer_bytes` is 1 to 4,096 (`InvalidConfig`).
+- **Effects.** The Config holds the admin and the six values. Emits `ConfigChanged`.
+
+## set_config
+
+Changes the Config's six values. The admin stays.
+
+<Rows data="ix-set-config-args" />
+
+<Rows data="ix-set-config" />
+
+- **Checks.** The signer is the Config's admin (`Unauthorized`). The values pass the same checks as in `initialize` (`InvalidConfig`).
+- **Effects.** The Config holds the new values. Calls that are already open keep the fee recipient, the protocol share and the deadline they opened with. Emits `ConfigChanged`.
+
+## migrate_config
+
+Reallocates a legacy 116-byte Config account to 118 bytes in place and writes `max_open_answer_bytes`.
+
+<Rows data="ix-migrate-config-args" />
+
+<Rows data="ix-migrate-config" />
+
+- **Checks.** The signer is the Config's admin (`Unauthorized`). The Config is the PDA `["config"]`, owned by the program, 116 bytes long, and `max_open_answer_bytes` is 1 to 4,096 (`InvalidConfig`).
+- **Effects.** Reallocates the Config to 118 bytes (rent difference paid by `admin`), writes `max_open_answer_bytes`, and emits `ConfigChanged`.
+
+## migrate_model
+
+Repairs trailing padding bytes in a pre-Build-4 Model account whose Borsh buffer shrunk during `seal_model` or `set_allowed_measurements`, so the trailing `price_unit` byte decodes cleanly as `PriceUnit::Call` (`0`).
+
+<Rows data="ix-migrate-model" />
+
+- **Checks.** `model` is owned by `voynich`, parses cleanly through `base`, and sits at PDA `["model", name]` with matching `bump` (`InvalidModel`). `authority` is either the model's `owner` or `config.admin` (`Unauthorized`).
+- **Effects.** If the byte at `price_unit` is above `1` or any trailing padding byte after it is non-zero, zeroes the tail from `price_unit` onward and verifies `Model::try_deserialize` succeeds. Takes no arguments and emits no event.
+
+## create_model
+
+Creates a Model in `Uploading`, binds its Weights accounts to it and moves the upload funding to the upload key.
+
+<Rows data="ix-create-model-args" />
+
+<Rows data="ix-create-model" />
+
+`manifest` is the manifest's compact UTF-8 JSON, as told in [The manifest on chain](/docs/concepts/sealed-models#on-chain). After the listed accounts, the transaction passes the model's initial Weights accounts in order, each writable, followed by `extra_upload_key_count` (`0` to `7`) additional writable non-signer upload keys as remaining accounts.
+
+- **Checks.** The name is 1 to 32 bytes of lowercase letters and digits in groups joined by single hyphens; the manifest is 1 to 4,096 bytes; `size_bytes` is above 16; `cipher` is `xchacha20poly1305-64k-v1`; there are 1 to 8 allowed measurements; when `base` is `Some`, `sha256` is non-zero, `size_bytes` is above 0, `format` is `onnx`, `safetensors` or `gguf` (at most 32 bytes), and `source` is 1 to 256 bytes starting with `https://`, `http://`, `ipfs://` or `hf://` with no ASCII whitespace or control bytes; the operator share plus the protocol share is at most 10,000; `1 + extra_upload_key_count` is at most 8; the primary `upload_key` and every extra upload key are distinct from `owner` and each other, owned by the System program, hold no data and (for extra keys) are writable (`InvalidModel`). There is at least 1 Weights account (up to 64 total across `create_model` and `attach_weights`), each owned by the program, writable, rent-exempt, listed once, at most 10 MiB, with its first 56 bytes zero, and their cumulative ciphertext sizes do not exceed `size_bytes` (`InvalidWeights`).
+- **Effects.** The Model exists with status `Uploading`, `hash_version = 1`, `sealed_chunks = 0`, empty `merkle_frontier`, `merkle_frontier_mask = 0`, `base` (when given), `price_unit` (`Call` or `Token`), and records `upload_key` and `upload_keys` (`[upload_key, ...extra_upload_keys]`). Each attached Weights account has its header initialized (with its global ciphertext byte offset in `reserved`). `upload_funding_lamports` is divided evenly across all `K = 1 + extra_upload_key_count` upload keys (remainder to `upload_key`) from `owner`. Emits `ModelCreated`.
+
+## attach_weights
+
+Binds additional preallocated Weights accounts to an uploading model (up to 64 total). Signed by any authorized upload key so attaching accounts beyond the initial `create_model` batch needs no extra owner signature.
+
+<Rows data="ix-attach-weights" />
+
+After the listed accounts, remaining accounts carry the last currently attached Weights account (read-only) followed by the new zero-header Weights accounts to bind in order, each writable.
+
+- **Checks.** The signer is `model.upload_key` or an entry in `model.upload_keys` (`Unauthorized`). The model is `Uploading` (`ModelNotUploading`). The first remaining account is the model's last currently attached Weights account, each new account passes the same Weights checks as `create_model`, total Weights accounts stay at most 64, and cumulative ciphertext size stays at most `model.size_bytes` (`InvalidWeights`).
+- **Effects.** Initializes each new Weights account header sequentially (writing its global byte offset to `reserved`), appends their keys to `model.weights`, and emits `WeightsAttached`.
+
+## write_weights
+
+Writes ciphertext bytes into one Weights account. Signed by any of the model's authorized upload keys alone, so an upload writes in parallel with no wallet prompt.
+
+<Rows data="ix-write-weights-args" />
+
+<Rows data="ix-write-weights" />
+
+`offset` counts from the start of that account's ciphertext, not from the start of the model's.
+
+- **Checks.** The signer is `model.upload_key` or an entry in `model.upload_keys` (`Unauthorized`). The model is `Uploading` (`ModelNotUploading`). The account is one of the model's Weights accounts (`InvalidWeights`). `bytes` is not empty and `offset` plus the length is at most the account's size (`InvalidWrite`).
+- **Effects.** The bytes are in the account and `written_bytes` is the highest end written so far. Writes may land in any order. Writing a range again replaces it. Emits `WeightsWritten`.
+
+## seal_range
+
+Hashes 1 to 8 consecutive 65,552-byte ciphertext chunks (`CIPHER_CHUNK_BYTES`) starting at `model.sealed_chunks` into the model's binary Merkle frontier (`voynich/chunk/v1` leaves, `voynich/node/v1` internal nodes). Signed by any authorized upload key.
+
+<Rows data="ix-seal-range-args" />
+
+<Rows data="ix-seal-range" />
+
+Remaining accounts carry the 1 or 2 Weights accounts covering the chunk byte range being hashed.
+
+- **Checks.** The signer is an authorized upload key (`Unauthorized`). The model is `Uploading` (`ModelNotUploading`) with `hash_version == 1` (`InvalidModel`). `chunk_count` is 1 to 8 and does not exceed total chunks; the covering Weights accounts belong to the model, span the byte range cleanly, and are written to their end (`InvalidWeights`, `UploadIncomplete`).
+- **Effects.** Updates `model.merkle_frontier`, `model.merkle_frontier_mask`, and increments `model.sealed_chunks` by `chunk_count`. Emits `RangeSealed`.
+
+## seal_model
+
+Finalizes the ciphertext root hash. From here the bytes cannot change.
+
+<Rows data="ix-seal-model-args" />
+
+<Rows data="ix-seal-model" />
+
+For `hash_version == 0`, remaining accounts carry every Weights account of the model in order. For `hash_version == 1`, remaining accounts are empty when `seal_range` has already hashed every chunk, or carry the covering Weights accounts for up to 8 remaining chunks hashed inline.
+
+- **Checks.** The signer is the model's owner (`Unauthorized`). The model is `Uploading` (`ModelNotUploading`). For `hash_version == 0`, every Weights account is written to its end (`UploadIncomplete`) and their flat SHA-256 equals `ciphertext_sha256` (`CiphertextHashMismatch`). For `hash_version == 1`, at most 8 chunks remain unhashed (`UploadIncomplete`), any remaining chunks hash cleanly, and folding `merkle_frontier` produces `ciphertext_sha256` (`CiphertextHashMismatch`).
+- **Effects.** The Model holds the root hash and the sealing slot, its status is `Sealed`, `merkle_frontier` is cleared, `merkle_frontier_mask` is set to 0, `upload_key` is cleared to the default address and `upload_keys` is emptied, so nothing can write to its Weights accounts again. Emits `ModelSealed` (carrying `base_sha256: model.base.map(|b| b.sha256)`).
+
+## set_price
+
+Sets the price, the price mint, the operator share and the price unit (`Call` or `Token`).
+
+<Rows data="ix-set-price-args" />
+
+<Rows data="ix-set-price" />
+
+`price_mint` is an SPL Token mint, or the default (all-zero) address for SOL. `price_unit` is `PriceUnit::Call` (`0`) or `PriceUnit::Token` (`1`).
+
+- **Checks.** The signer is the model's owner (`Unauthorized`). The operator share plus the protocol share is at most 10,000 (`InvalidModel`).
+- **Effects.** New calls open at the new price, mint, share and price unit. Open calls keep theirs. Emits `ModelPriceChanged`.
+
+## set_allowed_measurements
+
+Replaces the model's allowed measurements list without re-sealing.
+
+<Rows data="ix-set-allowed-measurements-args" />
+
+<Rows data="ix-set-allowed-measurements" />
+
+- **Checks.** The signer is the model's owner (`Unauthorized`). There are 1 to 8 measurements (`InvalidModel`).
+- **Effects.** Updates `model.allowed_measurements`. Emits `ModelAllowedMeasurementsChanged`.
+
+## retire_model
+
+Closes a model to new calls.
+
+<Rows data="ix-retire-model" />
+
+- **Checks.** The signer is the model's owner (`Unauthorized`).
+- **Effects.** The model's status is `Retired`. `open_call`, `grant_by_owner` and `grant_by_enclave` refuse it. Calls that are open settle until their deadline and refund after it. Emits `ModelStatusChanged`.
+
+## register_enclave
+
+Creates an Enclave from a current attestation record.
+
+<Rows data="ix-register-enclave-args" />
+
+<Rows data="ix-register-enclave" />
+
+- **Checks.** The endpoint is 1 to 256 bytes and starts with `http://` or `https://`, and the encryption key is not all zero (`InvalidEnclave`). The record is owned by the configured attestation program, sits at the address derived from the signing key, has the configured layout, names the signing key, and is unexpired at the current slot (`InvalidAttestation`). The signing key signs the transaction, so only the enclave that holds it can register it.
+- **Effects.** The Enclave holds both keys, the operator, the endpoint, the record's address and the record's hardware type, measurement, recorded slot and expiry slot. Emits `EnclaveChanged`.
+
+## refresh_enclave
+
+Copies the enclave's current attestation record into its Enclave account and sets its endpoint. An enclave sends it after it attests again.
+
+<Rows data="ix-refresh-enclave-args" />
+
+<Rows data="ix-refresh-enclave" />
+
+- **Checks.** The signer is the enclave's signing key (`Unauthorized`). The endpoint is valid (`InvalidEnclave`). The record is valid and unexpired (`InvalidAttestation`).
+- **Effects.** The Enclave holds the record's current hardware type, measurement, recorded slot and expiry slot, and the endpoint given. Emits `EnclaveChanged`.
+
+## grant_by_owner
+
+Writes a Grant from the owner to an enclave.
+
+<Rows data="ix-grant-by-owner-args" />
+
+<Rows data="ix-grant-by-owner" />
+
+- **Checks.** The signer is the model's owner (`Unauthorized`). The model is `Sealed` or `Live` (`ModelNotSealed`). The record passed is the one the target Enclave names and still states the Enclave's hardware type and measurement (`InvalidEnclave`), and it is valid and unexpired (`InvalidAttestation`). The measurement is in the model's allowed measurements (`MeasurementNotAllowed`). The wrapped key is 105 bytes and starts with byte 1 (`InvalidWrappedKey`).
+- **Effects.** The Grant holds the wrapped key, the owner as `granted_by` and the current slot, and is not revoked. A Grant that existed for this model and enclave is written over, which also lifts a revocation. The model's status is `Live`. Emits `GrantChanged` and `ModelStatusChanged`.
+
+## grant_by_enclave
+
+Writes a Grant from an enclave that holds one to another enclave. The owner does not sign.
+
+<Rows data="ix-grant-by-enclave-args" />
+
+<Rows data="ix-grant-by-enclave" />
+
+- **Checks.** The signer is the source enclave's signing key (`Unauthorized`). The model is `Live` (`ModelNotLive`). The source and the target are different enclaves (`InvalidEnclave`). The source holds a Grant for this model that is not revoked (`GrantRequired`). Both records are the ones their Enclaves name, are valid and are unexpired (`InvalidEnclave`, `InvalidAttestation`). Both measurements are in the model's allowed measurements (`MeasurementNotAllowed`). The wrapped key is 105 bytes and starts with byte 1 (`InvalidWrappedKey`).
+- **Effects.** The Grant holds the wrapped key, the source Enclave's address as `granted_by` and the current slot. Emits `GrantChanged`.
+
+## revoke_grant
+
+Marks a Grant revoked.
+
+<Rows data="ix-revoke-grant" />
+
+- **Checks.** The signer is the model's owner (`Unauthorized`). The Grant belongs to the model.
+- **Effects.** The Grant's `revoked` is true. `open_call` refuses the enclave for this model, and the enclave cannot pass the key on. Calls already open with it settle. Emits `GrantChanged`.
+
+## open_call
+
+Creates a per-call Call and moves the model's price into its escrow.
+
+<Rows data="ix-open-call-args" />
+
+<Rows data="ix-open-call" />
+
+`nonce` is any number the caller has not used before: it gives the Call its address, `["call", caller, nonce]`. For a direct wallet call, `payer` and `caller` are the same signer. When another Solana program opens a call through CPI, `caller` is that program's system-owned PDA signed via `invoke_signed` (which holds the escrow and receives any refund), while `payer` is a signer paying the Call account rent and any escrow token account rent. `callback` is optional (`CallbackSpec { program: pubkey, accounts: Vec<CallbackAccount> }`, where each `CallbackAccount` is `{ pubkey: pubkey, is_writable: bool }`) and registers an `on_receipt` CPI target invoked during `settle_call`. For a price in SOL the five token accounts and programs are left out.
+
+- **Checks.** The model is `Live` (`ModelNotLive`) and has `price_unit == PriceUnit::Call` (`InvalidCall`). The enclave's Grant for the model is not revoked (`GrantRequired`). The record is the one the Enclave names, valid and unexpired (`InvalidEnclave`, `InvalidAttestation`), and its measurement is allowed (`MeasurementNotAllowed`). The operator share plus the protocol share is at most 10,000 (`InvalidConfig`). When `callback` is `Some`: `callback.program` is neither the default address nor the `voynich` program itself, and `callback.accounts` has at most 8 entries (`InvalidCallback`). For a price in a mint: the mint is the model's price mint, the caller's token account holds that mint, and the escrow account is the Call's associated token account (`InvalidTokenAccount`).
+- **Effects.** The Call holds the caller, the model, the enclave, the input hash, `answer_mode`, `caller_is_program` (`true` when invoked via CPI, `false` otherwise), `callback_program` and `callback_accounts` (default address and empty list when `callback` is `None`), `price_unit = Call`, `ceiling = model.price`, the price and mint, the owner, the operator, the fee recipient and both shares as they are now, the opening slot and the deadline slot (the opening slot plus the Config's `call_deadline_slots`). The price moves from `caller` into the escrow. Emits `CallOpened`.
+
+## open_metered_call
+
+Creates a per-token metered Call and moves the caller's escrow ceiling into its escrow. Shares the same `OpenCall` account layout as `open_call`, keeping `open_call`'s 4-argument ABI unchanged for existing CPI callers.
+
+<Rows data="ix-open-metered-call-args" />
+
+<Rows data="ix-open-metered-call" />
+
+- **Checks.** The model is `Live` (`ModelNotLive`) and has `price_unit == PriceUnit::Token` (`InvalidCall`). `ceiling >= model.price`, and `ceiling > 0` whenever `model.price > 0` (`InvalidCall`). The enclave's Grant, attestation record, measurement, share sum, optional `callback`, and mint token accounts pass the same checks as `open_call`.
+- **Effects.** Creates the Call with `price = model.price` (the per-token unit price), `price_unit = Token`, and `ceiling`, and deposits `ceiling` from `caller` into the Call's SOL or SPL escrow (`Call::escrow_amount()`). Emits `CallOpened` carrying `price_unit` and `ceiling`.
+
+## settle_call
+
+Checks the enclave's signature, writes the Receipt, invokes any registered `on_receipt` callback and pays out the escrow, in one instruction.
+
+<Rows data="ix-settle-call-args" />
+
+<Rows data="ix-settle-call" />
+
+The transaction carries an Ed25519 program instruction before `settle_call`, and `ed25519_instruction_index` is its index. That instruction verifies exactly one signature and carries the signature, the enclave's signing key and the [receipt message](/docs/concepts/calls-and-receipts#what-the-enclave-signs) in its own data: 114 bytes (`voynich/receipt/v1`) when `Model.base` is `None`, or 146 bytes (`voynich/receipt/v2`, appending `base.sha256`) when `Model.base` is `Some`. When `Call.callback_program` is not the default address, the transaction passes `[callback_program, ...callback_accounts]` as remaining accounts after the listed accounts.
+
+- **Checks.** The call is `Open` (`CallNotOpen`) and has `price_unit == PriceUnit::Call` (`InvalidCall`). The current slot is at most the deadline slot (`CallDeadlinePassed`). The record is the one the Enclave names, valid and unexpired (`InvalidEnclave`, `InvalidAttestation`), and its measurement is allowed (`MeasurementNotAllowed`). For a `Sealed` call, `open_answer` is empty; for an `Open` call, `open_answer` is non-empty, at most `Config.max_open_answer_bytes`, and hashes to `output_hash` (`InvalidOpenAnswer`). The Ed25519 instruction at the index matches the signature, the enclave's signing key and the `v1` (standalone) or `v2` (adapter with `Model.base.sha256`) receipt message (`InvalidSignature`). The caller, owner, operator and fee recipient are the ones the Call recorded (`InvalidRecipient`). For a price in a mint: the escrow, owner, operator and protocol accounts are associated token accounts of the right wallet and mint (`InvalidTokenAccount`). The escrow holds the price (`InsufficientEscrow`). When `Call.callback_program` is set: remaining accounts equal `[callback_program, ...callback_accounts]`, `callback_program` is executable, and every callback account marked `is_writable` is passed writable (`InvalidCallback`).
+- **Effects.** The operator receives `price × operator_share_bps / 10,000`, rounded down. The fee recipient receives `price × protocol_share_bps / 10,000`, rounded down. The owner receives the rest. The Receipt holds the call, model, enclave, both hashes, the signature, `answer_mode`, `open_answer`, `caller_is_program`, the slot and the three payments. The Call's status is `Settled`, and the model's and the enclave's `calls_settled` rise by one. Emits `CallSettled`. When `Call.callback_program` is set, the program flushes `Receipt`, `Call`, `Model` and `Enclave`, and invokes `callback_program::on_receipt` (discriminator `93db513a4577e15d`) with accounts `[receipt, call, model, ...callback_accounts]` before transferring the escrow. For a price in a mint, the escrow token account is closed and its rent returns to the caller.
+
+## settle_metered_call
+
+Settles a per-token (`PriceUnit::Token`) call at a signed token count, writes a 423-byte metered Receipt, splits `count * call.price` across owner, operator and protocol, and returns the unspent escrow ceiling (`call.ceiling - total`) to `caller` in the same instruction.
+
+<Rows data="ix-settle-metered-call-args" />
+
+<Rows data="ix-settle-metered-call" />
+
+The transaction carries an Ed25519 program instruction at `ed25519_instruction_index` verifying `signature` against `enclave.signing_key` over the [piece message](/docs/concepts/calls-and-receipts#signed-pieces): 120 bytes (`voynich/piece/v1`) when `Model.base` is `None`, or 152 bytes (`voynich/piece/v2`, appending `base.sha256`) when `Model.base` is `Some`. `payer` must be either `call.operator` (the enclave runtime) or `call.caller` (caller self-settlement), preventing third-party observers from front-running a live stream.
+
+- **Checks.** `payer` equals `call.operator` or `call.caller` (`Unauthorized`). The call is `Open` (`CallNotOpen`), has `price_unit == PriceUnit::Token` (`InvalidCall`), and has `answer_mode == AnswerMode::Sealed` (`InvalidOpenAnswer`). The current slot is at most `call.deadline_slot` (`CallDeadlinePassed`). The attestation record is valid, unexpired and matches the Enclave (`InvalidEnclave`, `InvalidAttestation`), and its measurement is allowed (`MeasurementNotAllowed`). `total = count * call.price` does not overflow (`ArithmeticOverflow`) and satisfies `total <= call.ceiling` (`InsufficientEscrow`); `count == 0` is valid and returns 100% of `call.ceiling`. The Ed25519 instruction verifies `signature` over the `voynich/piece/v1` or `v2` message (`InvalidSignature`). The canonical `["receipt", call]` PDA is empty and System-owned (`InvalidCall`). Recipients and optional SPL token accounts match the Call (`InvalidRecipient`, `InvalidTokenAccount`), and any registered `callback_program` remaining accounts pass the same `InvalidCallback` checks as `settle_call`.
+- **Effects.** Initializes the canonical `["receipt", call]` PDA at `Receipt::METERED_SPACE` (`423` bytes, handling any pre-funded lamports cleanly via transfer + `allocate` + `assign`) with the 407-byte `Receipt` prefix (`output_hash = running_hash`, `total = count * call.price`) plus trailing `delivered_count: u64` and `returned_amount: u64`. Marks `call.status = Settled`, increments `model.calls_settled` and `enclave.calls_settled`, emits `CallSettled` with `delivered_count = Some(count)` and `returned_amount = Some(returned_amount)`, invokes any registered `on_receipt` callback CPI, and in the same transaction pays `owner_amount`, `operator_amount` and `protocol_amount` while returning `returned_amount` to `caller` (for SOL directly in lamports; for SPL transferring `escrow.amount - total` to `caller_tokens` and closing `escrow_tokens` back to `caller`).
+
+## refund_call
+
+Returns the escrow of a call that did not settle by its deadline. Anyone can send it; the escrow goes back to `caller` (whether a wallet or a calling program's PDA).
+
+<Rows data="ix-refund-call" />
+
+- **Checks.** The call is `Open` (`CallNotOpen`). The current slot is past the deadline slot (`CallNotRefundable`). The caller account is the Call's caller (`InvalidRecipient`). For a price in a mint: the escrow is the Call's associated token account and the destination is a token account of the caller's for the mint (`InvalidTokenAccount`).
+- **Effects.** The full escrowed amount (`Call::escrow_amount()`: `price` for `Call`, `ceiling` for `Token`) returns to `caller`. The Call's status is `Refunded`. For a price in a mint, the escrow token account is closed and its rent returns to `caller`. Emits `CallRefunded` with `amount` set to the refunded escrow.
+
+## publish_measurement
+
+Creates an immutable 366-byte `Measurement` PDA at `["measurement", digest[..32], digest[32..]]`, binding a 48-byte SHA-384 enclave measurement digest to its source repository, commit SHA, reproducible build recipe hash, and version.
+
+<Rows data="ix-publish-measurement-args" />
+
+<Rows data="ix-publish-measurement" />
+
+- **Checks.** `digest` and `recipe_hash` are non-zero (`InvalidMeasurement`). `source_repo` is 1 to 128 bytes and `version` is 1 to 32 bytes with no ASCII whitespace or control characters (`InvalidMeasurement`). `commit_sha` is 7 to 64 hex characters (`InvalidMeasurement`). The PDA does not already exist (Anchor `init` rejects duplicates).
+- **Effects.** Initializes the `Measurement` account with `publisher`, `created_slot = clock.slot`, and `status = Active`. Emits `MeasurementPublished`.
+
+## deprecate_measurement
+
+Marks a published `Measurement` PDA as `Deprecated`.
+
+<Rows data="ix-deprecate-measurement" />
+
+- **Checks.** `authority` is either `measurement.publisher` or `config.admin` (`Unauthorized`). `measurement.status` is `Active` (`InvalidMeasurement` if already `Deprecated`).
+- **Effects.** Sets `measurement.status = Deprecated` and emits `MeasurementDeprecated`.

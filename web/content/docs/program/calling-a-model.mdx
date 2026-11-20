@@ -1,0 +1,373 @@
+---
+title: Calling a model from a program
+description: Open a paid call to a sealed model through CPI and verify its settled Receipt on chain with the voynich-cpi crate.
+---
+
+A Solana program can call a sealed model directly through CPI and act on the settled Receipt in a single on-chain transaction. The `voynich-cpi` crate (`backend/voynich-cpi/`) wraps `voynich`'s `open_call`, `open_metered_call` and `refund_call` CPIs, derives every protocol PDA, and verifies and decodes `Receipt` accounts across all on-chain layouts.
+
+## Adding the crate
+
+Add `voynich-cpi` alongside Anchor `0.31.1` in your program's `Cargo.toml`:
+
+```toml
+[dependencies]
+anchor-lang = { version = "=0.31.1" }
+voynich-cpi = { path = "../../voynich-cpi" }
+```
+
+`voynich-cpi` re-exports `voynich`, `ID`, `Voynich`, `OpenCall`, `RefundCall`, `AnswerMode`, `PriceUnit`, `CallbackAccount`, `CallbackSpec`, `MAX_CALLBACK_ACCOUNTS` (`8`), `ON_RECEIPT_DISCRIMINATOR` (`[147, 219, 81, 58, 69, 119, 225, 93]`), `ParsedReceipt`, `VoynichCpiError`, `RECEIPT_LEGACY_SPACE` (`401`), and `RECEIPT_STEP1_HEADER_SPACE` (`406`).
+
+## Opening a call via CPI
+
+```rust
+pub fn open_call<'a, 'b, 'c, 'info>(
+    ctx: CpiContext<'a, 'b, 'c, 'info, OpenCall<'info>>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    answer_mode: AnswerMode,
+) -> Result<()>
+```
+
+`open_call` separates two signers:
+
+- **`caller`** is a system-owned PDA derived by your program and signed through `CpiContext::new_with_signer`. The escrow (SOL or SPL tokens) is debited from `caller`, and any refund returns to `caller`.
+- **`payer`** is a writable signer (typically the transaction fee payer) that pays Call account rent and, for SPL-priced models, escrow token account creation.
+
+Pass `AnswerMode::Open` so the enclave writes the verified plaintext answer bytes into the Receipt on chain (or `AnswerMode::Sealed` when the output stays encrypted off chain). When invoked through CPI, `voynich` detects the nested stack height and records `caller_is_program = true` on both the `Call` and the settled `Receipt`.
+
+```rust
+use anchor_lang::{prelude::*, system_program};
+use voynich_cpi::{AnswerMode, OpenCall, Voynich};
+
+pub fn open_model_call(
+    ctx: Context<CpiOpenCall>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    fund_lamports: u64,
+) -> Result<()> {
+    if fund_lamports > 0 {
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.payer.to_account_info(),
+                    to: ctx.accounts.caller.to_account_info(),
+                },
+            ),
+            fund_lamports,
+        )?;
+    }
+
+    let authority_key = ctx.accounts.authority.key();
+    let bump = [ctx.bumps.caller];
+    let seeds: &[&[u8]] = &[b"caller", authority_key.as_ref(), &bump];
+    let signer_seeds = &[seeds];
+
+    let cpi_accounts = OpenCall {
+        payer: ctx.accounts.payer.to_account_info(),
+        caller: ctx.accounts.caller.to_account_info(),
+        config: ctx.accounts.config.to_account_info(),
+        model: ctx.accounts.model.to_account_info(),
+        enclave: ctx.accounts.enclave.to_account_info(),
+        attestation_record: ctx.accounts.attestation_record.to_account_info(),
+        grant: ctx.accounts.grant.to_account_info(),
+        call: ctx.accounts.call.to_account_info(),
+        mint: ctx.accounts.mint.as_ref().map(|a| a.to_account_info()),
+        caller_tokens: ctx.accounts.caller_tokens.as_ref().map(|a| a.to_account_info()),
+        escrow_tokens: ctx.accounts.escrow_tokens.as_ref().map(|a| a.to_account_info()),
+        token_program: ctx.accounts.token_program.as_ref().map(|a| a.to_account_info()),
+        associated_token_program: ctx.accounts.associated_token_program.as_ref().map(|a| a.to_account_info()),
+        system_program: ctx.accounts.system_program.to_account_info(),
+        event_authority: ctx.accounts.event_authority.to_account_info(),
+        program: ctx.accounts.voynich_program.to_account_info(),
+    };
+
+    voynich_cpi::open_call(
+        CpiContext::new_with_signer(
+            ctx.accounts.voynich_program.to_account_info(),
+            cpi_accounts,
+            signer_seeds,
+        ),
+        nonce,
+        input_hash,
+        AnswerMode::Open,
+    )
+}
+```
+
+Once the transaction confirms, send the encrypted input envelope (whose SHA-256 equals `input_hash`) to the enclave via [`POST /v1/calls/{id}/input`](/docs/api/relay). The enclave runs the model and settles the call on chain, creating the `Receipt` PDA.
+
+## Settling and acting in one transaction (`on_receipt`)
+
+To react to a model's answer in the same transaction that settles the call, open the call with `voynich_cpi::open_call_with_callback` and register a `CallbackSpec`:
+
+```rust
+pub const MAX_CALLBACK_ACCOUNTS: usize = 8;
+pub const ON_RECEIPT_DISCRIMINATOR: [u8; 8] = [147, 219, 81, 58, 69, 119, 225, 93];
+
+pub struct CallbackAccount {
+    pub pubkey: Pubkey,
+    pub is_writable: bool,
+}
+
+pub struct CallbackSpec {
+    pub program: Pubkey,
+    pub accounts: Vec<CallbackAccount>,
+}
+
+pub fn open_call_with_callback<'a, 'b, 'c, 'info>(
+    ctx: CpiContext<'a, 'b, 'c, 'info, OpenCall<'info>>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    answer_mode: AnswerMode,
+    callback: CallbackSpec,
+) -> Result<()>
+
+pub fn open_metered_call<'a, 'b, 'c, 'info>(
+    ctx: CpiContext<'a, 'b, 'c, 'info, OpenCall<'info>>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    answer_mode: AnswerMode,
+    ceiling: u64,
+) -> Result<()>
+
+pub fn open_metered_call_with_callback<'a, 'b, 'c, 'info>(
+    ctx: CpiContext<'a, 'b, 'c, 'info, OpenCall<'info>>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    answer_mode: AnswerMode,
+    callback: CallbackSpec,
+    ceiling: u64,
+) -> Result<()>
+```
+
+`callback.program` must not be the default address or `voynich::ID`, and `callback.accounts` holds at most `MAX_CALLBACK_ACCOUNTS` (`8`) entries (`InvalidCallback` otherwise). Both values are stored on the `Call` account (349 + 33 * N bytes). For models priced per token (`PriceUnit::Token`), call `open_metered_call` or `open_metered_call_with_callback` with an escrow `ceiling` at least `model.price` (and `> 0` when `model.price > 0`).
+
+When the enclave settles a call with a non-default `callback_program`:
+
+1. The enclave appends `[callback_program, ...callback_accounts]` as `remaining_accounts` on `settle_call` (and, for sketch models, serializes compact `{ label, probability }` JSON as `open_answer`).
+2. `settle_call` writes and flushes `Receipt`, `Call`, `Model`, and `Enclave`, emits `CallSettled`, and checks that `remaining_accounts` matches `[callback_program (executable), ...callback_accounts]` with every required `is_writable` flag set (`InvalidCallback` otherwise).
+3. `settle_call` invokes `callback_program` with instruction data `ON_RECEIPT_DISCRIMINATOR` (`sha256("global:on_receipt")[..8]`, hex `93db513a4577e15d`) and accounts in this exact order:
+   `[receipt (read-only), call (read-only), model (read-only), ...callback_accounts]`.
+4. After `on_receipt` returns `Ok(())`, `settle_call` pays out the call escrow to the owner, operator, and protocol fee recipient.
+
+Inside your program's `pub fn on_receipt` handler:
+
+- **Verify the Receipt and Call.** Call `voynich_cpi::read_receipt` on `receipt`, and check that `call` is owned by `voynich::ID`, was opened by your program's expected caller PDA, and recorded your program and payout accounts in its `callback_program` / `callback_accounts` fields. Anyone can invoke `on_receipt` directly, so never rely on caller identity alone.
+- **Return `Ok(())` on non-matching business outcomes.** Returning an error from `on_receipt` reverts the entire `settle_call` transaction (preventing the Receipt from landing and the enclave from being paid). Return `Ok(())` when the answer does not trigger an action, such as a non-matching label or an already-closed escrow.
+- **Pre-create recipient token accounts on open.** Because `on_receipt` has no user signer to pay rent, create any SPL associated token accounts your payout needs when opening the call.
+
+## Reading and verifying a Receipt
+
+A `Receipt` is written only by `settle_call` (per-call) or `settle_metered_call` (per-token). For the account to exist at its canonical PDA owned by `voynich`, the program has already checked that:
+
+- the call was open and within its deadline
+- the enclave's attestation record was valid, unexpired, and carried a measurement allowed by the model
+- the enclave's Ed25519 signature matched `voynich/receipt/v1|v2` (for `settle_call`) or `voynich/piece/v1|v2` (for `settle_metered_call`) over the call address, `input_hash`, and `output_hash` (plus `count` for metered calls and `base.sha256` for adapter models)
+- for an `Open` call, `open_answer` was non-empty, within `Config.max_open_answer_bytes`, and hashed (SHA-256) to `output_hash`
+- the escrow paid out to the owner, operator, and protocol fee recipient (and returned `returned_amount` to `caller` on metered calls)
+
+Use `voynich_cpi::read_receipt` to verify and decode the Receipt account before acting on its answer:
+
+```rust
+pub fn read_receipt(
+    receipt_info: &AccountInfo,
+    expected_model: &Pubkey,
+    expected_call: &Pubkey,
+) -> Result<ParsedReceipt>
+```
+
+`read_receipt` enforces every check in order:
+
+1. **Owner check:** `receipt_info.owner == &voynich::ID` (`InvalidReceiptOwner`).
+2. **PDA check:** `receipt_info.key() == receipt_pda(expected_call).0` (`InvalidReceiptPda`).
+3. **Discriminator check:** the first 8 bytes match `Receipt::DISCRIMINATOR`, `279a496a50669199` (`InvalidReceiptDiscriminator`).
+4. **Layout decoding:** decodes all four on-chain Receipt sizes cleanly, rejecting truncated or malformed trailing bytes (`InvalidReceiptData`):
+   - `401` bytes (`RECEIPT_LEGACY_SPACE`): legacy sealed receipt (`answer_mode = AnswerMode::Sealed`, `open_answer = []`, `caller_is_program = false`, `delivered_count = None`, `returned_amount = None`).
+   - `406 + N` bytes (`RECEIPT_STEP1_HEADER_SPACE + N`): `answer_mode` + `open_answer`, with `caller_is_program = false`, `delivered_count = None`, `returned_amount = None`.
+   - `407 + N` bytes: `answer_mode` + `open_answer` + trailing `caller_is_program` byte (`0` or `1`), `delivered_count = None`, `returned_amount = None`.
+   - `423 + N` bytes (`+ RECEIPT_METERED_EXTENSION`, `16` bytes): metered receipt carrying `delivered_count: Some(u64)` and `returned_amount: Some(u64)` after `caller_is_program`.
+5. **Call and model binding:** `parsed.call == *expected_call` (`CallMismatch`) and `parsed.model == *expected_model` (`ModelMismatch`).
+
+```rust
+use anchor_lang::prelude::*;
+use voynich_cpi::AnswerMode;
+
+#[error_code]
+pub enum ConsumerError {
+    #[msg("Receipt open answer does not match the expected payload.")]
+    AnswerMismatch,
+}
+
+#[derive(Accounts)]
+pub struct VerifyReceipt<'info> {
+    /// CHECK: verified by voynich_cpi::read_receipt.
+    pub receipt: UncheckedAccount<'info>,
+    /// CHECK: expected Voynich model address checked against Receipt.model.
+    pub model: UncheckedAccount<'info>,
+    /// CHECK: expected Voynich call address checked against Receipt.call and Receipt PDA.
+    pub call: UncheckedAccount<'info>,
+}
+
+pub fn verify_receipt(
+    ctx: Context<VerifyReceipt>,
+    expected_open_answer: Vec<u8>,
+) -> Result<()> {
+    let parsed = voynich_cpi::read_receipt(
+        &ctx.accounts.receipt.to_account_info(),
+        &ctx.accounts.model.key(),
+        &ctx.accounts.call.key(),
+    )?;
+    if !expected_open_answer.is_empty() {
+        require!(
+            parsed.answer_mode == AnswerMode::Open && parsed.open_answer == expected_open_answer,
+            ConsumerError::AnswerMismatch
+        );
+    }
+    Ok(())
+}
+```
+
+### What your program decides next
+
+`read_receipt` proves the Receipt belongs to `voynich`, `expected_model`, and `expected_call`. Your program checks the remaining fields against its own state:
+
+| Field | Compare with | Purpose |
+| --- | --- | --- |
+| `answer_mode`, `open_answer` | `AnswerMode::Open` and the expected answer payload | Act directly on the verified answer bytes stored on chain. |
+| `input_hash` | The SHA-256 of the input envelope your flow committed to | Confirm the enclave answered that exact input. |
+| `output_hash` | The SHA-256 of an off-chain output envelope | Verify a `Sealed` output presented to your program. |
+| `slot` | Current clock slot | Enforce freshness of the answer. |
+| `caller_is_program` | `true` | Confirm the call was opened via CPI rather than an external wallet. |
+| `total`, `price_mint`, `owner_amount`, `operator_amount`, `protocol_amount` | Expected pricing | Account for what was paid and to whom. |
+
+## ParsedReceipt
+
+<Fields>
+<Field name="call" type="Pubkey">
+The `Call` account settled by this receipt.
+</Field>
+<Field name="model" type="Pubkey">
+The `Model` account that answered.
+</Field>
+<Field name="enclave" type="Pubkey">
+The `Enclave` account that answered.
+</Field>
+<Field name="input_hash" type="[u8; 32]">
+SHA-256 of the encrypted input envelope.
+</Field>
+<Field name="output_hash" type="[u8; 32]">
+SHA-256 of the output envelope (`Sealed`) or `open_answer` bytes (`Open`).
+</Field>
+<Field name="signature" type="[u8; 64]">
+The enclave's Ed25519 signature over `voynich/receipt/v1`.
+</Field>
+<Field name="slot" type="u64">
+The slot the call settled in.
+</Field>
+<Field name="price_mint" type="Pubkey">
+The mint paid. The default (all-zero) pubkey means SOL.
+</Field>
+<Field name="total" type="u64">
+Total base units paid out from escrow.
+</Field>
+<Field name="owner" type="Pubkey">
+Recipient of the model owner's share.
+</Field>
+<Field name="operator" type="Pubkey">
+Recipient of the enclave operator's share.
+</Field>
+<Field name="fee_recipient" type="Pubkey">
+Recipient of the protocol share.
+</Field>
+<Field name="owner_amount" type="u64">
+Amount paid to `owner`.
+</Field>
+<Field name="operator_amount" type="u64">
+Amount paid to `operator`.
+</Field>
+<Field name="protocol_amount" type="u64">
+Amount paid to `fee_recipient`.
+</Field>
+<Field name="bump" type="u8">
+The Receipt PDA bump.
+</Field>
+<Field name="answer_mode" type="AnswerMode">
+`AnswerMode::Sealed` or `AnswerMode::Open`.
+</Field>
+<Field name="open_answer" type="Vec<u8>">
+Verified plaintext answer bytes for an `Open` receipt. Empty for a `Sealed` receipt.
+</Field>
+<Field name="caller_is_program" type="bool">
+`true` when `open_call` was invoked through CPI by another program.
+</Field>
+</Fields>
+
+## Refunding via CPI
+
+```rust
+pub fn refund_call<'a, 'b, 'c, 'info>(
+    ctx: CpiContext<'a, 'b, 'c, 'info, RefundCall<'info>>,
+) -> Result<()>
+```
+
+When a call opened by your program passes its deadline without settling, invoke `voynich_cpi::refund_call` (or let any wallet or crank call `refund_call` directly). The full escrow returns to your program's `caller` PDA (for SOL) or its token account (for SPL mints).
+
+```rust
+let cpi_accounts = RefundCall {
+    actor: ctx.accounts.caller.to_account_info(),
+    call: ctx.accounts.call.to_account_info(),
+    caller: ctx.accounts.caller.to_account_info(),
+    escrow_tokens: ctx.accounts.escrow_tokens.as_ref().map(|a| a.to_account_info()),
+    caller_tokens: ctx.accounts.caller_tokens.as_ref().map(|a| a.to_account_info()),
+    token_program: ctx.accounts.token_program.as_ref().map(|a| a.to_account_info()),
+    event_authority: ctx.accounts.event_authority.to_account_info(),
+    program: ctx.accounts.voynich_program.to_account_info(),
+};
+
+voynich_cpi::refund_call(CpiContext::new_with_signer(
+    ctx.accounts.voynich_program.to_account_info(),
+    cpi_accounts,
+    signer_seeds,
+))
+```
+
+## PDA helpers
+
+Every helper derives its address against `voynich::ID` and returns `(Pubkey, u8)`.
+
+| Helper | Seeds |
+| --- | --- |
+| `config_pda()` | `[b"config"]` |
+| `model_pda(name: &str)` | `[b"model", name.as_bytes()]` |
+| `enclave_pda(signing_key: &Pubkey)` | `[b"enclave", signing_key.as_ref()]` |
+| `grant_pda(model: &Pubkey, enclave: &Pubkey)` | `[b"grant", model.as_ref(), enclave.as_ref()]` |
+| `call_pda(caller: &Pubkey, nonce: u64)` | `[b"call", caller.as_ref(), &nonce.to_le_bytes()]` |
+| `receipt_pda(call: &Pubkey)` | `[b"receipt", call.as_ref()]` |
+| `event_authority_pda()` | `[b"__event_authority"]` |
+
+## Errors
+
+`read_receipt` returns `VoynichCpiError` on any failed check:
+
+| Variant | Message | Raised when |
+| --- | --- | --- |
+| `InvalidReceiptOwner` | `Receipt account is not owned by the Voynich program.` | `receipt_info.owner` is not `voynich::ID`. |
+| `InvalidReceiptPda` | `Receipt address does not match the canonical receipt PDA for this call.` | `receipt_info.key()` is not `receipt_pda(expected_call).0`. |
+| `InvalidReceiptDiscriminator` | `Account bytes do not start with the Voynich Receipt discriminator.` | Data is shorter than 8 bytes or does not match `Receipt::DISCRIMINATOR`. |
+| `InvalidReceiptData` | `Receipt account data is malformed or truncated.` | Account length is below 401 bytes, truncated between header and `open_answer`, or carries an invalid `answer_mode` or `caller_is_program` byte. |
+| `ModelMismatch` | `Receipt model does not match the expected model.` | `parsed.model` does not equal `expected_model`. |
+| `CallMismatch` | `Receipt call does not match the expected call.` | `parsed.call` does not equal `expected_call`. |
+
+## Live example: the bounty program
+
+The `bounty` program (`8Sm13coiVCjiHAp6NNvuJv36xcFqLN84ykZgqYBmX2ws`, source in `backend/programs/bounty/`) is built directly on `voynich-cpi`:
+
+- `post` escrows a SOL or SPL Token reward for a target label on a sealed model (such as `sketch-32`).
+- `draw` opens an `AnswerMode::Open` call via `voynich_cpi::open_call_with_callback` from a per-bounty caller PDA, registering `bounty::ID` as `callback_program` with 4 callback accounts for SOL (`[bounty, event_authority, bounty_program, drawer]`) or 6 for SPL (`[bounty, event_authority, bounty_program, bounty_tokens, drawer_reward_tokens, token_program]`, creating `drawer_reward_tokens` idempotently).
+- `on_receipt` runs inside `voynich::settle_call` in the same transaction that writes the Receipt. It checks `call` ownership, the bounty caller PDA, and the recorded payout accounts, verifies the Receipt with `voynich_cpi::read_receipt`, returns `Ok(())` without reverting if the bounty is no longer open or the label does not match, and otherwise pays the reward directly to the drawer, marks the bounty `Claimed`, and emits `BountyCollected` with no second signature from the drawer.
+- `collect` remains available to claim pre-callback attempts opened without `callback_program`.
+
+Try it live on [/bounties](/bounties) or call its HTTP routes in [HTTP API: Bounties](/docs/api/bounties).
+
+See [Accounts](/docs/program/accounts) and [Instructions](/docs/program/instructions) for the full on-chain layouts and checks.
