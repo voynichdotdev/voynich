@@ -1,0 +1,581 @@
+---
+title: Calls and receipts
+description: The call and receipt routes of the Voynich HTTP API, covering opening a call, reading it, polling its answer, refunding it and reading its receipt.
+---
+
+Nine routes open, read, stream, stop, self-settle and refund calls and read receipts. The relay route that carries the encrypted input is on [Relay](/docs/api/relay). What a call is, how signed pieces chain, and what a receipt proves are told in [Calls and receipts](/docs/concepts/calls-and-receipts).
+
+Over the API a call is made in this order:
+
+| Step | Route |
+| --- | --- |
+| Open the call | `POST /v1/calls/build`, then [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit) |
+| Send the encrypted input | [`POST /v1/calls/{id}/input`](/docs/api/relay) |
+| Read the answer (per-call) | `GET /v1/calls/{id}/answer` |
+| Stream or read signed pieces (per-token) | `GET /v1/calls/{id}/stream` or `GET /v1/calls/{id}/pieces` |
+| Stop a live stream early (per-token) | `POST /v1/calls/{id}/stop` |
+| Settle a cut-short stream directly (per-token) | `POST /v1/calls/{id}/settle/build` |
+| Read the receipt | `GET /v1/receipts/{id}` |
+| Take the escrow back when no answer came | `POST /v1/calls/{id}/refund/build` |
+
+In the paths of calls, `{id}` is the Call account's address. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
+
+## Call
+
+<Fields>
+<Field name="address" type="address" required>
+The Call account.
+</Field>
+<Field name="caller" type="address" required>
+The wallet or program-derived address that opened the call and funded its escrow.
+</Field>
+<Field name="callerIsProgram" type="boolean" required>
+`true` when `open_call` or `open_metered_call` was invoked by another Solana program through CPI; `false` for a direct wallet call.
+</Field>
+<Field name="model" type="address" required>
+The model called.
+</Field>
+<Field name="modelName" type="string" required>
+The model's name.
+</Field>
+<Field name="enclave" type="address" required>
+The Enclave account chosen to answer.
+</Field>
+<Field name="inputHash" type="hash" required>
+The SHA-256 of the input envelope, as the caller gave it when the call opened.
+</Field>
+<Field name="answerMode" type="string" required>
+`sealed` (encrypted output envelope) or `open` (plaintext answer bytes written into the Receipt on chain).
+</Field>
+<Field name="price" type="Money" required>
+The total amount in escrow, as a [Money](/docs/api/overview#money). Equals `unitPrice` for `call` calls and `ceiling` for `token` calls.
+</Field>
+<Field name="priceUnit" type="'call' | 'token'" required>
+Pricing unit snapshotted from the model when the call opened (`PriceUnit`).
+</Field>
+<Field name="unitPrice" type="Money" required>
+The model's unit price when the call opened (one call when `priceUnit` is `call`, or one output token when `token`).
+</Field>
+<Field name="ceiling" type="Money or null" required>
+The caller's escrow ceiling as a [Money](/docs/api/overview#money) when `priceUnit` is `token`, or `null` when `priceUnit` is `call`.
+</Field>
+<Field name="openedSlot" type="slot" required>
+The slot the call opened in.
+</Field>
+<Field name="deadlineSlot" type="slot" required>
+The last slot the call can settle in. After it the call can be refunded.
+</Field>
+<Field name="status" type="string" required>
+`open`: in escrow, its deadline ahead. `settled`: answered, with a receipt. `refundable`: still open on chain with the current slot past `deadlineSlot`. `refunded`: the escrow is back with the caller.
+</Field>
+<Field name="receipt" type="address or null" required>
+The Receipt account, once the call has settled.
+</Field>
+<Field name="failure" type="CallFailure or null" required>
+A [CallFailure](#callfailure) with `code` `CALL_DEADLINE_PASSED` while the call is `refundable` (`refundState` `refundable`) and once it is `refunded` (`refundState` `refunded`). `null` while the call is `open` or `settled`.
+</Field>
+</Fields>
+
+### CallFailure
+
+<Fields>
+<Field name="code" type="string" required>
+One of the [error codes](/docs/api/overview#errors).
+</Field>
+<Field name="message" type="string" required>
+A sentence that can be shown to a person.
+</Field>
+<Field name="refundState" type="string" required>
+`unavailable`: the call settled. `pending-deadline`: the call is open and its deadline has not passed. `refundable`: the deadline has passed without a receipt. `refunded`: the escrow is back with the caller. See [Refunds](/docs/concepts/calls-and-receipts#refunds).
+</Field>
+</Fields>
+
+## CallAnswer
+
+What `GET /v1/calls/{id}/answer` returns.
+
+<Fields>
+<Field name="status" type="string" required>
+`waiting`: the enclave has not answered. `answered`: the enclave answered and sent `settle_call`. `failed`: the call did not settle.
+</Field>
+<Field name="call" type="Call" required>
+The [Call](#call) as it is now.
+</Field>
+<Field name="outputEnvelope" type="envelope or null" required>
+For a `sealed` call, the output encrypted to the output key the caller put in the input. `null` for an `open` call. See [What is encrypted](/docs/concepts/calls-and-receipts#what-is-encrypted).
+</Field>
+<Field name="openAnswer" type="base64 or null" required>
+For an `open` call, the plaintext answer bytes written into the Receipt, base64-encoded. `null` for a `sealed` call.
+</Field>
+<Field name="outputHash" type="hash or null" required>
+The SHA-256 of the output envelope (`sealed`) or `openAnswer` bytes (`open`).
+</Field>
+<Field name="signature" type="receipt signature or null" required>
+The enclave's Ed25519 signature over the call's address, the input hash and the output hash. See [What the enclave signs](/docs/concepts/calls-and-receipts#what-the-enclave-signs).
+</Field>
+<Field name="settleTransaction" type="transaction signature or null" required>
+The signature of the `settle_call` transaction.
+</Field>
+<Field name="receiptAddress" type="address or null" required>
+The Receipt account.
+</Field>
+<Field name="failure" type="CallFailure or null" required>
+Why the call failed, as a [CallFailure](#callfailure).
+</Field>
+</Fields>
+
+## StreamPiece
+
+One encrypted, signed output piece from a per-token metered stream.
+
+<Fields>
+<Field name="call" type="address" required>
+The Call account this piece belongs to.
+</Field>
+<Field name="index" type="integer, 0 or more" required>
+Zero-based sequential piece index.
+</Field>
+<Field name="count" type="integer, 0 or more" required>
+Cumulative output token count through this piece.
+</Field>
+<Field name="deltaTokens" type="integer, 0 or more" required>
+Output tokens added by this piece (`count` equals the previous piece's `count + deltaTokens`).
+</Field>
+<Field name="envelope" type="envelope" required>
+Version 1 ciphertext envelope encrypting `{ index, text, tokens, finishReason }` to the caller's `outputPublicKey` (`voynich/call-output/v1`).
+</Field>
+<Field name="pieceHash" type="hash" required>
+SHA-256 of the raw bytes of `envelope`.
+</Field>
+<Field name="runningHash" type="hash" required>
+32-byte cumulative hash advanced with `streamNextHash(prevHash, count, envelopeBytes)`.
+</Field>
+<Field name="signature" type="receipt signature" required>
+Enclave Ed25519 signature over `voynich/piece/v1` (120 bytes, standalone) or `voynich/piece/v2` (152 bytes, adapter with `base.sha256`).
+</Field>
+<Field name="finishReason" type="'eos' | 'length' | 'ceiling' | 'stopped' | null" required>
+`null` on intermediate pieces; on the final piece, why generation stopped (`StreamFinishReason`).
+</Field>
+</Fields>
+
+## CallStreamDone
+
+The terminal event emitted as `call.stream.done` when a metered piece stream finishes or fails.
+
+<Fields>
+<Field name="call" type="address" required>
+The Call account.
+</Field>
+<Field name="status" type="'done' | 'failed'" required>
+Whether the stream finished cleanly or failed.
+</Field>
+<Field name="count" type="integer, 0 or more" required>
+Final cumulative token count.
+</Field>
+<Field name="pieceCount" type="integer, 0 or more" required>
+Total number of pieces emitted (`0`..`pieceCount - 1`).
+</Field>
+<Field name="runningHash" type="hash or null" required>
+Final running hash, or `null` if no piece was emitted before failure.
+</Field>
+<Field name="signature" type="receipt signature or null" required>
+Final piece signature, or `null` if no piece was emitted before failure.
+</Field>
+<Field name="finishReason" type="StreamFinishReason or null" required>
+Terminal finish reason, or `null` on failure.
+</Field>
+<Field name="receiptAddress" type="address or null" required>
+Address of the 423-byte metered Receipt created by `settle_metered_call`, or `null` if not yet settled or failed.
+</Field>
+<Field name="settleTransaction" type="transaction signature or null" required>
+Signature of the `settle_metered_call` transaction, or `null` if not yet settled or failed.
+</Field>
+<Field name="failure" type="CallFailure or null" required>
+Present when `status` is `failed`.
+</Field>
+</Fields>
+
+## CallPieces
+
+Snapshot returned by `GET /v1/calls/{id}/pieces`.
+
+<Fields>
+<Field name="call" type="address" required>
+The Call account.
+</Field>
+<Field name="status" type="'waiting' | 'streaming' | 'done' | 'failed'" required>
+Current stream state on the enclave.
+</Field>
+<Field name="pieces" type="array of StreamPiece" required>
+All signed pieces emitted so far in order.
+</Field>
+<Field name="failure" type="CallFailure or null" required>
+Present when `status` is `failed`.
+</Field>
+</Fields>
+
+## Receipt
+
+<Fields>
+<Field name="address" type="address" required>
+The Receipt account.
+</Field>
+<Field name="call" type="address" required>
+The call it settles.
+</Field>
+<Field name="caller" type="address" required>
+The wallet or program PDA that opened the call.
+</Field>
+<Field name="callerIsProgram" type="boolean" required>
+`true` when the settled call was opened by another Solana program through CPI.
+</Field>
+<Field name="model" type="address" required>
+The model that answered.
+</Field>
+<Field name="modelName" type="string" required>
+The model's name.
+</Field>
+<Field name="enclave" type="address" required>
+The Enclave account that answered.
+</Field>
+<Field name="inputHash" type="hash" required>
+The SHA-256 of the input envelope.
+</Field>
+<Field name="outputHash" type="hash" required>
+The SHA-256 of the output envelope (`sealed`) or `openAnswer` bytes (`open`).
+</Field>
+<Field name="signature" type="receipt signature" required>
+The enclave's 64-byte Ed25519 signature.
+</Field>
+<Field name="answerMode" type="string" required>
+`sealed` or `open`.
+</Field>
+<Field name="openAnswer" type="base64 or null" required>
+For an `open` receipt, the verified answer bytes stored on chain, base64-encoded. `null` for a `sealed` receipt.
+</Field>
+<Field name="deliveredCount" type="amount or null" required>
+Delivered output token count settled by `settle_metered_call` on a per-token call (`total` equals `deliveredCount * unitPrice`), or `null` on a per-call receipt.
+</Field>
+<Field name="returnedAmount" type="amount or null" required>
+Unspent escrow ceiling (`ceiling - total`) returned to `caller` in the settling transaction on a per-token call, or `null` on a per-call receipt.
+</Field>
+<Field name="slot" type="slot" required>
+The slot the call settled in.
+</Field>
+<Field name="transactionSignature" type="transaction signature" required>
+The signature of the settling transaction.
+</Field>
+<Field name="payments" type="object" required>
+The [payments](#payments) made at settlement.
+</Field>
+</Fields>
+
+### Payments
+
+<Fields>
+<Field name="mint" type="address or null" required>
+The mint paid in. `null` is SOL.
+</Field>
+<Field name="total" type="amount" required>
+The sum of the three payments.
+</Field>
+<Field name="owner" type="object" required>
+`recipient` (address) and `amount` paid to the model's owner.
+</Field>
+<Field name="operator" type="object" required>
+`recipient` (address) and `amount` paid to the enclave's operator.
+</Field>
+<Field name="protocol" type="object" required>
+`recipient` (address) and `amount` of the protocol share.
+</Field>
+</Fields>
+
+How the price divides is in [The split](/docs/concepts/fees-and-the-token#the-split).
+
+## `POST /v1/calls/build`
+
+Builds [`open_call`](/docs/program/instructions#opencall) for a per-call model or [`open_metered_call`](/docs/program/instructions#openmeteredcall) for a per-token model: a Call account with the escrow deposited and the hash of the encrypted input on record.
+
+Before this call, encrypt the input to the enclave's `encryptionKey` and take the SHA-256 of the envelope's bytes, as told in [What is encrypted](/docs/concepts/calls-and-receipts#what-is-encrypted).
+
+```http
+POST /v1/calls/build
+Content-Type: application/json
+
+{
+  "wallet": "<caller address>",
+  "model": "<model name or address>",
+  "enclave": "<enclave address>",
+  "inputHash": "<sha-256 of the input envelope, 64 hex characters>",
+  "ceiling": "<optional escrow ceiling in base units, required for per-token models>",
+  "nonce": "<unsigned 64-bit integer, decimal>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The caller. It pays the escrow and the fee, and signs.
+</Field>
+<Field name="model" type="address or name" required>
+The model to call.
+</Field>
+<Field name="enclave" type="address" required>
+The Enclave account that answers. It holds a grant for the model. [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves) lists the candidates, live and reachable ones first.
+</Field>
+<Field name="inputHash" type="hash" required>
+The SHA-256 of the complete input envelope.
+</Field>
+<Field name="answerMode" type="string">
+`sealed` (default) or `open`. An `open` call stores its plaintext answer bytes on chain in the Receipt up to `maxOpenAnswerBytes`.
+</Field>
+<Field name="ceiling" type="decimal string, unsigned 64-bit">
+Maximum escrow in base units of the model's price mint. Required when the model's `priceUnit` is `token` (must be at least the model's per-token price, and above `0` when the price is above `0`), which routes the build to `open_metered_call`. Must be omitted when `priceUnit` is `call`.
+</Field>
+<Field name="nonce" type="decimal string, unsigned 64-bit">
+A number the caller has not used before. With the caller it gives the Call its address. The API draws a random one when it is omitted.
+</Field>
+</Fields>
+
+Returns a [Build](/docs/api/transactions#build). Its `action` is `open_call` and its `addresses` hold `model` and `call`, the address of the Call the transaction creates. For a price in a mint, the escrowed amount (`model.price` or `ceiling`) leaves the caller's associated token account for that mint.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `ceiling` is missing or below the per-token price for a `token` model, or `ceiling` is supplied for a `call` model. |
+| `MODEL_NOT_FOUND` | No model has this name or address. |
+| `ENCLAVE_NOT_FOUND` | No Enclave account has the address in `enclave`. |
+| `MODEL_NOT_LIVE` | The model is not `live`. |
+| `GRANT_REQUIRED` | The enclave's grant for the model is revoked. |
+| `ENCLAVE_EXPIRED` | The enclave's attestation record is invalid or expired. |
+| `MEASUREMENT_NOT_ALLOWED` | The enclave's measurement is not in the model's `allowedMeasurements`. |
+| `INSUFFICIENT_FUNDS` | For a price in SOL: the caller holds fewer lamports than the escrow amount, the Call's rent and the fee. For a price in a mint: the caller's associated token account holds less than the escrow amount, with `funding.mint` the mint, or the caller holds fewer lamports than the Call's rent, the rent of a new escrow token account and the fee. |
+| `SIMULATION_FAILED` | The transaction failed in simulation for another reason. `programError` names a program error when there is one. |
+
+The codes every build shares are in [Errors from a build](/docs/api/transactions#errors-from-a-build).
+
+Next: sign and submit the Build, then send the envelope to [`POST /v1/calls/{id}/input`](/docs/api/relay) with `addresses.call` as `{id}`.
+
+## `GET /v1/calls/{id}`
+
+Reads one call.
+
+Returns a [Call](#call).
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{id}` is not an address. |
+| `CALL_NOT_FOUND` | No call has this address. |
+
+A wallet's calls are listed at [`GET /v1/accounts/{wallet}`](/docs/api/accounts-and-stats#get-v1accountswallet).
+
+## `GET /v1/calls/{id}/answer`
+
+Reads the call's answer. Poll it after the input is sent until `status` leaves `waiting`, or follow [`GET /v1/calls/{id}/events`](/docs/api/overview#event-streams).
+
+Returns a [CallAnswer](#callanswer).
+
+| `status` | The response holds |
+| --- | --- |
+| `waiting` | The output fields as `null`. The enclave holds no answer for this call. |
+| `answered` | `outputEnvelope`, `outputHash`, `signature`, `settleTransaction` and `receiptAddress`. |
+| `failed` | `failure`. The output fields are `null`. |
+
+The answer is the enclave's: for a call that is `open` or `settled` the API asks the call's enclave and returns what it holds, with the `call` read by the API. For a call that is `refundable` or `refunded` the API answers `failed` itself. Its `failure` is the call's own: `code` `CALL_DEADLINE_PASSED`, with `refundState` `refundable` or `refunded`.
+
+In a failed answer from the enclave, `failure.code` is `ENCLAVE_EXPIRED` when the enclave's attestation record expired before it answered, and `PROGRAM_REFUSED` when the enclave could not complete the call. `failure.refundState` says where the escrow stands at the moment of the read.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{id}` is not an address. |
+| `CALL_NOT_FOUND` | No call has this address. |
+| `ENCLAVE_NOT_FOUND` | The API holds no enclave for the call's `enclave`. |
+| `UPSTREAM_UNAVAILABLE` | The enclave did not answer within 60 seconds, or answered with something that is not an answer. Retryable. |
+
+The plaintext of `outputEnvelope` is UTF-8 JSON with two fields: `label`, the name of the highest output, and `scores`, up to five `{ label, probability }` objects, highest first.
+
+Next: decrypt `outputEnvelope` with the secret half of the output key, then read the receipt and check it. The checks are in [Verify a receipt](/docs/guides/verify-a-receipt).
+
+## `GET /v1/calls/{id}/pieces`
+
+Returns the persisted snapshot of all signed pieces emitted so far for a per-token call, in sequential index order.
+
+Returns a [CallPieces](#callpieces) object (`call`, `status`, `pieces`, `failure`).
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{id}` is not an address. |
+| `CALL_NOT_FOUND` | No call has this address. |
+| `ENCLAVE_NOT_FOUND` | The API holds no enclave for the call's `enclave`. |
+| `UPSTREAM_UNAVAILABLE` | The enclave did not answer or returned an invalid snapshot. Retryable. |
+
+## `GET /v1/calls/{id}/stream`
+
+Long-lived Server-Sent Events (`text/event-stream`) stream of live `call.piece` ([StreamPiece](#streampiece)) and terminal `call.stream.done` ([CallStreamDone](#callstreamdone)) events proxied from the call's enclave. Validates every frame against `ProgramEvent` and `call === {id}`, and aborts the upstream enclave request immediately when the client disconnects.
+
+<Fields>
+<Field name="after" type="integer, -1 or more (query parameter)">
+Optional last piece index already received by the client. The stream replays every persisted piece with `index > after` before switching to live events (for example, `?after=4` resumes from piece `5`).
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{id}` is not an address, or `after` is not an integer `-1` or greater. |
+| `CALL_NOT_FOUND` | No call has this address. |
+| `ENCLAVE_NOT_FOUND` | The API holds no enclave for the call's `enclave`. |
+| `UPSTREAM_UNAVAILABLE` | The enclave did not accept the stream connection. Retryable. |
+
+## `POST /v1/calls/{id}/stop`
+
+Requests an immediate cooperative stop on a live per-token metered stream. The API proxies the request to the call's enclave, which checks `stopToken` in constant time against the 16-byte token sealed inside the caller's encrypted input envelope. On a match, the enclave stops generation, emits a terminal piece with `finishReason: "stopped"` (`deltaTokens: 0` when no pending tokens are buffered), and settles immediately via `settle_metered_call` at the current count, returning `ceiling - total` to the caller in the same transaction.
+
+```http
+POST /v1/calls/<call address>/stop
+Content-Type: application/json
+
+{
+  "stopToken": "<16-byte caller stop token, base64>"
+}
+```
+
+<Fields>
+<Field name="stopToken" type="base64" required>
+The caller's 16-byte stop token generated alongside `outputPublicKey` and sealed inside the encrypted input payload.
+</Field>
+</Fields>
+
+Returns `StopCallAccepted`:
+
+<Fields>
+<Field name="call" type="address" required>
+The Call account.
+</Field>
+<Field name="status" type="'stopping' | 'already-finished'" required>
+`stopping` when the stop signal was accepted for an active stream; `already-finished` when the stream had already completed or settled.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{id}` is not an address, or `stopToken` is missing or not padded base64. |
+| `UNAUTHORIZED` | `stopToken` does not match the token sealed in this call's input envelope (HTTP `403`). |
+| `CALL_NOT_FOUND` | No call has this address. |
+| `ENCLAVE_NOT_FOUND` | The API holds no enclave for the call's `enclave`. |
+| `UPSTREAM_UNAVAILABLE` | The enclave did not answer or returned an invalid response. Retryable. |
+
+## `POST /v1/calls/{id}/settle/build`
+
+Builds [`settle_metered_call`](/docs/program/instructions#settlemeteredcall) so the caller (or operator) holding a signed stream piece can settle an open per-token call directly before `deadlineSlot`, paying `count * unitPrice` across owner, operator, and protocol and returning `ceiling - total` to `caller` in the same transaction.
+
+```http
+POST /v1/calls/<call address>/settle/build
+Content-Type: application/json
+
+{
+  "wallet": "<caller or operator address>",
+  "count": "<cumulative delivered token count, decimal u64>",
+  "runningHash": "<64-hex running hash of the last signed piece>",
+  "signature": "<64-byte enclave Ed25519 piece signature, base64>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+Must match either `call.caller` or `call.operator`. Signs the transaction and pays the 423-byte metered Receipt rent (plus any missing SPL associated token account rent) and transaction fee.
+</Field>
+<Field name="count" type="amount (u64 decimal string)" required>
+Cumulative output token count of the signed piece (`count * unitPrice <= ceiling`).
+</Field>
+<Field name="runningHash" type="hash" required>
+64-character hex `runningHash` of the signed piece.
+</Field>
+<Field name="signature" type="receipt signature" required>
+Enclave Ed25519 signature over `voynich/piece/v1` (standalone) or `voynich/piece/v2` (adapter with `Model.base.sha256`). Verified pre-flight before the transaction is built.
+</Field>
+</Fields>
+
+Returns a [Build](/docs/api/transactions#build) with `action: "settle_metered_call"` and `addresses: { model, call, receipt }`. The transaction prepends any missing SPL associated token account creations and the Ed25519 verification instruction before `settle_metered_call`.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{id}` is not an address, fields fail schema validation, or `count * unitPrice` exceeds the call's `ceiling`. |
+| `UNAUTHORIZED` | `wallet` is neither `call.caller` nor `call.operator` (HTTP `403`). |
+| `CALL_NOT_FOUND` | No Call account has this address. |
+| `CALL_NOT_OPEN` | The call already settled or was refunded. |
+| `PROGRAM_REFUSED` | The call is not priced per token (`priceUnit !== 'token'`). |
+| `CALL_DEADLINE_PASSED` | The current slot is past `deadlineSlot`; use `POST /v1/calls/{id}/refund/build` instead to recover 100% of `ceiling`. |
+| `ENCLAVE_EXPIRED`, `MEASUREMENT_NOT_ALLOWED` | The enclave's attestation record is expired or its measurement is not allowed by the model. |
+| `INVALID_ENVELOPE` | Pre-flight `verifyPiece` failed against the enclave's on-chain signing key. |
+| `INSUFFICIENT_FUNDS` | `wallet` lacks lamports for the 423-byte Receipt rent, missing SPL ATAs, and fee. |
+
+## `POST /v1/calls/{id}/refund/build`
+
+Builds [`refund_call`](/docs/program/instructions#refundcall) for a call that passed its deadline without settling. The whole escrow returns to the caller, whoever sends the transaction.
+
+```http
+POST /v1/calls/<call address>/refund/build
+Content-Type: application/json
+
+{
+  "wallet": "<address that signs and pays the fee>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The wallet that sends the refund. It pays the fee and signs. It can be any wallet; the escrow goes to the call's `caller`.
+</Field>
+</Fields>
+
+Returns a [Build](/docs/api/transactions#build). Its `action` is `refund_call` and its `addresses` hold `model` and `call`.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{id}` is not an address. |
+| `CALL_NOT_FOUND` | No Call account has this address. |
+| `CALL_NOT_OPEN` | The call already settled or was refunded. |
+| `CALL_NOT_REFUNDABLE` | The current slot is not past the call's `deadlineSlot`. |
+
+Next: sign and submit the Build. `GET /v1/calls/{id}` then reads `refunded`. The whole task is in [Refund a call](/docs/guides/refund-a-call).
+
+## `GET /v1/receipts/{id}`
+
+Reads one receipt with what a client needs to check it. `{id}` is any of three things: the Receipt account's address, the address of its call, or the signature of the settling transaction.
+
+<Fields>
+<Field name="receipt" type="Receipt" required>
+The [Receipt](#receipt).
+</Field>
+<Field name="enclaveSigningKey" type="address" required>
+The signing key in the enclave's attestation record. The receipt's `signature` verifies against it.
+</Field>
+<Field name="attestationRecord" type="object" required>
+The enclave's [attestation record](/docs/api/enclaves#attestation-record).
+</Field>
+<Field name="attestationProgramId" type="address" required>
+The program that owns the record.
+</Field>
+<Field name="recordLayoutVersion" type="integer above 0" required>
+The record's layout version.
+</Field>
+<Field name="modelBase" type="ModelBase or null" required>
+The model's pinned [ModelBase](/docs/api/models#modelbase) (`sha256`, `sizeBytes`, `format`, `source`) when the model is a sealed adapter, or `null` for standalone models. Verified against the on-chain Model account and `voynich/receipt/v2` signature in the 5th receipt check.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{id}` is neither an address nor a transaction signature. |
+| `RECEIPT_NOT_FOUND` | No receipt matches this receipt address, call address or transaction signature. |
+
+Next: run the five checks of [What the checks prove](/docs/concepts/calls-and-receipts#what-the-checks-prove). A model's receipts are listed at [`GET /v1/models/{id}/receipts`](/docs/api/models#get-v1modelsidreceipts).
+
+## Read next
+
+<Cards>
+<Card href="/docs/api/relay" title="Relay">
+How the encrypted input reaches the enclave.
+</Card>
+<Card href="/docs/api/transactions" title="Transactions">
+Sign a build, submit it and follow it.
+</Card>
+</Cards>

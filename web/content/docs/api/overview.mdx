@@ -1,0 +1,354 @@
+---
+title: Overview
+description: The base URL of the Voynich HTTP API, its conventions, the error envelope, every error code, every route, the configuration route and the event streams.
+---
+
+The HTTP API reads the `voynich` program's accounts as JSON, builds the transactions a wallet signs, follows them, and carries encrypted inputs to enclaves. The SDK and the CLI are clients of it.
+
+## Base URL
+
+The API is served at `https://api.voynich.dev`, the address of the Voynich API. Every path on these pages is relative to it.
+
+- Every read is public. No route takes a key, a session or a cookie.
+- A route that builds a transaction takes a `wallet` address in its body. The program checks the signer when the transaction lands.
+- Requests with a body send `Content-Type: application/json`. Responses are JSON, except the three [event streams](#event-streams).
+- A request body is at most 1,048,576 bytes.
+- A request that carries an `Origin` header is answered only when that origin is on the API's allow list.
+
+Every response carries these headers:
+
+| Header | Value |
+| --- | --- |
+| `X-Request-Id` | An id for this request. |
+| `X-Contract-Version` | The version of the API's contract, the same value as `contractVersion` in [`GET /health`](#get-health). |
+| `Cache-Control` | `no-store` |
+
+## Conventions
+
+| Kind | Written as |
+| --- | --- |
+| Amount | A decimal string of base units, such as `"100000"`. It fits an unsigned 64-bit integer. |
+| Slot | A decimal string, such as `"1000"`. |
+| Address | Base58 of 32 bytes. |
+| Transaction signature | Base58 of 64 bytes. |
+| Hash | SHA-256 as 64 lowercase hex characters. |
+| Measurement | 96 lowercase hex characters (48 bytes). |
+| Encryption key | Padded base64 of 32 bytes. |
+| Receipt signature | Padded base64 of 64 bytes. |
+| Envelope | Padded base64 of at least 73 bytes whose first byte is 1. |
+| Wrapped key | An envelope of exactly 105 bytes. |
+| Ciphertext bytes, transactions | Padded base64. |
+| Byte count, share in basis points, layout version | A JSON number. |
+| Timestamp | ISO 8601 in UTC, such as `2026-11-18T11:48:06.849Z`. |
+| Byte range | `offset` and `length`: the bytes from `offset` up to, and not including, `offset + length`. |
+
+A model is named in a path or a body by its account address or by its name: 1 to 32 characters of lowercase letters and digits in groups joined by single hyphens, such as `sketch-32`.
+
+A field the API does not define is refused: a body or a query with an unknown key answers `VALIDATION_ERROR`.
+
+### Money
+
+A price, an escrow or an earning is a Money object.
+
+<Fields>
+<Field name="amount" type="amount" required>
+Base units of the mint.
+</Field>
+<Field name="mint" type="address or null" required>
+The SPL Token mint. `null` is SOL.
+</Field>
+<Field name="decimals" type="integer, 0 to 255" required>
+The mint's decimals. 9 for SOL.
+</Field>
+<Field name="symbol" type="string" required>
+The mint's symbol. `SOL` for SOL.
+</Field>
+</Fields>
+
+### Pagination
+
+List routes take two query parameters.
+
+<Fields>
+<Field name="cursor" type="string of digits, at most 12">
+Where the page starts. Pass the `nextCursor` of the page before. Omitted, the list starts at its first item.
+</Field>
+<Field name="limit" type="integer, 1 to 100">
+Items per page. 24 when omitted.
+</Field>
+</Fields>
+
+A page has this shape:
+
+<Fields>
+<Field name="items" type="array" required>
+The items of this page.
+</Field>
+<Field name="page.nextCursor" type="string or null" required>
+The `cursor` of the next page. `null` on the last page.
+</Field>
+<Field name="page.hasMore" type="boolean" required>
+Whether a next page exists.
+</Field>
+<Field name="asOf" type="timestamp" required>
+When the API assembled the response.
+</Field>
+</Fields>
+
+## The error envelope
+
+Every failed response has one shape, with the HTTP status of its code:
+
+```json
+{
+  "error": {
+    "code": "MODEL_NOT_FOUND",
+    "message": "This model was not found.",
+    "retryable": false,
+    "stage": "read"
+  }
+}
+```
+
+<Fields>
+<Field name="code" type="string" required>
+One of the codes in [Errors](#errors). Branch on this.
+</Field>
+<Field name="message" type="string" required>
+A sentence that can be shown to a person.
+</Field>
+<Field name="retryable" type="boolean" required>
+Whether the same request can succeed when sent again.
+</Field>
+<Field name="stage" type="string" required>
+Where the request failed. One of the stages below.
+</Field>
+<Field name="fieldErrors" type="object of string arrays">
+With `VALIDATION_ERROR`: the messages for each field, keyed by the field's path joined with dots, such as `price.amount`. A message about the whole value is under `form`.
+</Field>
+<Field name="programError" type="object">
+With an error raised by a program: `programId` (address of the program that raised it), `name` (the error's name, `ProgramError` when the program gave none) and `number` (its number, when it has one). The names and numbers of the `voynich` program are in [Program errors](/docs/program/errors).
+</Field>
+<Field name="funding" type="object">
+With `INSUFFICIENT_FUNDS`: `mint` (the mint's address, `null` for SOL), `required` (the amount the transaction needs), `available` (the amount the wallet holds) and `shortfall` (`required` less `available`), each an amount in base units of the mint, lamports for SOL. What `required` counts for each build is in [Errors from a build](/docs/api/transactions#errors-from-a-build).
+</Field>
+<Field name="retryAfterSeconds" type="integer">
+With `RATE_LIMITED`: seconds until the next request is taken. The same number is in the `Retry-After` header.
+</Field>
+<Field name="requestId" type="string">
+The request's id, on `INTERNAL_ERROR`. The `X-Request-Id` header carries it on every response.
+</Field>
+</Fields>
+
+| Stage | The request failed |
+| --- | --- |
+| `validation` | in its path, query, headers or body |
+| `auth` | in authorization |
+| `read` | while reading state |
+| `upload` | while an encrypted input was handed to an enclave |
+| `build` | while a transaction was built |
+| `wallet` | in the copy the wallet signed |
+| `co_sign` | in a signature the API adds |
+| `simulation` | in simulation of the transaction |
+| `send` | while the transaction was sent |
+| `confirmation` | while the transaction was followed on the cluster |
+
+## Errors
+
+<Rows data="api-errors" columns="code,status,meaning" />
+
+### On every route
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | A path parameter, a query parameter or the body does not match the route. |
+| `ORIGIN_NOT_ALLOWED` | The request's `Origin` header is not on the allow list. |
+| `PAYLOAD_TOO_LARGE` | The body is larger than 1,048,576 bytes. |
+| `NOT_FOUND` | The path is not a route. The two [transaction routes](/docs/api/transactions) also answer it for a Build id they do not hold. |
+| `INTERNAL_ERROR` | The API failed. The envelope carries `requestId`. |
+
+A route that returns a [Money](#money) in a mint answers `UPSTREAM_UNAVAILABLE`, retryable, while the API has no decimals and symbol for that mint.
+
+### On every POST route
+
+| Code | When |
+| --- | --- |
+| `UNSUPPORTED_MEDIA_TYPE` | The `Content-Type` does not start with `application/json`. |
+| `VALIDATION_ERROR` | The body is not JSON. |
+| `PROGRAM_UNAVAILABLE` | `GET /health` reports `waiting`. Retryable. Every POST route under `/v1` answers it except `POST /v1/models/quote`. |
+
+The pages for each group of routes list the codes each route adds to these.
+
+## Routes
+
+<Rows data="api-routes" columns="route,operation,does" />
+
+| Routes | Page |
+| --- | --- |
+| `/health`, `/openapi.json`, `/v1/config`, `/rpc`, `/v1/events`, `/v1/calls/{id}/events` | This page |
+| `/v1/models...` | [Models](/docs/api/models) |
+| `/v1/enclaves...`, `/v1/measurements...` | [Enclaves](/docs/api/enclaves) |
+| `/v1/calls/build`, `/v1/calls/{id}`, `/v1/calls/{id}/answer`, `/v1/calls/{id}/pieces`, `/v1/calls/{id}/stream`, `/v1/calls/{id}/stop`, `/v1/calls/{id}/settle/build`, `/v1/calls/{id}/refund/build`, `/v1/receipts/{id}` | [Calls and receipts](/docs/api/calls-and-receipts) |
+| `/v1/bounties...` | [Bounties](/docs/api/bounties) |
+| `/v1/accounts/{wallet}`, `/v1/stats`, `/v1/home` | [Accounts and stats](/docs/api/accounts-and-stats) |
+| `/v1/transactions...` | [Transactions](/docs/api/transactions) |
+| `/v1/calls/{id}/input` | [Relay](/docs/api/relay) |
+
+## `GET /health`
+
+Whether the API reaches the program on its cluster.
+
+<Fields>
+<Field name="status" type="string" required>
+`ready`: the `voynich` program, the attestation program and both Config accounts exist on the API's cluster. `waiting`: one of them does not; reads answer and every POST route under `/v1` except `POST /v1/models/quote` answers `PROGRAM_UNAVAILABLE`. `fixture`: the API answers from built-in sample data.
+</Field>
+<Field name="contractVersion" type="string" required>
+The version of the API's contract, a semantic version string.
+</Field>
+</Fields>
+
+## `GET /v1/config`
+
+What a client needs before it reads the chain or opens a call: the cluster, the RPC address, the program ids and the protocol's Config values. The Config account is described in [Program accounts](/docs/program/accounts).
+
+<Fields>
+<Field name="mode" type="string" required>
+`chain`: the API reads and writes a Solana cluster. `fixture`: the API answers from built-in sample data.
+</Field>
+<Field name="cluster" type="string" required>
+`localnet`, `devnet` or `mainnet-beta`.
+</Field>
+<Field name="rpcUrl" type="URL" required>
+A Solana JSON-RPC address for this cluster. In `chain` mode it is the API's own [`/rpc`](#post-rpc).
+</Field>
+<Field name="programId" type="address or null" required>
+The `voynich` program.
+</Field>
+<Field name="attestationProgramId" type="address or null" required>
+The program that owns attestation records.
+</Field>
+<Field name="bountyProgramId" type="address or null" required>
+The `bounty` program built on `voynich-cpi`.
+</Field>
+<Field name="attestationRecordLayoutVersion" type="integer or null" required>
+The record layout the Config names. See [Enclaves and attestation](/docs/concepts/enclaves-and-attestation#the-attestation-record).
+</Field>
+<Field name="feeRecipient" type="address or null" required>
+The wallet that receives the protocol share.
+</Field>
+<Field name="protocolShareBps" type="integer, 0 to 10000, or null" required>
+The protocol share of a settled call, in basis points. See [Fees and the token](/docs/concepts/fees-and-the-token#the-split).
+</Field>
+<Field name="callDeadlineSlots" type="slot count or null" required>
+The slots a call stays open before it can be refunded.
+</Field>
+<Field name="maxOpenAnswerBytes" type="integer, 1 to 4096, or null" required>
+The maximum length in bytes of an open answer stored on a Receipt.
+</Field>
+<Field name="tokenMint" type="address or null" required>
+The mint of VOYNICH.
+</Field>
+<Field name="fixture" type="boolean" required>
+`true` when `mode` is `fixture`.
+</Field>
+</Fields>
+
+The four values read from the Config account (`attestationRecordLayoutVersion`, `feeRecipient`, `protocolShareBps`, `callDeadlineSlots`) are `null` when the API holds no Config.
+
+## `POST /rpc`
+
+A Solana JSON-RPC relay, the address `rpcUrl` names. A web3.js `Connection` pointed at it reads and sends through the API.
+
+It takes one JSON-RPC 2.0 request per POST: `jsonrpc` is `"2.0"`, `id` is a string or an integer, `method` is one of the methods below, `params` is an array. The body is at most 65,536 bytes. A successful call returns the cluster's JSON-RPC response unchanged.
+
+```text
+getAccountInfo            getMultipleAccounts     getBalance
+getTokenAccountBalance    getSlot                 getBlockHeight
+getLatestBlockhash        isBlockhashValid        getFeeForMessage
+getMinimumBalanceForRentExemption                 getSignatureStatuses
+getTransaction            getSignaturesForAddress getGenesisHash
+getVersion                simulateTransaction     sendTransaction
+```
+
+Each client address has 600 calls a minute, and 30 a minute for `sendTransaction`.
+
+This route answers in JSON-RPC's own error shape, `{ "jsonrpc": "2.0", "id": ..., "error": { "code", "message" } }`, not in the error envelope:
+
+| JSON-RPC code | HTTP status | When |
+| --- | --- | --- |
+| `-32700` | 400 | The body is not JSON. |
+| `-32600` | 400 | The body is not one JSON-RPC 2.0 request with an id, a method and array params. A batch is refused. |
+| `-32600` | 413 | The body is larger than 65,536 bytes. |
+| `-32601` | 400 | The method is not in the list. |
+| `-32005` | 429 | The client's minute is used up, or the API is at its own RPC budget. `Retry-After` says when to send again. |
+| `-32004` | 200 | `GET /health` reports `waiting`. |
+| `-32603` | 502 | The cluster's RPC did not answer. |
+
+## `GET /openapi.json`
+
+The OpenAPI 3.1 document of the API, generated from the schemas the API validates with. It lists every route under `/health` and `/v1` with its parameters, its request body and its response as JSON Schema.
+
+## Event streams
+
+Three routes answer as Server-Sent Events (`text/event-stream`).
+
+| Route | Sends |
+| --- | --- |
+| `GET /v1/events` | Every event. |
+| `GET /v1/calls/{id}/events` | `call.updated`, `call.piece`, `call.stream.done` and `receipt.created` for the call at address `{id}`. |
+| `GET /v1/calls/{id}/stream` | Live `call.piece` and `call.stream.done` events for a per-token metered call, with optional `?after=<index>` catch-up replay. See [`GET /v1/calls/{id}/stream`](/docs/api/calls-and-receipts#get-v1callsidstream). |
+
+`GET /v1/calls/{id}/events` reads the call's answer before the stream opens. It answers `VALIDATION_ERROR` when `{id}` is not an address, and otherwise the errors of [`GET /v1/calls/{id}/answer`](/docs/api/calls-and-receipts#get-v1callsidanswer), `CALL_NOT_FOUND` among them.
+
+Each message has the SSE fields `event` (the event's name), `id` and `data`. `data` is one JSON object, the event envelope:
+
+<Fields>
+<Field name="type" type="string" required>
+The event's name, the same as the SSE `event` field.
+</Field>
+<Field name="id" type="string" required>
+The event's id.
+</Field>
+<Field name="timestamp" type="timestamp" required>
+When the API published it.
+</Field>
+<Field name="data" type="object" required>
+The object the event is about, whole, as its read route returns it.
+</Field>
+</Fields>
+
+| Event | `data` | Sent when |
+| --- | --- | --- |
+| `ready` | On `/v1/events`: `{ status }`, the status of [`GET /health`](#get-health). On a call's stream: the call's [CallAnswer](/docs/api/calls-and-receipts#callanswer), as `GET /v1/calls/{id}/answer` returns it when the stream opens. | First on every connection. |
+| `resync` | `{ reason }`: `reconnected` or `behind`. | See below. |
+| `model.updated` | [Model](/docs/api/models#model) | A model was created, written to, sealed, priced or retired, a grant for it changed, or one of its calls settled. |
+| `enclave.updated` | [Enclave](/docs/api/enclaves#enclave) | An enclave registered or refreshed, a grant to it changed, it settled a call, or its `reachable` changed. |
+| `measurement.updated` | [MeasurementRecord](/docs/api/enclaves#measurementrecord) | A measurement record was published or deprecated on chain. |
+| `call.updated` | [Call](/docs/api/calls-and-receipts#call) | A call opened, settled or was refunded. |
+| `call.piece` | [StreamPiece](/docs/api/calls-and-receipts#streampiece) | The enclave signed and emitted one encrypted output piece on a per-token stream. |
+| `call.stream.done` | [CallStreamDone](/docs/api/calls-and-receipts#callstreamdone) | A per-token piece stream completed or failed. |
+| `receipt.created` | [Receipt](/docs/api/calls-and-receipts#receipt) | A call settled. |
+| `bounty.updated` | [Bounty](/docs/api/bounties#bounty) | A bounty was posted, drawn at, claimed or cancelled. |
+| `transaction.updated` | [TxStatus](/docs/api/transactions#txstatus) | `POST /v1/transactions/submit` took a submission. |
+
+A comment line, `: keepalive`, is sent every 15 seconds on a quiet stream.
+
+### On `resync`
+
+The stream holds no history. A `resync` says events were sent that this connection did not receive:
+
+- `reconnected` is sent first on a connection that carries a `Last-Event-ID` header, which an `EventSource` sends when it reconnects.
+- `behind` is sent when 500 events were waiting for this connection. They are dropped and replaced by the `resync`.
+
+After a `resync`, fetch again the snapshots the client shows (the model, the call, the answer, the transaction) from their read routes, then continue with the events that follow. Polling [`GET /v1/calls/{id}/answer`](/docs/api/calls-and-receipts#get-v1callsidanswer) reaches the same answer without a stream.
+
+## Read next
+
+<Cards>
+<Card href="/docs/api/transactions" title="Transactions">
+How a build is signed, submitted and followed.
+</Card>
+<Card href="/docs/api/calls-and-receipts" title="Calls and receipts">
+Open a call, read its answer, read its receipt.
+</Card>
+</Cards>

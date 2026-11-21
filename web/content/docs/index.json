@@ -6,52 +6,94 @@
       "id": "start",
       "title": "Start",
       "pages": [
-        {
-          "slug": "start/what-voynich-is",
-          "title": "What Voynich is",
-          "job": "The sealed model, the three people around it (owner, operator, caller) and where each one goes next."
-        },
-        {
-          "slug": "start/call-a-model",
-          "title": "Call a model in five minutes",
-          "job": "From nothing to a verified answer from sketch-32 with its receipt, in the browser, the SDK and the CLI."
-        },
-        {
-          "slug": "start/seal-a-model",
-          "title": "Seal a model in ten minutes",
-          "job": "From an ONNX file and a manifest to a live model with an address, on /seal and from the CLI."
-        }
+        { "slug": "start/what-voynich-is", "title": "What Voynich is", "job": "The sealed model, the three people around it (owner, operator, caller) and where each one goes next." },
+        { "slug": "start/call-a-model", "title": "Call a model in five minutes", "job": "From nothing to a verified answer from sketch-32 with its receipt, in the browser, the SDK and the CLI." },
+        { "slug": "start/seal-a-model", "title": "Seal a model in ten minutes", "job": "From an ONNX file and a manifest to a live model with an address, on /seal and from the CLI." }
       ]
     },
     {
       "id": "concepts",
       "title": "Concepts",
       "pages": [
-        {
-          "slug": "concepts/sealed-models",
-          "title": "Sealed models",
-          "job": "What a Model is on chain: the ciphertext accounts, the cipher and chunking, the hash, the manifest, the allowed measurements, the statuses and what changes each."
-        },
-        {
-          "slug": "concepts/enclaves-and-attestation",
-          "title": "Enclaves and attestation",
-          "job": "What an enclave is, what the hardware report says, what the attestation record holds, measurements, expiry and refresh."
-        },
-        {
-          "slug": "concepts/grants",
-          "title": "Grants",
-          "job": "How the model key moves: wrapping, grants by the owner, grants from enclave to enclave, revoking, where the key exists in plaintext."
-        },
-        {
-          "slug": "concepts/calls-and-receipts",
-          "title": "Calls and receipts",
-          "job": "A call from escrow to receipt: what is encrypted to whom, the deadline, settlement, refunds, and what each check on a receipt proves."
-        },
-        {
-          "slug": "concepts/fees-and-the-token",
-          "title": "Fees and the token",
-          "job": "The price per call, its mint, the split at settlement, and VOYNICH: the one place the token is told."
-        }
+        { "slug": "concepts/sealed-models", "title": "Sealed models", "job": "What a Model is on chain: the ciphertext accounts, the cipher and chunking, the hash, the manifest, the allowed measurements, the statuses and what changes each." },
+        { "slug": "concepts/enclaves-and-attestation", "title": "Enclaves and attestation", "job": "What an enclave is, what the hardware report says, what the attestation record holds, measurements, expiry and refresh." },
+        { "slug": "concepts/grants", "title": "Grants", "job": "How the model key moves: wrapping, grants by the owner, grants from enclave to enclave, revoking, where the key exists in plaintext." },
+        { "slug": "concepts/calls-and-receipts", "title": "Calls and receipts", "job": "A call from escrow to receipt: what is encrypted to whom, the deadline, settlement, refunds, and what each check on a receipt proves." },
+        { "slug": "concepts/fees-and-the-token", "title": "Fees and the token", "job": "The price per call, its mint, the split at settlement, and VOYNICH: the one place the token is told." }
+      ]
+    },
+    {
+      "id": "guides",
+      "title": "Guides",
+      "pages": [
+        { "slug": "guides/manage-a-model", "title": "Manage a model", "job": "Set the price and operator share, grant further enclaves, revoke a grant, retire, on the site, from the CLI and from the SDK." },
+        { "slug": "guides/refund-a-call", "title": "Refund a call", "job": "Find a call past its deadline and take the escrow back, on /account, from the SDK and the CLI." },
+        { "slug": "guides/verify-a-receipt", "title": "Verify a receipt", "job": "Check any answer from a receipt id or transaction signature: the signature, the key's record, the expiry at the settling slot." }
+      ]
+    },
+    {
+      "id": "sdk",
+      "title": "SDK",
+      "pages": [
+        { "slug": "sdk/install", "title": "Install", "job": "The package, its client and configuration, browser and Node." },
+        { "slug": "sdk/call", "title": "call", "job": "Every parameter, the returned { output, receipt, verified }, the stages and what fails at each." },
+        { "slug": "sdk/stream", "title": "stream", "job": "Stream verified pieces from a per-token model, track live spend, stop cooperatively, and verify the metered receipt." },
+        { "slug": "sdk/verify", "title": "verify", "job": "Inputs, each check and its result, failures." },
+        { "slug": "sdk/seal", "title": "seal", "job": "Inputs, progress events, resuming, the result, failures." },
+        { "slug": "sdk/models-and-enclaves", "title": "Models and enclaves", "job": "Reading and listing models and enclaves, with every field returned." },
+        { "slug": "sdk/grant-and-refund", "title": "grant and refund", "job": "Granting and revoking an enclave, setting the price and retiring a model as the owner, refunding an expired call, and send." },
+        { "slug": "sdk/types-and-errors", "title": "Types and errors", "job": "Every exported type and every error the SDK raises, complete." },
+        { "slug": "sdk/from-an-agent", "title": "Calling from an agent", "job": "Run an autonomous agent with a Solana keypair, verify all four receipt checks before acting, forward the receipt proof, and inspect agent receipts on /account." }
+      ]
+    },
+    {
+      "id": "cli",
+      "title": "CLI",
+      "pages": [
+        { "slug": "cli/install", "title": "Install", "job": "The binary, its configuration, the wallet it signs with, global flags, output and exit codes." },
+        { "slug": "cli/seal", "title": "seal", "job": "Every flag, output, resuming an upload, exit codes." },
+        { "slug": "cli/models", "title": "models", "job": "List sealed models and enclaves, set a model's price and retire it." },
+        { "slug": "cli/grant", "title": "grant", "job": "Grant a model to an enclave as its owner, and revoke a grant." },
+        { "slug": "cli/call", "title": "call", "job": "Call a model with a drawing or a tensor, and refund an expired call." },
+        { "slug": "cli/verify", "title": "verify", "job": "Verify a receipt id or transaction signature, with its output and exit code." },
+        { "slug": "cli/enclave", "title": "enclave", "job": "register, run, status." },
+        { "slug": "cli/measurement", "title": "measurement", "job": "list, show, publish, deprecate and verify on-chain enclave measurements." },
+        { "slug": "cli/account", "title": "account", "job": "A wallet's models owned, enclaves operated, calls made, earnings, refunds." }
+      ]
+    },
+    {
+      "id": "api",
+      "title": "HTTP API",
+      "pages": [
+        { "slug": "api/overview", "title": "Overview", "job": "Base URL, the response and error envelope, pagination, big integers, every error code." },
+        { "slug": "api/models", "title": "Models", "job": "Every model route, the cost quote and the seven builds: request, response, errors." },
+        { "slug": "api/enclaves", "title": "Enclaves", "job": "Every enclave route." },
+        { "slug": "api/calls-and-receipts", "title": "Calls and receipts", "job": "Every call and receipt route." },
+        { "slug": "api/bounties", "title": "Bounties", "job": "Browse bounties and attempts, and build post, draw, collect and cancel transactions." },
+        { "slug": "api/accounts-and-stats", "title": "Accounts and stats", "job": "A wallet's side and the protocol's counts." },
+        { "slug": "api/transactions", "title": "Transactions", "job": "The build and submit routes for every flow." },
+        { "slug": "api/relay", "title": "Relay", "job": "The encrypted relay to enclave endpoints: the envelope sent and returned." }
+      ]
+    },
+    {
+      "id": "program",
+      "title": "Program",
+      "pages": [
+        { "slug": "program/accounts", "title": "Accounts", "job": "Every account: seeds, fields with types, sizes, who writes it." },
+        { "slug": "program/instructions", "title": "Instructions", "job": "Every instruction: arguments, accounts, signers, checks, effects, errors." },
+        { "slug": "program/events", "title": "Events", "job": "Every event and its fields, and how to decode them." },
+        { "slug": "program/errors", "title": "Errors", "job": "Every error code, its name and what raises it." },
+        { "slug": "program/calling-a-model", "title": "Calling a model from a program", "job": "Opening a call via CPI and verifying a settled Receipt in your own Anchor program with voynich-cpi." }
+      ]
+    },
+    {
+      "id": "operators",
+      "title": "Operators",
+      "pages": [
+        { "slug": "operators/hardware", "title": "Hardware", "job": "The hardware types the attestation record carries and what a machine needs to serve." },
+        { "slug": "operators/run-the-runtime", "title": "Run the enclave runtime", "job": "Install and start the runtime, its configuration, its endpoint, what it does on boot and how to read its status." },
+        { "slug": "operators/register-and-get-granted", "title": "Register and get granted", "job": "Attest, register, receive a grant from an owner or a granted enclave, refresh before expiry." },
+        { "slug": "operators/earnings", "title": "Earnings", "job": "What a settled call pays the operator, where it lands and how to read it." }
       ]
     }
   ]

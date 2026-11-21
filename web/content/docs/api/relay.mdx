@@ -1,0 +1,113 @@
+---
+title: Relay
+description: The route that carries a call's encrypted input to its enclave, how the answer comes back, and what the relay can and cannot see.
+---
+
+One route carries a call's input to the enclave that answers it. The input travels as an envelope encrypted to the enclave's key on the caller's device, and the answer returns as an envelope encrypted to a key only the caller holds. The byte layout of both is in [What is encrypted](/docs/concepts/calls-and-receipts#what-is-encrypted).
+
+## `POST /v1/calls/{id}/input`
+
+Sends the encrypted input of an open call to the call's enclave. `{id}` is the Call account's address, the `addresses.call` of the Build from [`POST /v1/calls/build`](/docs/api/calls-and-receipts#post-v1callsbuild). Send it once the `open_call` transaction is confirmed.
+
+```http
+POST /v1/calls/<call address>/input
+Content-Type: application/json
+
+{
+  "envelope": "<input envelope, base64>"
+}
+```
+
+<Fields>
+<Field name="envelope" type="envelope" required>
+The complete input envelope as padded base64: at least 73 bytes, the first byte 1. Its SHA-256 is the `inputHash` the call was opened with.
+</Field>
+</Fields>
+
+Response:
+
+<Fields>
+<Field name="call" type="address" required>
+The call the enclave took the input for.
+</Field>
+<Field name="status" type="string" required>
+Always `accepted`: the enclave holds the input and is answering.
+</Field>
+</Fields>
+
+Sending the same envelope again while the enclave is answering, or after it answered, returns `accepted` again and starts nothing new.
+
+| Code | Stage | When |
+| --- | --- | --- |
+| `VALIDATION_ERROR` | `validation` | `{id}` is not an address, or `envelope` is not a version 1 envelope in padded base64. |
+| `CALL_NOT_FOUND` | `read` | No call has this address. A call opened a moment ago reads this way until the API has indexed its transaction: send again. |
+| `INPUT_HASH_MISMATCH` | `upload` | The SHA-256 of the envelope's bytes is not the call's `inputHash`. |
+| `ENCLAVE_NOT_FOUND` | `read` | The API holds no enclave for the call's `enclave`. |
+| `INVALID_ENVELOPE` | `upload` | The enclave that received the input is not the one the call names. |
+| `CALL_NOT_OPEN` | `upload` | The call already settled or was refunded. |
+| `CALL_DEADLINE_PASSED` | `upload` | The current slot is past the call's `deadlineSlot`. |
+| `UPSTREAM_UNAVAILABLE` | `read` | The enclave did not answer within 60 seconds, or did not accept the call. Retryable. Check the call's deadline before sending again. |
+
+The errors every POST route shares are in [Overview](/docs/api/overview#on-every-post-route).
+
+Next: read the answer at [`GET /v1/calls/{id}/answer`](/docs/api/calls-and-receipts#get-v1callsidanswer), or for a per-token stream follow [`GET /v1/calls/{id}/stream`](/docs/api/calls-and-receipts#get-v1callsidstream) (and stop early with [`POST /v1/calls/{id}/stop`](/docs/api/calls-and-receipts#post-v1callsidstop) using the 16-byte `stopToken` sealed inside the input envelope).
+
+## The path of the envelope
+
+<Steps>
+<Step title="The caller encrypts">
+
+On the caller's device the input and a fresh output public key are encrypted to the enclave's `encryptionKey`, read from [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves). The SHA-256 of the envelope goes on chain in `open_call`.
+
+</Step>
+<Step title="The API checks the hash">
+
+The API reads the call, hashes the envelope it received and compares the hash with the call's `inputHash`. An envelope that differs is refused with `INPUT_HASH_MISMATCH` and goes no further.
+
+</Step>
+<Step title="The API forwards">
+
+The API posts the same body to the call's enclave, at the enclave's `endpoint` followed by its `relayPath` with the call's address in it.
+
+</Step>
+<Step title="The enclave checks the call">
+
+The enclave reads the Call account from the chain and takes the input when the call names this enclave, the envelope hashes to the call's input hash, the call is open and its deadline is ahead. Then it answers `accepted`.
+
+</Step>
+<Step title="The enclave answers">
+
+Inside the enclave the input is decrypted and the model runs. The output is encrypted to the caller's output key, the enclave signs the call's address with both hashes, and it sends `settle_call`, which writes the receipt and pays out the escrow.
+
+</Step>
+<Step title="The answer returns">
+
+`GET /v1/calls/{id}/answer` asks the enclave for what it holds for the call and returns it with the call's state: the output envelope, its hash, the enclave's signature, the settling transaction and the receipt's address.
+
+</Step>
+</Steps>
+
+## What the relay sees
+
+| The relay | |
+| --- | --- |
+| sees | The call's address, the input envelope and the output envelope as ciphertext, both hashes, the enclave's signature, and what the chain shows of the call: caller, model, enclave, price. |
+| cannot read | The input, the output key and optional `stopToken` inside the input envelope, and the output. The input opens only with the enclave's encryption key, the output only with the secret half of the caller's output key. |
+| cannot change | The input: the API and the enclave each compare the envelope with the hash the caller escrowed on chain. The output: its hash is in the message the enclave signs and in the receipt, and the caller compares the envelope it received with it. |
+
+The caller's checks on the answer are in [What the checks prove](/docs/concepts/calls-and-receipts#what-the-checks-prove).
+
+<Callout kind="important">
+Keep the secret half of the output key on the device until the answer has been decrypted. The output envelope opens with nothing else.
+</Callout>
+
+## Read next
+
+<Cards>
+<Card href="/docs/api/calls-and-receipts" title="Calls and receipts">
+Open the call, poll the answer, read the receipt.
+</Card>
+<Card href="/docs/concepts/calls-and-receipts" title="Calls and receipts, the concept">
+The envelope, the signed message and the three checks.
+</Card>
+</Cards>

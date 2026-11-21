@@ -1,0 +1,836 @@
+---
+title: Models
+description: Every model route of the Voynich HTTP API, from listing and reading models and their ciphertext to the cost quote and the seven builds of a model.
+---
+
+Five routes read models, one quotes the cost of sealing, and seven build the transactions that create and change a model. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models).
+
+In every path, `{id}` is the model's account address or its name, such as `sketch-32`. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
+
+## Model
+
+The object the read routes return for one model.
+
+<Fields>
+<Field name="address" type="address" required>
+The Model account.
+</Field>
+<Field name="name" type="string" required>
+The model's name, 1 to 32 characters.
+</Field>
+<Field name="owner" type="address" required>
+The wallet that created the model.
+</Field>
+<Field name="createdSlot" type="slot" required>
+The slot the model was created in.
+</Field>
+<Field name="sealedSlot" type="slot or null" required>
+The slot the model was sealed in. `null` while it is `uploading`.
+</Field>
+<Field name="sizeBytes" type="integer" required>
+Bytes of ciphertext.
+</Field>
+<Field name="plaintextSizeBytes" type="integer" required>
+Bytes of the weights before encryption.
+</Field>
+<Field name="ciphertextSha256" type="hash or null" required>
+The ciphertext root hash (`hashVersion = 1`: 64 KiB chunk Merkle root; `hashVersion = 0`: legacy flat SHA-256). `null` while the model is `uploading`.
+</Field>
+<Field name="hashVersion" type="0 | 1" required>
+`1` for the 64 KiB chunk binary Merkle root (`voynich/chunk/v1` + `voynich/node/v1`), or `0` for legacy flat SHA-256.
+</Field>
+<Field name="sealedChunks" type="integer" required>
+Number of 65,552-byte ciphertext chunks already folded into the model's Merkle frontier via `seal_range`.
+</Field>
+<Field name="base" type="ModelBase or null" required>
+Optional [ModelBase](#modelbase) pinning a sealed adapter to a public open-weight base model. `null` for standalone models (such as `sketch-32`).
+</Field>
+<Field name="cipher" type="object" required>
+The [cipher header](#cipher-header).
+</Field>
+<Field name="allowedMeasurements" type="array of measurements" required>
+The enclave measurements that may hold the model's key. At least one.
+</Field>
+<Field name="price" type="Money" required>
+The unit price of the model (per call when `priceUnit` is `call`, or per output token when `token`), as a [Money](/docs/api/overview#money).
+</Field>
+<Field name="priceUnit" type="'call' | 'token'" required>
+Whether `price` is charged per `call` or per output `token` (`PriceUnit`).
+</Field>
+<Field name="operatorShareBps" type="integer, 0 to 10000" required>
+The operator's share of the price, in basis points.
+</Field>
+<Field name="protocolShareBps" type="integer, 0 to 10000, or null" required>
+The protocol share from the Config, in basis points. The same value as in [`GET /v1/config`](/docs/api/overview#get-v1config).
+</Field>
+<Field name="status" type="string" required>
+`uploading`: created, its ciphertext being written. `sealed`: complete, its hash fixed. `live`: granted to a first enclave, taking calls. `retired`: closed to new calls and new grants. What changes each is in [Statuses](/docs/concepts/sealed-models#statuses).
+</Field>
+<Field name="manifest" type="object" required>
+The [manifest](#manifest).
+</Field>
+<Field name="weights" type="array of Weights" required>
+The model's [Weights accounts](#weights), in order.
+</Field>
+<Field name="upload" type="object or null" required>
+The [upload](#upload) of the ciphertext. `null` when the model records no upload key.
+</Field>
+<Field name="enclavesHolding" type="integer" required>
+Grants for this model that are not revoked and whose enclave's attestation record is unexpired.
+</Field>
+<Field name="callsSettled" type="decimal string" required>
+Calls to this model that settled.
+</Field>
+</Fields>
+
+### ModelBase
+
+Optional public open-weight base model pinned to a sealed adapter. When present, `/models/<name>` displays `Base model` (format, size and link/URI) and `Base SHA-256`.
+
+<Fields>
+<Field name="sha256" type="hash (64 lowercase hex characters, non-zero)" required>
+SHA-256 of the base model weights file.
+</Field>
+<Field name="sizeBytes" type="integer above 0" required>
+Exact byte length of the base model weights file.
+</Field>
+<Field name="format" type="'onnx' | 'safetensors' | 'gguf'" required>
+Weight container format (`MODEL_BASE_FORMATS`, at most 32 bytes).
+</Field>
+<Field name="source" type="string, 1 to 256 characters" required>
+URI pointing to the base weights, starting with `https://`, `http://`, `ipfs://` or `hf://` with no whitespace or control characters.
+</Field>
+</Fields>
+
+### Cipher header
+
+<Fields>
+<Field name="id" type="string" required>
+Always `xchacha20poly1305-64k-v1`.
+</Field>
+<Field name="chunkSizeBytes" type="integer" required>
+Always 65536.
+</Field>
+<Field name="noncePrefix" type="base64 of 16 bytes" required>
+The nonce prefix of this model's chunks.
+</Field>
+</Fields>
+
+The chunking and the nonce of each chunk are in [The cipher](/docs/concepts/sealed-models#the-cipher).
+
+### Manifest
+
+<Fields>
+<Field name="name" type="string" required>
+The model's name.
+</Field>
+<Field name="inputKind" type="string" required>
+`sketch`, `tensor` or `text`. What a caller sends for each is in [What is encrypted](/docs/concepts/calls-and-receipts#what-is-encrypted).
+</Field>
+<Field name="inputShape" type="array of positive integers">
+The shape of the input tensor. Required for `sketch` and `tensor` models; optional for `text` models.
+</Field>
+<Field name="labels" type="array of strings">
+The names of the model's outputs, in order. Required for `sketch` and `tensor` models; optional for `text` models (when present, the model runs text classification; when omitted, greedy autoregressive generation).
+</Field>
+<Field name="tokenizer" type="TokenizerRef">
+Required when `inputKind` is `text`. Describes how the enclave tokenizes prompts and decodes generated tokens.
+</Field>
+<Field name="inputName" type="string">
+The name of the ONNX input.
+</Field>
+<Field name="outputName" type="string">
+The name of the ONNX output.
+</Field>
+<Field name="preprocess" type="string">
+How a raw input becomes the tensor.
+</Field>
+</Fields>
+
+#### TokenizerRef
+
+<Fields>
+<Field name="format" type="'byte-level' | 'bpe' | 'word-piece'" required>
+Tokenizer format (`TOKENIZER_FORMATS`). `byte-level` maps UTF-8 bytes 0..255 with no external file; `bpe` and `word-piece` load a SHA-256-verified Hugging Face `tokenizer.json`.
+</Field>
+<Field name="source" type="string, 1 to 256 characters">
+URI (`https://`, `http://`, `ipfs://` or `hf://`) of `tokenizer.json`. Required for `bpe` and `word-piece`; paired with `sha256` when supplied.
+</Field>
+<Field name="sha256" type="hash (64 lowercase hex characters, non-zero)">
+Expected SHA-256 of the tokenizer file. Required for `bpe` and `word-piece`; paired with `source` when supplied.
+</Field>
+<Field name="vocabSize" type="integer, 1 to 1000000" required>
+Vocabulary size of the model.
+</Field>
+<Field name="maxInputTokens" type="integer, 1 to 32768" required>
+Maximum prompt length in tokens.
+</Field>
+<Field name="maxOutputTokens" type="integer, 1 to 4096">
+Default maximum tokens generated per call on generative `text` models.
+</Field>
+<Field name="bosTokenId" type="integer">
+Optional beginning-of-sequence token id (`< vocabSize`).
+</Field>
+<Field name="eosTokenId" type="integer">
+Optional end-of-sequence stop token id (`< vocabSize`).
+</Field>
+<Field name="padTokenId" type="integer">
+Optional padding token id (`< vocabSize`).
+</Field>
+</Fields>
+
+The API returns the manifest whole. The fields a `sketch` manifest leaves out on chain are filled in with the sketch defaults, as told in [The manifest on chain](/docs/concepts/sealed-models#on-chain).
+
+### Weights
+
+One account that holds a part of the ciphertext.
+
+<Fields>
+<Field name="address" type="address" required>
+The Weights account.
+</Field>
+<Field name="model" type="address" required>
+The model it belongs to.
+</Field>
+<Field name="index" type="integer" required>
+Its place in the model's list, from 0.
+</Field>
+<Field name="offset" type="integer" required>
+Where this account's first ciphertext byte sits in the model's ciphertext.
+</Field>
+<Field name="sizeBytes" type="integer" required>
+Ciphertext bytes this account holds.
+</Field>
+<Field name="writtenRanges" type="array of byte ranges" required>
+The ranges written so far, each `{ offset, length }` counted from the start of this account's ciphertext.
+</Field>
+</Fields>
+
+### Upload
+
+<Fields>
+<Field name="uploadKey" type="address" required>
+The primary key that signs `create_model` and `seal_model` and writes ciphertext.
+</Field>
+<Field name="uploadKeys" type="array of addresses" required>
+All keys authorized to sign `write_weights` for this model, 1 to 8 (starts with `uploadKey`).
+</Field>
+<Field name="bytesWritten" type="integer" required>
+Ciphertext bytes written across all Weights accounts.
+</Field>
+<Field name="transactionsWritten" type="integer" required>
+`write_weights` transactions that landed for this model.
+</Field>
+<Field name="writtenRanges" type="array of byte ranges" required>
+The ranges written so far, each `{ offset, length }` counted from the start of the model's ciphertext. An upload resumes at the first byte outside them.
+</Field>
+<Field name="closed" type="boolean" required>
+`false` while the model is `uploading`. From sealing on, the model's `upload` is `null`.
+</Field>
+</Fields>
+
+## `GET /v1/models`
+
+Lists models, one page at a time.
+
+<Fields>
+<Field name="sort" type="string">
+`calls`: most settled calls first. `newest`: latest created first. `price`: lowest price amount first. `calls` when omitted. Models that tie are ordered by address.
+</Field>
+<Field name="cursor" type="string">
+See [Pagination](/docs/api/overview#pagination).
+</Field>
+<Field name="limit" type="integer, 1 to 100">
+24 when omitted.
+</Field>
+</Fields>
+
+Returns a [page](/docs/api/overview#pagination) whose `items` are [Model](#model) objects.
+
+Next: read one model with `GET /v1/models/{id}`, or its enclaves with `GET /v1/models/{id}/enclaves`.
+
+## `GET /v1/models/{id}`
+
+Reads one model with its manifest, its Weights accounts and the progress of its upload.
+
+Returns a [Model](#model).
+
+| Code | When |
+| --- | --- |
+| `MODEL_NOT_FOUND` | No model has this name or address. |
+| `PROGRAM_REFUSED` | The Model account holds a manifest that is not a valid manifest, or a price mint that is not an SPL Token mint. `message` says which. |
+
+The three routes below that read under `/v1/models/{id}` return the same two codes.
+
+## `GET /v1/models/{id}/weights`
+
+Reads a range of the model's ciphertext, as it sits on chain.
+
+<Fields>
+<Field name="offset" type="integer, 0 or more">
+The first byte of the range, counted from the start of the model's ciphertext. 0 when omitted.
+</Field>
+<Field name="length" type="integer, 1 to 1048576">
+Bytes to read. 256 when omitted.
+</Field>
+</Fields>
+
+Response:
+
+<Fields>
+<Field name="model" type="address" required>
+The Model account.
+</Field>
+<Field name="offset" type="integer" required>
+The first byte returned.
+</Field>
+<Field name="length" type="integer" required>
+Bytes returned. Less than the `length` asked for when the range runs past the end of the ciphertext.
+</Field>
+<Field name="totalBytes" type="integer" required>
+The model's `sizeBytes`.
+</Field>
+<Field name="bytesBase64" type="base64" required>
+The bytes of the range.
+</Field>
+<Field name="accounts" type="array of Weights" required>
+The [Weights accounts](#weights) the range was read from.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `offset` is past the end of the ciphertext, or `length` is outside 1 to 1,048,576. |
+| `UPSTREAM_UNAVAILABLE` | A Weights account could not be read from the cluster. Retryable. |
+
+Next: read the following range with `offset` raised by `length`, until `offset` reaches `totalBytes`. The SHA-256 of all of it equals the model's `ciphertextSha256`.
+
+## `GET /v1/models/{id}/enclaves`
+
+Lists every grant for the model with the enclave it was made to. Revoked grants and enclaves whose record has expired are included. The items are in the order of [`GET /v1/enclaves`](/docs/api/enclaves#get-v1enclaves): live and reachable enclaves first.
+
+<Fields>
+<Field name="items" type="array" required>
+One object per grant: `enclave`, an [Enclave](/docs/api/enclaves#enclave), and `grant`, a [Grant](/docs/api/enclaves#grant).
+</Field>
+<Field name="asOf" type="timestamp" required>
+When the API assembled the response.
+</Field>
+</Fields>
+
+The list is whole, without pages.
+
+Next: to open a call, pick an item whose `enclave.status` is `live`, whose `enclave.reachable` is `true` and whose `grant.status` is `live`, and pass `enclave.address` to [`POST /v1/calls/build`](/docs/api/calls-and-receipts#post-v1callsbuild).
+
+## `GET /v1/models/{id}/receipts`
+
+Lists the model's receipts, latest settling slot first. It takes `cursor` and `limit` as in [Pagination](/docs/api/overview#pagination).
+
+Returns a [page](/docs/api/overview#pagination) whose `items` are [Receipt](/docs/api/calls-and-receipts#receipt) objects.
+
+Next: read one with its attestation record at [`GET /v1/receipts/{id}`](/docs/api/calls-and-receipts#get-v1receiptsid).
+
+## `POST /v1/models/quote`
+
+Computes what sealing a model of a given ciphertext size costs, from the cluster's rent and the fees of the transactions a sealing sends. With the model's create metadata in `create`, it also measures the `create_model` transaction and says whether it fits. It builds nothing, signs nothing and needs no Weights account to exist.
+
+```http
+POST /v1/models/quote
+Content-Type: application/json
+
+{
+  "sizeBytes": <ciphertext bytes>,
+  "create": {
+    "wallet": "<owner address>",
+    "uploadKey": "<upload key address>",
+    "weights": ["<Weights account address>"],
+    "name": "<model name>",
+    "manifest": { "name": "<model name>", "inputKind": "<sketch or tensor>", "inputShape": [<dimension>], "labels": ["<label>"] },
+    "plaintextSizeBytes": <plaintext bytes>,
+    "cipher": { "id": "xchacha20poly1305-64k-v1", "chunkSizeBytes": 65536, "noncePrefix": "<16 bytes, base64>" },
+    "price": { "amount": "<base units>", "mint": null, "decimals": 9, "symbol": "SOL" },
+    "operatorShareBps": <0 to 10000>,
+    "allowedMeasurements": ["<96 hex characters>"]
+  }
+}
+```
+
+<Fields>
+<Field name="sizeBytes" type="integer, 17 to 671085056" required>
+Bytes of ciphertext (up to 64 Weights accounts, ~640 MiB): the weights' length plus 16 bytes for every 65,536 bytes of it, the last partial chunk included.
+</Field>
+<Field name="uploadKeyCount" type="integer, 1 to 8">
+How many upload keys to budget reserves and sweep fees for. Defaults to `create.uploadKeys.length` when `create` includes `uploadKeys`, or `DEFAULT_UPLOAD_KEYS` (`8`) otherwise.
+</Field>
+<Field name="create" type="object">
+The body of [`POST /v1/models/build`](#post-v1modelsbuild) without `sizeBytes` and `uploadFundingLamports`. `weights` holds 1 to 8 addresses, the ones the Weights accounts will have, and `name` equals `manifest.name`. The quote measures the transaction with its own `uploadFundingLamports`.
+</Field>
+</Fields>
+
+Response. Every amount is in lamports.
+
+<Fields>
+<Field name="fixture" type="boolean" required>
+`false` for a quote read from a cluster.
+</Field>
+<Field name="asOfSlot" type="slot" required>
+The slot the rent and the fees were read at.
+</Field>
+<Field name="sizeBytes" type="integer" required>
+The `sizeBytes` asked for.
+</Field>
+<Field name="writeChunkBytes" type="integer" required>
+Always 888: the ciphertext bytes one write carries (`WRITE_CHUNK_BYTES`).
+</Field>
+<Field name="writeCount" type="integer" required>
+The `write_weights` transactions the upload takes.
+</Field>
+<Field name="modelAccountBytes" type="integer" required>
+Always 8192: the size of new Model accounts (`MODEL_ACCOUNT_BYTES`; legacy models are 6,000 bytes).
+</Field>
+<Field name="modelRentLamports" type="amount" required>
+The rent-exempt minimum of the Model account.
+</Field>
+<Field name="weights" type="array" required>
+One object per Weights account, in order: `index`, `payloadBytes` (the ciphertext bytes it holds), `accountBytes` (`payloadBytes` plus the 56-byte header), `rentLamports` (its rent-exempt minimum) and `writeCount` (the writes that fill it).
+</Field>
+<Field name="weightsRentLamports" type="amount" required>
+The rent of all Weights accounts.
+</Field>
+<Field name="uploadKeyCount" type="integer, 1 to 8" required>
+The number of upload keys this quote budgets for.
+</Field>
+<Field name="uploadKeyMinimumLamports" type="amount" required>
+The rent-exempt minimum of one empty account, held by each upload key until sealing or self-sweep.
+</Field>
+<Field name="signaturesPerTransaction" type="object" required>
+The signatures each kind of transaction carries: `allocation`, `createModel`, `write` and `seal`.
+</Field>
+<Field name="allocationFeeLamports" type="amount" required>
+The fee of one transaction that creates a Weights account.
+</Field>
+<Field name="allocationFeesLamports" type="amount" required>
+That fee for every Weights account.
+</Field>
+<Field name="createFeeLamports" type="amount" required>
+The fee of the `create_model` transaction.
+</Field>
+<Field name="attachWeightsCount" type="integer" required>
+The `attach_weights` transactions needed for Weights accounts beyond the initial batch of 8 (in batches of up to 16).
+</Field>
+<Field name="attachWeightsFeesLamports" type="amount" required>
+Total fees for all `attach_weights` transactions.
+</Field>
+<Field name="writeFeeLamports" type="amount" required>
+The fee of one `write_weights` transaction.
+</Field>
+<Field name="writeFeesLamports" type="amount" required>
+That fee for every write.
+</Field>
+<Field name="sealRangeCount" type="integer" required>
+The `seal_range` transactions needed to fold 65,552-byte chunks into the Merkle frontier (8 chunks per transaction, leaving up to 8 chunks inline for `seal_model`).
+</Field>
+<Field name="sealRangeFeesLamports" type="amount" required>
+Total fees for all `seal_range` transactions.
+</Field>
+<Field name="sealFeeLamports" type="amount" required>
+The fee of the `seal_model` transaction.
+</Field>
+<Field name="uploadFundingLamports" type="amount" required>
+The `uploadFundingLamports` to send in `POST /v1/models/build`, split evenly across all `uploadKeyCount` upload keys in `create_model` (covering write fees, per-key rent-exempt reserves, `sealFeeLamports` and any extra-key self-sweep fees).
+</Field>
+<Field name="returnedUploadReserveLamports" type="amount" required>
+The reserve returned to the owner when extra upload keys self-sweep before sealing and the sealing transaction sweeps the primary upload key.
+</Field>
+<Field name="estimatedCostLamports" type="amount" required>
+What the sealing costs: the Model's rent, the Weights accounts' rent and the fees of every allocation, the creation, every write and the sealing.
+</Field>
+<Field name="requiredUpfrontLamports" type="amount" required>
+What the owner's wallet needs before the sealing starts: `estimatedCostLamports` plus `returnedUploadReserveLamports`.
+</Field>
+<Field name="createTransactionBytes" type="integer or null" required>
+The size in bytes of the `create_model` transaction built from `create`, its signatures included. `null` without `create`.
+</Field>
+<Field name="createTransactionMaxBytes" type="integer" required>
+Always 1104: the largest transaction a build returns, 1,232 bytes less the 128 bytes left for what the wallet adds. See [Signing](/docs/api/transactions#signing).
+</Field>
+<Field name="manifestBytes" type="integer or null" required>
+The size of the manifest as the Model stores it. `null` without `create`.
+</Field>
+<Field name="canCreate" type="boolean or null" required>
+`true` when `createTransactionBytes` is at most `createTransactionMaxBytes` and `manifestBytes` is at most 4,096. `null` without `create`.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `sizeBytes` is outside 17 to 671,085,056, or a field of `create` does not match its schema, `create.name` differing from `create.manifest.name` among them. |
+| `UPSTREAM_UNAVAILABLE` | The cluster's RPC returned no rent or no fee. Retryable. |
+
+Next: when `canCreate` is `true`, create the Weights accounts at the addresses in `create.weights`, then build the model with `POST /v1/models/build`.
+
+## Builds
+
+The nine routes below each return a [Build](/docs/api/transactions#build): an unsigned transaction and the addresses it creates. Sign it and send it through [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit). Signing, the order of signatures and the errors every build shares are in [Transactions](/docs/api/transactions).
+
+Each build route can return `MODEL_NOT_FOUND` (except `POST /v1/models/build`), `INSUFFICIENT_FUNDS`, `SIMULATION_FAILED` and `PROGRAM_REFUSED` as told in [Errors from a build](/docs/api/transactions#errors-from-a-build). The tables below list what each adds.
+
+## `POST /v1/models/build`
+
+Builds [`create_model`](/docs/program/instructions#createmodel): the Model in `uploading`, its Weights accounts bound to it, and the upload funding moved to the upload key.
+
+The Weights accounts exist before this call: each is owned by the `voynich` program and holds 56 bytes of header plus its share of the ciphertext. See [Where the ciphertext sits](/docs/concepts/sealed-models#where-the-ciphertext-sits).
+
+```http
+POST /v1/models/build
+Content-Type: application/json
+
+{
+  "wallet": "<owner address>",
+  "uploadKey": "<upload key address>",
+  "weights": ["<Weights account address>"],
+  "name": "<model name>",
+  "manifest": {
+    "name": "<model name>",
+    "inputKind": "<sketch or tensor>",
+    "inputShape": [<dimension>, <dimension>],
+    "labels": ["<label>", "<label>"]
+  },
+  "sizeBytes": <ciphertext bytes>,
+  "plaintextSizeBytes": <plaintext bytes>,
+  "cipher": {
+    "id": "xchacha20poly1305-64k-v1",
+    "chunkSizeBytes": 65536,
+    "noncePrefix": "<16 bytes, base64>"
+  },
+  "price": { "amount": "<base units>", "mint": null, "decimals": 9, "symbol": "SOL" },
+  "operatorShareBps": <0 to 10000>,
+  "allowedMeasurements": ["<96 hex characters>"],
+  "uploadFundingLamports": "<lamports>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The owner. It pays the fee and signs.
+</Field>
+<Field name="uploadKey" type="address" required>
+The primary fresh key the owner's device holds. It signs `create_model`, `seal_model` and its assigned writes.
+</Field>
+<Field name="uploadKeys" type="array of 1 to 8 addresses">
+Optional full list of distinct upload keys (`MAX_UPLOAD_KEYS = 8`), starting with `uploadKey`. Defaults to `[uploadKey]` when omitted. Extra keys (`uploadKeys[1..]`) receive an equal share of `uploadFundingLamports` as writable non-signers in `create_model` and can write ciphertext in parallel without extra owner signatures.
+</Field>
+<Field name="weights" type="array of 1 to 8 addresses" required>
+The Weights accounts, in the order of the ciphertext.
+</Field>
+<Field name="name" type="string" required>
+The model's name, 1 to 32 characters. The same as `manifest.name`.
+</Field>
+<Field name="manifest" type="object" required>
+The [manifest](#manifest).
+</Field>
+<Field name="sizeBytes" type="integer above 0" required>
+Bytes of ciphertext. The ciphertext space of the Weights accounts adds up to it.
+</Field>
+<Field name="plaintextSizeBytes" type="integer above 0" required>
+Bytes of the weights before encryption.
+</Field>
+<Field name="cipher" type="object" required>
+The [cipher header](#cipher-header).
+</Field>
+<Field name="price" type="Money" required>
+The unit price of the model (per call when `priceUnit` is `call`, or per output token when `token`). All four fields of [Money](/docs/api/overview#money) are sent; the transaction carries `amount` and `mint`.
+</Field>
+<Field name="priceUnit" type="'call' | 'token'">
+Optional pricing unit (`'call'` by default). Pass `'token'` to price the model per output token; calls then open through `open_metered_call` with a caller-chosen escrow `ceiling`.
+</Field>
+<Field name="operatorShareBps" type="integer, 0 to 10000" required>
+The operator's share of the price, in basis points.
+</Field>
+<Field name="allowedMeasurements" type="array of measurements" required>
+At least one. The program takes 1 to 8.
+</Field>
+<Field name="uploadFundingLamports" type="amount" required>
+Lamports moved from the owner to the upload keys (divided evenly across all `uploadKeys`, with any remainder going to `uploadKey`), covering write fees, reserves and sweep fees. [`POST /v1/models/quote`](#post-v1modelsquote) returns the amount for a ciphertext size and key count.
+</Field>
+<Field name="base" type="ModelBase">
+Optional [ModelBase](#modelbase) pinning the model to a public open-weight base model. Also accepted in `POST /v1/models/quote`'s `create` object when sizing `create_model` under 1,104 bytes.
+</Field>
+</Fields>
+
+The Build's `action` is `create_model`. Its `addresses` hold `model`, `weights` and `uploadKey`. Its `requiredSigners` are the owner and the upload key.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `name` differs from `manifest.name`; `weights` is missing or empty (`fieldErrors.weights`); a Weights account does not exist or is not owned by the program; the accounts' ciphertext space does not add up to `sizeBytes`. |
+| `INSUFFICIENT_FUNDS` | The owner holds fewer lamports than the Model's rent, `uploadFundingLamports` and the fee. |
+| `SIMULATION_FAILED` | The program refused the model or its Weights accounts (`InvalidModel`, `InvalidWeights`), or the name is taken. `programError` names the error. |
+
+Next: submit, attach any additional Weights accounts beyond 8 with `POST /v1/models/{id}/weights/attach/build`, then write the ciphertext with `POST /v1/models/{id}/write/build`.
+
+## `POST /v1/models/{id}/weights/attach/build`
+
+Builds [`attach_weights`](/docs/program/instructions#attachweights): binds up to 16 additional preallocated Weights accounts (`ATTACH_WEIGHTS_BATCH = 16`, up to 64 total) to an uploading model.
+
+```http
+POST /v1/models/large-model/weights/attach/build
+Content-Type: application/json
+
+{
+  "wallet": "<authorized upload key address>",
+  "weights": ["<Weights account address>"]
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+Any authorized upload key for the model (`upload.uploadKeys`). Pays the fee and is the only signer.
+</Field>
+<Field name="weights" type="array of 1 to 16 addresses" required>
+Preallocated zero-header Weights accounts to append in order.
+</Field>
+</Fields>
+
+The Build's `action` is `attach_weights`. Its `addresses` hold `model`, `weights` and `uploadKey`.
+
+## `POST /v1/models/{id}/write/build`
+
+Builds [`write_weights`](/docs/program/instructions#writeweights): one piece of ciphertext into the model's Weights accounts.
+
+```http
+POST /v1/models/sketch-32/write/build
+Content-Type: application/json
+
+{
+  "wallet": "<upload key address>",
+  "offset": <byte offset in the model's ciphertext>,
+  "bytesBase64": "<up to 888 bytes, base64>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+Any authorized upload key for the model (`upload.uploadKeys`). It pays the fee and is the only signer.
+</Field>
+<Field name="offset" type="integer, 0 or more" required>
+Where the bytes go, counted from the start of the model's ciphertext. The API turns it into the offset inside the Weights account that holds it.
+</Field>
+<Field name="bytesBase64" type="base64, 4 to 1184 characters" required>
+1 to 888 bytes of ciphertext. The whole write lies inside one Weights account.
+</Field>
+</Fields>
+
+The Build's `action` is `write_weights`. Its `addresses` hold `model`, `weights` (the one account written) and `uploadKey`.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | The bytes are more than 888, or the range `offset` to `offset + bytes` does not lie inside one Weights account. |
+| `MODEL_NOT_UPLOADING` | The model is sealed. |
+| `INSUFFICIENT_FUNDS` | The upload key holds fewer lamports than the write's fee. |
+| `SIMULATION_FAILED` | `wallet` is not the model's upload key (`Unauthorized`), or the write is empty or ends past the account's size (`InvalidWrite`). |
+
+Next: submit, and write the following range. `upload.writtenRanges` of `GET /v1/models/{id}` shows what has landed. When every byte is written, run `POST /v1/models/{id}/seal-range/build` (for models over 8 chunks) and then `POST /v1/models/{id}/seal/build`.
+
+## `POST /v1/models/{id}/seal-range/build`
+
+Builds [`seal_range`](/docs/program/instructions#sealrange): hashes 1 to 8 consecutive 65,552-byte ciphertext chunks (`SEAL_RANGE_CHUNKS = 8`) starting at `model.sealedChunks` into the model's Merkle frontier.
+
+```http
+POST /v1/models/large-model/seal-range/build
+Content-Type: application/json
+
+{
+  "wallet": "<authorized upload key address>",
+  "chunkCount": 8
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+Any authorized upload key for the model (`upload.uploadKeys`). Pays the fee and is the only signer.
+</Field>
+<Field name="chunkCount" type="integer, 1 to 8">
+Number of consecutive chunks to hash in this transaction. Defaults to the smaller of 8 and the remaining unhashed chunks.
+</Field>
+</Fields>
+
+The Build's `action` is `seal_range`. Its `addresses` hold `model`, `weights` (the 1 or 2 covering Weights accounts) and `uploadKey`.
+
+## `POST /v1/models/{id}/seal/build`
+
+Builds [`seal_model`](/docs/program/instructions#sealmodel), which fixes the ciphertext hash and clears all upload keys, followed by a transfer of the primary upload key's remaining lamports back to the owner (extra upload keys self-sweep their own reserve back to the owner before `seal_model`).
+
+```http
+POST /v1/models/sketch-32/seal/build
+Content-Type: application/json
+
+{
+  "wallet": "<owner address>",
+  "ciphertextSha256": "<sha-256 of the complete ciphertext, 64 hex characters>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The owner. It pays the fee and signs.
+</Field>
+<Field name="ciphertextSha256" type="hash" required>
+The SHA-256 of the complete ciphertext, as the owner's device computed it.
+</Field>
+</Fields>
+
+The Build's `action` is `seal_model`. Its `addresses` hold `model` and `uploadKey`. Its `requiredSigners` are the owner and the upload key, which signs the transfer.
+
+| Code | When |
+| --- | --- |
+| `MODEL_NOT_UPLOADING` | The model is already sealed. |
+| `UPLOAD_INCOMPLETE` | Not every ciphertext byte is written. |
+| `CIPHERTEXT_HASH_MISMATCH` | `ciphertextSha256` is not the SHA-256 of the bytes on chain. |
+| `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`). |
+
+Next: submit, then grant a first enclave with `POST /v1/models/{id}/grant/build`.
+
+## `POST /v1/models/{id}/price/build`
+
+Builds [`set_price`](/docs/program/instructions#setprice): the price, its mint, the operator share and the price unit. New calls open at the new values.
+
+```http
+POST /v1/models/sketch-32/price/build
+Content-Type: application/json
+
+{
+  "wallet": "<owner address>",
+  "price": { "amount": "<base units>", "mint": null, "decimals": 9, "symbol": "SOL" },
+  "priceUnit": "call",
+  "operatorShareBps": <0 to 10000>
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The owner. It pays the fee and signs.
+</Field>
+<Field name="price" type="Money" required>
+The new unit price. All four fields of [Money](/docs/api/overview#money) are sent; the transaction carries `amount` and `mint`, with `mint: null` for SOL.
+</Field>
+<Field name="priceUnit" type="'call' | 'token'">
+Optional pricing unit. When omitted, the model keeps its current `priceUnit`.
+</Field>
+<Field name="operatorShareBps" type="integer, 0 to 10000" required>
+The operator's share of the price, in basis points.
+</Field>
+</Fields>
+
+The Build's `action` is `set_price`. Its `addresses` hold `model`.
+
+| Code | When |
+| --- | --- |
+| `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`), or the operator share plus the protocol share is above 10,000 (`InvalidModel`). |
+
+## `POST /v1/models/{id}/grant/build`
+
+Builds [`grant_by_owner`](/docs/program/instructions#grantbyowner): a Grant that carries the model key wrapped to one enclave. Wrapping is told in [Grants](/docs/concepts/grants#the-wrapped-key).
+
+```http
+POST /v1/models/sketch-32/grant/build
+Content-Type: application/json
+
+{
+  "wallet": "<owner address>",
+  "enclave": "<enclave address>",
+  "wrappedKey": "<105-byte envelope, base64>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The owner. It pays the fee and the Grant's rent, and signs.
+</Field>
+<Field name="enclave" type="address" required>
+The Enclave account that receives the grant.
+</Field>
+<Field name="wrappedKey" type="wrapped key" required>
+The model key wrapped on the owner's device to the enclave's `encryptionKey`: an envelope of 105 bytes.
+</Field>
+</Fields>
+
+The Build's `action` is `grant_by_owner`. Its `addresses` hold `model`.
+
+| Code | When |
+| --- | --- |
+| `ENCLAVE_NOT_FOUND` | No Enclave account has the address in `enclave`. |
+| `MODEL_NOT_LIVE` | The model is `uploading` or `retired`. |
+| `ENCLAVE_EXPIRED` | The enclave's attestation record is invalid or expired. |
+| `MEASUREMENT_NOT_ALLOWED` | The enclave's measurement is not in the model's `allowedMeasurements`. |
+| `INSUFFICIENT_FUNDS` | The owner holds fewer lamports than the fee and, for a Grant that does not exist yet, its rent. |
+| `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`), or the record no longer matches the Enclave account (`InvalidEnclave`). |
+
+Next: submit. The first grant makes the model `live`, and `GET /v1/models/{id}/enclaves` lists the grant.
+
+## `POST /v1/models/{id}/revoke/build`
+
+Builds [`revoke_grant`](/docs/program/instructions#revokegrant), which marks the Grant of one enclave revoked. What a revoked grant stops is told in [Grants](/docs/concepts/grants#revoking).
+
+```http
+POST /v1/models/sketch-32/revoke/build
+Content-Type: application/json
+
+{
+  "wallet": "<owner address>",
+  "enclave": "<enclave address>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The owner. It pays the fee and signs.
+</Field>
+<Field name="enclave" type="address" required>
+The Enclave account whose grant is revoked.
+</Field>
+</Fields>
+
+The Build's `action` is `revoke_grant`. Its `addresses` hold `model`.
+
+| Code | When |
+| --- | --- |
+| `GRANT_REQUIRED` | No Grant account exists for this model and the address in `enclave`. Stage `build`. |
+| `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`). |
+
+Next: submit. `GET /v1/models/{id}/enclaves` then lists the grant with `status` `revoked`.
+
+## `POST /v1/models/{id}/retire/build`
+
+Builds [`retire_model`](/docs/program/instructions#retiremodel), which closes the model to new calls and new grants.
+
+```http
+POST /v1/models/sketch-32/retire/build
+Content-Type: application/json
+
+{
+  "wallet": "<owner address>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The owner. It pays the fee and signs.
+</Field>
+</Fields>
+
+The Build's `action` is `retire_model`. Its `addresses` hold `model`.
+
+| Code | When |
+| --- | --- |
+| `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`). |
+
+## Read next
+
+<Cards>
+<Card href="/docs/api/transactions" title="Transactions">
+Sign a build, submit it and follow it.
+</Card>
+<Card href="/docs/api/enclaves" title="Enclaves">
+The Enclave and Grant objects.
+</Card>
+</Cards>

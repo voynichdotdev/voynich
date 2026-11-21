@@ -1,0 +1,245 @@
+---
+title: Enclaves
+description: The enclave routes of the Voynich HTTP API, with the Enclave, attestation record and Grant objects they return.
+---
+
+Two routes read enclaves and four routes read, publish and deprecate on-chain measurement records. An enclave reaches the chain by registering its attestation record with the program, which is told in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation) and, for operators, in [Register and get granted](/docs/operators/register-and-get-granted).
+
+The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
+
+## Enclave
+
+<Fields>
+<Field name="address" type="address" required>
+The Enclave account.
+</Field>
+<Field name="signingKey" type="address" required>
+The enclave's Ed25519 key. It signs receipts.
+</Field>
+<Field name="encryptionKey" type="base64 of 32 bytes" required>
+The enclave's X25519 key. Inputs and wrapped model keys are encrypted to it.
+</Field>
+<Field name="hardwareType" type="string" required>
+`dev`: a standard-server enclave attested through `attest` (used at mainnet launch until `Config.attestation_program` switches via `set_config`, as well as on local clusters). `tdx`: Intel TDX. `sev-snp`: AMD SEV-SNP.
+</Field>
+<Field name="measurement" type="measurement" required>
+The measurement in the enclave's attestation record.
+</Field>
+<Field name="expiresAtSlot" type="slot" required>
+The slot the attestation record expires at.
+</Field>
+<Field name="operator" type="address" required>
+The wallet that registered the enclave and receives the operator share.
+</Field>
+<Field name="endpoint" type="URL" required>
+The address the enclave registered for itself.
+</Field>
+<Field name="relayPath" type="string" required>
+`/v1/calls/{call}/input`, with the call's address in place of `{call}`: the path, on the API and on the enclave's `endpoint` alike, that takes a call's encrypted input. See [Relay](/docs/api/relay).
+</Field>
+<Field name="status" type="string" required>
+`live`: the attestation record expires after the current slot. `expired`: it does not.
+</Field>
+<Field name="reachable" type="boolean" required>
+Whether the enclave's endpoint answered the API's last health request as this enclave. See [Reachability](#reachability).
+</Field>
+<Field name="lastSeen" type="timestamp or null" required>
+When the endpoint last answered as this enclave. `null` until it first does.
+</Field>
+<Field name="modelsHeld" type="integer" required>
+Grants to this enclave that are not revoked.
+</Field>
+<Field name="callsSettled" type="decimal string" required>
+Calls this enclave settled.
+</Field>
+<Field name="attestation" type="object" required>
+The enclave's [attestation record](#attestation-record).
+</Field>
+</Fields>
+
+### Reachability
+
+The API sends `GET /health` to every enclave's `endpoint` every 15 seconds and waits up to 3 seconds for the answer. The enclave is `reachable` when the answer has HTTP status 200 and a JSON body whose `status` is `ready`, whose `enclave` is this Enclave account's address and whose `measurement` is the measurement of its attestation record. Any other answer, or none, makes it unreachable. Each answer that makes it reachable sets `lastSeen`.
+
+When a refresh changes the enclave's endpoint or measurement, `reachable` reads `false` until the next health request reaches the new runtime.
+
+The runtime's side of the health request is in [Run the enclave runtime](/docs/operators/run-the-runtime#get-health).
+
+### Attestation record
+
+The record the chain holds for the enclave's signing key. What it proves and how it is laid out are in [The attestation record](/docs/concepts/enclaves-and-attestation#the-attestation-record).
+
+<Fields>
+<Field name="address" type="address" required>
+The record's account.
+</Field>
+<Field name="signingKey" type="address" required>
+The signing key the record names.
+</Field>
+<Field name="encryptionKey" type="base64 of 32 bytes" required>
+The enclave's encryption key.
+</Field>
+<Field name="hardwareType" type="string" required>
+`dev`, `tdx` or `sev-snp`, as on the [Enclave](#enclave).
+</Field>
+<Field name="measurement" type="measurement" required>
+The 48-byte software measurement recorded for the enclave.
+</Field>
+<Field name="recordedSlot" type="slot" required>
+The slot the record was written in.
+</Field>
+<Field name="expiresAtSlot" type="slot" required>
+The slot the record expires at.
+</Field>
+<Field name="layoutVersion" type="integer above 0" required>
+The record's layout version.
+</Field>
+</Fields>
+
+### Grant
+
+One model key wrapped to one enclave. See [Grants](/docs/concepts/grants).
+
+<Fields>
+<Field name="address" type="address" required>
+The Grant account.
+</Field>
+<Field name="model" type="address" required>
+The model.
+</Field>
+<Field name="modelName" type="string" required>
+The model's name.
+</Field>
+<Field name="enclave" type="address" required>
+The Enclave account the key is wrapped to.
+</Field>
+<Field name="wrappedKey" type="wrapped key" required>
+The model key as a 105-byte envelope, readable only inside the enclave.
+</Field>
+<Field name="grantedBy" type="address" required>
+Who wrote the grant: the owner's wallet, or the Enclave account of the enclave that passed the key on.
+</Field>
+<Field name="grantedSlot" type="slot" required>
+The slot the grant was written in.
+</Field>
+<Field name="status" type="string" required>
+`revoked`: the owner revoked it. `expired`: it is not revoked and the enclave's attestation record has expired. `live`: neither.
+</Field>
+</Fields>
+
+## `GET /v1/enclaves`
+
+Lists enclaves, `live` and `expired`, in this order: live and reachable, then live, then reachable, then the rest, each group by address. It takes `cursor` and `limit` as in [Pagination](/docs/api/overview#pagination).
+
+Returns a [page](/docs/api/overview#pagination) whose `items` are [Enclave](#enclave) objects.
+
+Next: read one enclave with `GET /v1/enclaves/{key}`. The enclaves that hold a given model are at [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves).
+
+## `GET /v1/enclaves/{key}`
+
+Reads one enclave with its grants, its latest receipts and its earnings. `{key}` is the Enclave account's address or the enclave's signing key.
+
+<Fields>
+<Field name="enclave" type="Enclave" required>
+The [Enclave](#enclave).
+</Field>
+<Field name="grants" type="array of Grant" required>
+Every [Grant](#grant) made to this enclave, revoked ones included.
+</Field>
+<Field name="receipts" type="array of Receipt" required>
+The enclave's 20 latest [Receipt](/docs/api/calls-and-receipts#receipt) objects, latest settling slot first.
+</Field>
+<Field name="earnings" type="array of Money" required>
+The operator share of the calls this enclave settled, one [Money](/docs/api/overview#money) per mint. Calls settled by the operator's other enclaves are not in it; the operator's total is `operatorEarnings` of [`GET /v1/accounts/{wallet}`](/docs/api/accounts-and-stats#get-v1accountswallet).
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{key}` is not an address. |
+| `ENCLAVE_NOT_FOUND` | No enclave has this address or signing key. |
+
+Next: an owner grants this enclave a model with [`POST /v1/models/{id}/grant/build`](/docs/api/models#post-v1modelsidgrantbuild) and revokes the grant with [`POST /v1/models/{id}/revoke/build`](/docs/api/models#post-v1modelsidrevokebuild). A caller names it in [`POST /v1/calls/build`](/docs/api/calls-and-receipts#post-v1callsbuild).
+
+## MeasurementRecord
+
+An on-chain `Measurement` PDA binding a 48-byte SHA-384 enclave runtime measurement to its source commit and reproducible build recipe (`voynich/enclave-recipe/v1`).
+
+<Fields>
+<Field name="address" type="address" required>
+The 366-byte Measurement PDA (`["measurement", digest[..32], digest[32..]]`).
+</Field>
+<Field name="digest" type="measurement (96 hex chars)" required>
+The non-zero 48-byte SHA-384 measurement digest.
+</Field>
+<Field name="publisher" type="address" required>
+The wallet that published this record.
+</Field>
+<Field name="sourceRepo" type="string (1 to 128 bytes)" required>
+Source repository URL or identifier (no whitespace or control characters).
+</Field>
+<Field name="commitSha" type="string (7 to 64 hex chars)" required>
+Source commit SHA that produced this measurement.
+</Field>
+<Field name="recipeHash" type="hash (64 hex chars)" required>
+Non-zero SHA-256 of the canonical `voynich/enclave-recipe/v1` manifest.
+</Field>
+<Field name="version" type="string (1 to 32 bytes)" required>
+Release version string (no whitespace or control characters).
+</Field>
+<Field name="createdSlot" type="slot" required>
+The slot the record was published in.
+</Field>
+<Field name="status" type="'active' | 'deprecated'" required>
+Whether this measurement is currently active or deprecated.
+</Field>
+</Fields>
+
+## `GET /v1/measurements`
+
+Lists published on-chain measurement records. Takes `cursor`, `limit` ([Pagination](/docs/api/overview#pagination)), and optional `status` (`active` or `deprecated`).
+
+Returns a page whose `items` are [MeasurementRecord](#measurementrecord) objects.
+
+## `GET /v1/measurements/{digest}`
+
+Reads one published measurement record by its 96-character hex SHA-384 `digest`.
+
+Returns a [MeasurementRecord](#measurementrecord). Answers `VALIDATION_ERROR` if `{digest}` is not 96 hex characters, or `MEASUREMENT_NOT_FOUND` if no record exists on chain.
+
+## `POST /v1/measurements/build`
+
+Builds [`publish_measurement`](/docs/program/instructions#publishmeasurement) to create a 366-byte `Measurement` PDA on chain.
+
+```http
+POST /v1/measurements/build
+Content-Type: application/json
+
+{
+  "wallet": "<publisher address>",
+  "digest": "<96-hex SHA-384 measurement>",
+  "sourceRepo": "https://github.com/...",
+  "commitSha": "<7 to 64 hex commit SHA>",
+  "recipeHash": "<64-hex SHA-256 recipeHash>",
+  "version": "0.1.3"
+}
+```
+
+Returns a [Build](/docs/api/transactions#build) with `action: "publish_measurement"` and `addresses: { measurement }`. Answers `MEASUREMENT_ALREADY_EXISTS` if a record for `digest` is already published, `INVALID_MEASUREMENT` or `VALIDATION_ERROR` on invalid fields, or `INSUFFICIENT_FUNDS` if `wallet` lacks lamports for the 366-byte PDA rent and fee.
+
+## `POST /v1/measurements/{digest}/deprecate/build`
+
+Builds [`deprecate_measurement`](/docs/program/instructions#deprecatemeasurement) to mark an active `Measurement` PDA as `deprecated`. Body: `{ "wallet": "<publisher or Config.admin address>" }`.
+
+Returns a [Build](/docs/api/transactions#build) with `action: "deprecate_measurement"` and `addresses: { measurement }`. Answers `MEASUREMENT_NOT_FOUND`, `MEASUREMENT_DEPRECATED` (already deprecated), or `UNAUTHORIZED` (HTTP `403`, signer is neither `publisher` nor `Config.admin`).
+
+## Read next
+
+<Cards>
+<Card href="/docs/api/calls-and-receipts" title="Calls and receipts">
+Open a call with an enclave and read its receipt.
+</Card>
+<Card href="/docs/operators/earnings" title="Earnings">
+What a settled call pays the operator.
+</Card>
+</Cards>

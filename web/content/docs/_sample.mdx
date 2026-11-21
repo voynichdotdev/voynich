@@ -1,0 +1,181 @@
+---
+title: Call sketch-32
+description: One call to the first sealed model, from the SDK, the CLI and the HTTP API, with what it sends and what it leaves on chain.
+---
+
+`sketch-32` is the first sealed model. It names what a person has drawn, out of 32 things. Its weights are ONNX, stored on Solana as ciphertext, and it takes a 28 by 28 drawing with one channel. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models).
+
+A call has three people around it:
+
+- the **caller**, who sends an input and pays the model's price
+- the **operator**, whose enclave opens the model and answers
+- the **owner**, who sealed the model and set its price
+
+## One call
+
+The SDK makes the whole call in one line and returns `{ output, receipt, verified }`. The CLI and the HTTP API reach the same call.
+
+<Ways>
+<Way label="SDK">
+
+```ts
+const { output, receipt, verified } = await voynich.call('sketch-32', input)
+```
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich call sketch-32
+```
+
+</Way>
+<Way label="HTTP">
+
+```http
+POST /v1/calls/build
+Content-Type: application/json
+
+{
+  "wallet": "<caller address>",
+  "model": "sketch-32",
+  "enclave": "<enclave address>",
+  "inputHash": "<sha-256 of the input envelope, 64 hex characters>"
+}
+```
+
+</Way>
+</Ways>
+
+For a `sketch` model the input is a flat array of 784 numbers from 0 to 1, row by row, with the background at 0.
+
+## What a call does
+
+<Diagram name="call" />
+
+Over the HTTP API the same call is five steps.
+
+<Steps>
+<Step title="Read the model and its enclaves">
+
+Pick an enclave whose status is `live` and whose grant is live.
+
+```http
+GET /v1/models/sketch-32
+GET /v1/models/sketch-32/enclaves
+```
+
+</Step>
+<Step title="Encrypt the input">
+
+Encrypt the input to the enclave's `encryptionKey` and hash the complete envelope with SHA-256. The envelope carries a public key of the caller's, so the answer comes back readable to the caller alone.
+
+</Step>
+<Step title="Open the call">
+
+Build the transaction, sign it and submit it. The price goes into escrow and the build returns the call's address.
+
+```http
+POST /v1/calls/build
+POST /v1/transactions/submit
+```
+
+</Step>
+<Step title="Send the input and read the answer">
+
+```http
+POST /v1/calls/{call}/input
+GET /v1/calls/{call}/answer
+```
+
+</Step>
+<Step title="Verify">
+
+Decrypt the output, then check the enclave's signature, its attestation record and the record's expiry at the settling slot.
+
+```http
+GET /v1/receipts/{receipt}
+```
+
+</Step>
+</Steps>
+
+## Fields
+
+The body of `POST /v1/calls/build`:
+
+<Fields>
+<Field name="wallet" type="address" required>
+The caller's wallet. It signs the transaction and pays the price.
+</Field>
+<Field name="model" type="address or name" required>
+The model to call, by its account address or by its name, such as `sketch-32`.
+</Field>
+<Field name="enclave" type="address" required>
+The enclave that answers. It holds a live grant for the model.
+</Field>
+<Field name="inputHash" type="64 hex characters" required>
+The SHA-256 of the complete input envelope.
+</Field>
+</Fields>
+
+The answer route reports one of three statuses.
+
+| Status | The call |
+| --- | --- |
+| `waiting` | is open and the enclave has not answered yet |
+| `answered` | is settled, with the output envelope, the enclave's signature and the receipt's address |
+| `failed` | did not settle, with the reason and the state of the refund |
+
+### Errors
+
+Every failed response carries a code. These are the codes a call can meet.
+
+<Rows data="_sample-errors" columns="code,status" />
+
+<Callout>
+A call that is not settled by its deadline is refunded to the caller in full. Refunding is told in [Calls and receipts](/docs/concepts/calls-and-receipts).
+</Callout>
+
+<Callout kind="important">
+Keep the secret half of the caller's output key on the device until the answer has been decrypted. Without it the answer cannot be read.
+</Callout>
+
+## What the receipt proves
+
+A receipt is checked in three steps, in order.
+
+| Check | What it says |
+| --- | --- |
+| Signature | The enclave key signed this call, input hash and output hash. |
+| Attestation record | The chain recorded that key as living inside attested hardware. |
+| Expiry | The record was unexpired at the slot the call settled. |
+
+> A text anyone can look at in full and no one has read.
+
+The name is the Voynich manuscript's. The model is the same kind of thing: every byte is public and only an enclave reads it.
+
+## Where the key is
+
+### Custody
+
+<Diagram name="custody" />
+
+### Sealing
+
+<Diagram name="seal" />
+
+### Grants
+
+<Diagram name="grant" />
+
+## Read next
+
+<Cards>
+<Card href="/docs/concepts/sealed-models" title="Sealed models">
+The ciphertext accounts, the cipher, the hash and the statuses.
+</Card>
+<Card href="/docs/concepts/calls-and-receipts" title="Calls and receipts">
+A call from escrow to receipt, and what each check proves.
+</Card>
+</Cards>

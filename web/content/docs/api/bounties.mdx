@@ -1,0 +1,285 @@
+---
+title: Bounties
+description: The bounty routes of the Voynich HTTP API: browse bounties and attempts, and build post, draw, collect and cancel transactions.
+---
+
+Six routes read and act on bounties posted against sealed models through the `bounty` program (`bountyProgramId` in [`GET /v1/config`](/docs/api/overview#get-v1config), built on `voynich-cpi`). On the site, [/bounties](/bounties) uses these routes directly.
+
+A bounty is posted in one transaction and won in a single drawer signature: `draw` registers `bounty::on_receipt` as a Voynich settlement callback, so `settle_call` verifies the settled Receipt and pays the reward to the drawer inside the same transaction.
+
+| Step | Route |
+| --- | --- |
+| Post a bounty reward in escrow | `POST /v1/bounties/build`, then [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit) |
+| Draw, settle and pay in one signature | `POST /v1/bounties/{address}/draw/build`, submit, then send the encrypted input to [`POST /v1/calls/{id}/input`](/docs/api/relay) with `addresses.call` |
+| Collect a pre-callback attempt manually | `POST /v1/bounties/{address}/collect/build`, then submit |
+| Cancel an open bounty as its creator | `POST /v1/bounties/{address}/cancel/build`, then submit |
+
+In every path, `{address}` is the Bounty account's address. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
+
+## Bounty
+
+<Fields>
+<Field name="address" type="address" required>
+The Bounty PDA account.
+</Field>
+<Field name="creator" type="address" required>
+The wallet that posted and funded the bounty.
+</Field>
+<Field name="nonce" type="decimal string" required>
+The unsigned 64-bit nonce that derives the Bounty PDA with `creator`.
+</Field>
+<Field name="model" type="address" required>
+The sealed Model account that classifies attempts.
+</Field>
+<Field name="modelName" type="string or null" required>
+The model's name, when indexed.
+</Field>
+<Field name="targetLabel" type="string, 1 to 32 bytes" required>
+The label the model's verified open answer must match to win the bounty.
+</Field>
+<Field name="reward" type="Money" required>
+The reward held in escrow, as a [Money](/docs/api/overview#money).
+</Field>
+<Field name="status" type="string" required>
+`open`: taking draw attempts. `claimed`: paid out to `winner`. `cancelled`: refunded to `creator`.
+</Field>
+<Field name="winner" type="address or null" required>
+The drawer paid when `status` is `claimed`.
+</Field>
+<Field name="winningCall" type="address or null" required>
+The Call account that won the bounty.
+</Field>
+<Field name="winningReceipt" type="address or null" required>
+The Receipt account verified by `on_receipt` (or `collect` for legacy attempts).
+</Field>
+<Field name="createdSlot" type="slot" required>
+The slot the bounty was posted in.
+</Field>
+<Field name="claimedSlot" type="slot or null" required>
+The slot the bounty was claimed in, or `null`.
+</Field>
+<Field name="attempts" type="decimal string" required>
+Number of `draw` attempts opened against this bounty.
+</Field>
+</Fields>
+
+### BountyAttempt
+
+<Fields>
+<Field name="address" type="address" required>
+The Attempt PDA account, derived from `bounty` and `call`.
+</Field>
+<Field name="bounty" type="address" required>
+The Bounty account.
+</Field>
+<Field name="drawer" type="address" required>
+The wallet that paid the model's call price and receives the reward if the label matches.
+</Field>
+<Field name="call" type="address" required>
+The Voynich Call account opened via CPI by the bounty program's caller PDA.
+</Field>
+<Field name="createdSlot" type="slot" required>
+The slot the attempt opened in.
+</Field>
+<Field name="refunded" type="boolean" required>
+`true` if an expired attempt call was refunded.
+</Field>
+</Fields>
+
+## `GET /v1/bounties`
+
+Lists bounties, one page at a time.
+
+<Fields>
+<Field name="status" type="string">
+Filter by `open`, `claimed` or `cancelled`. All statuses when omitted.
+</Field>
+<Field name="model" type="address or name">
+Filter to bounties targeting one model.
+</Field>
+<Field name="cursor" type="string">
+See [Pagination](/docs/api/overview#pagination).
+</Field>
+<Field name="limit" type="integer, 1 to 100">
+24 when omitted.
+</Field>
+</Fields>
+
+Returns a [page](/docs/api/overview#pagination) whose `items` are [Bounty](#bounty) objects.
+
+## `GET /v1/bounties/{address}`
+
+Reads one bounty and its recorded attempts, latest attempt first.
+
+<Fields>
+<Field name="bounty" type="Bounty" required>
+The [Bounty](#bounty).
+</Field>
+<Field name="attempts" type="array of BountyAttempt" required>
+Every [BountyAttempt](#bountyattempt) recorded for this bounty.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{address}` is not an address. |
+| `BOUNTY_NOT_FOUND` | No bounty has this address. |
+
+## `POST /v1/bounties/build`
+
+Builds `post`: creates a Bounty PDA and moves `reward` (SOL or any SPL Token mint) into the bounty's escrow.
+
+```http
+POST /v1/bounties/build
+Content-Type: application/json
+
+{
+  "wallet": "<creator address>",
+  "model": "sketch-32",
+  "targetLabel": "star",
+  "reward": { "amount": "20000000", "mint": null, "decimals": 9, "symbol": "SOL" },
+  "nonce": "<optional unsigned 64-bit integer>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The creator wallet. Pays rent, the transaction fee and the escrowed reward.
+</Field>
+<Field name="model" type="address or name" required>
+The target model (such as `sketch-32`).
+</Field>
+<Field name="targetLabel" type="string, 1 to 32 bytes" required>
+The label that wins the bounty.
+</Field>
+<Field name="reward" type="Money" required>
+The reward amount and mint (`mint: null` for SOL).
+</Field>
+<Field name="nonce" type="decimal string, unsigned 64-bit">
+A nonce unused by `wallet`. Drawn randomly when omitted.
+</Field>
+</Fields>
+
+Returns a [Build](/docs/api/transactions#build) with `action: "post_bounty"` and `addresses: { model, bounty }`.
+
+| Code | When |
+| --- | --- |
+| `PROGRAM_UNAVAILABLE` | The bounty program is not configured on this API. Retryable. |
+| `MODEL_NOT_FOUND` | No model has this name or address. |
+| `INSUFFICIENT_FUNDS` | `wallet` holds less than the reward, rent and fee. |
+| `SIMULATION_FAILED` | Refused by the bounty program in simulation. |
+
+## `POST /v1/bounties/{address}/draw/build`
+
+Builds `draw`: transfers the model's call price from the drawer to the bounty's caller PDA, creates the drawer's reward associated token account idempotently for SPL bounties, invokes `voynich_cpi::open_call_with_callback` in `open` answer mode with `bounty::on_receipt` as the settlement callback, and records an Attempt PDA.
+
+```http
+POST /v1/bounties/<bounty address>/draw/build
+Content-Type: application/json
+
+{
+  "wallet": "<drawer address>",
+  "enclave": "<enclave address>",
+  "inputHash": "<sha-256 of the input envelope, 64 hex characters>",
+  "nonce": "<optional unsigned 64-bit integer>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The drawer. Pays the model's call price, rent and transaction fee, and receives the bounty if the settled answer matches `targetLabel`.
+</Field>
+<Field name="enclave" type="address" required>
+The live, reachable Enclave account holding a grant for the bounty's model.
+</Field>
+<Field name="inputHash" type="hash" required>
+SHA-256 of the encrypted input envelope sent next to [`POST /v1/calls/{id}/input`](/docs/api/relay).
+</Field>
+<Field name="nonce" type="decimal string, unsigned 64-bit">
+Call nonce for the bounty's caller PDA. Drawn randomly when omitted.
+</Field>
+</Fields>
+
+Returns a [Build](/docs/api/transactions#build) with `action: "draw_bounty"` and `addresses: { model, bounty, attempt, call }`.
+
+| Code | When |
+| --- | --- |
+| `PROGRAM_UNAVAILABLE` | The bounty program is not configured on this API. Retryable. |
+| `BOUNTY_NOT_FOUND` | No bounty has this address. |
+| `BOUNTY_NOT_OPEN` | The bounty is already claimed or cancelled. |
+| `MODEL_NOT_FOUND`, `ENCLAVE_NOT_FOUND`, `MODEL_NOT_LIVE`, `GRANT_REQUIRED`, `ENCLAVE_EXPIRED`, `MEASUREMENT_NOT_ALLOWED` | As on [`POST /v1/calls/build`](/docs/api/calls-and-receipts#post-v1callsbuild). |
+| `INSUFFICIENT_FUNDS` | `wallet` holds less than the model's call price, rent and fee. |
+
+Next: sign and submit the Build, send the encrypted input envelope to [`POST /v1/calls/{id}/input`](/docs/api/relay) using `addresses.call`, and wait for settlement. When the settled label matches `targetLabel`, `settle_call` invokes `bounty::on_receipt` and pays the reward to `wallet` in the same transaction. Poll `GET /v1/bounties/{address}` to observe `status: "claimed"` and `winningCall`.
+
+## `POST /v1/bounties/{address}/collect/build`
+
+Builds `collect`: invokes `voynich_cpi::read_receipt` on chain to verify the settled Receipt for `call` and pays the bounty reward to the attempt's `drawer` when the on-chain open answer's `label` matches `targetLabel`. Attempts opened with `draw` settle and pay automatically via `on_receipt`; `collect` remains available for pre-callback attempts.
+
+```http
+POST /v1/bounties/<bounty address>/collect/build
+Content-Type: application/json
+
+{
+  "wallet": "<signer address>",
+  "call": "<call address from draw>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The signer paying the transaction fee (and any missing SPL token account rent for the winner). Any wallet may submit `collect`; the reward always lands in the attempt's `drawer`.
+</Field>
+<Field name="call" type="address" required>
+The Call account opened by `draw`.
+</Field>
+</Fields>
+
+Returns a [Build](/docs/api/transactions#build) with `action: "collect_bounty"` and `addresses: { model, bounty, attempt, call }`.
+
+| Code | When |
+| --- | --- |
+| `PROGRAM_UNAVAILABLE` | The bounty program is not configured on this API. Retryable. |
+| `BOUNTY_NOT_FOUND` | No bounty has this address. |
+| `BOUNTY_NOT_OPEN` | The bounty is already claimed or cancelled. |
+| `CALL_NOT_FOUND` | No bounty attempt exists for `{address}` and `call`. |
+| `PROGRAM_REFUSED` | The Receipt does not match `targetLabel` (`LabelMismatch`) or is not a valid open Receipt for this attempt. |
+
+## `POST /v1/bounties/{address}/cancel/build`
+
+Builds `cancel`: refunds an open bounty's full escrow back to its `creator`.
+
+```http
+POST /v1/bounties/<bounty address>/cancel/build
+Content-Type: application/json
+
+{
+  "wallet": "<creator address>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The bounty's `creator`. Must match the creator recorded in the Bounty account.
+</Field>
+</Fields>
+
+Returns a [Build](/docs/api/transactions#build) with `action: "cancel_bounty"` and `addresses: { model, bounty }`.
+
+| Code | When |
+| --- | --- |
+| `PROGRAM_UNAVAILABLE` | The bounty program is not configured on this API. Retryable. |
+| `BOUNTY_NOT_FOUND` | No bounty has this address. |
+| `BOUNTY_NOT_OPEN` | The bounty is already claimed or cancelled. |
+| `SIMULATION_FAILED` | `wallet` is not the bounty's `creator`. |
+
+## Read next
+
+<Cards>
+<Card href="/docs/program/calling-a-model" title="Calling a model from a program">
+How the bounty program uses voynich-cpi to open calls and verify receipts on chain.
+</Card>
+<Card href="/docs/api/transactions" title="Transactions">
+Sign a build, submit it and follow it.
+</Card>
+</Cards>

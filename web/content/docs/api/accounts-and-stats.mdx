@@ -1,0 +1,108 @@
+---
+title: Accounts and stats
+description: A wallet's models, enclaves, earnings and calls, the protocol's counts, and the home summary of sketch-32.
+---
+
+Three routes read summaries: everything one wallet has on the protocol, the protocol's counts, and the first model with a piece of its ciphertext. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
+
+## `GET /v1/accounts/{wallet}`
+
+Reads one wallet's side of the protocol in its three roles: the models it owns, the enclaves it operates and the calls it made. `{wallet}` is the wallet's address.
+
+<Fields>
+<Field name="wallet" type="address" required>
+The wallet asked for.
+</Field>
+<Field name="models" type="array of Model" required>
+The [Model](/docs/api/models#model) objects this wallet owns.
+</Field>
+<Field name="ownerEarnings" type="array of Money" required>
+What the wallet was paid as an owner by settled calls, one [Money](/docs/api/overview#money) per mint.
+</Field>
+<Field name="enclaves" type="array of Enclave" required>
+The [Enclave](/docs/api/enclaves#enclave) objects this wallet operates, in the order of [`GET /v1/enclaves`](/docs/api/enclaves#get-v1enclaves).
+</Field>
+<Field name="operatorEarnings" type="array of Money" required>
+What the wallet was paid as an operator by settled calls, across every enclave it operates, one Money per mint.
+</Field>
+<Field name="calls" type="array of Call" required>
+The [Call](/docs/api/calls-and-receipts#call) objects this wallet opened, latest opened first.
+</Field>
+</Fields>
+
+Every list is whole, without pages. A wallet with nothing on the protocol returns empty arrays.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | `{wallet}` is not an address. |
+
+Next: a call whose `status` is `refundable` is refunded with [`POST /v1/calls/{id}/refund/build`](/docs/api/calls-and-receipts#post-v1callsidrefundbuild). An owned model is changed with the builds on [Models](/docs/api/models#builds). How earnings come about is in [Fees and the token](/docs/concepts/fees-and-the-token#the-split).
+
+## `GET /v1/stats`
+
+Reads the protocol's counts.
+
+<Fields>
+<Field name="models" type="integer" required>
+Models, in every status.
+</Field>
+<Field name="enclaves" type="integer" required>
+Enclaves whose attestation record is unexpired at the current slot.
+</Field>
+<Field name="receipts" type="decimal string" required>
+Receipts written.
+</Field>
+<Field name="callsSettled" type="decimal string" required>
+Calls settled. Each settled call has one receipt, so it equals `receipts`.
+</Field>
+<Field name="programCalls" type="decimal string" required>
+Calls opened by another Solana program through CPI (`callerIsProgram: true`).
+</Field>
+<Field name="operatorEarnings" type="array of Money" required>
+What all operators were paid by settled calls, one [Money](/docs/api/overview#money) per mint.
+</Field>
+<Field name="currentSlot" type="slot" required>
+The latest slot the API has read. Statuses that depend on a slot (`live` and `expired` enclaves and grants, `refundable` calls) are computed against it.
+</Field>
+<Field name="asOf" type="timestamp" required>
+When the API assembled the response.
+</Field>
+</Fields>
+
+Next: the models behind the counts are at [`GET /v1/models`](/docs/api/models#get-v1models) and the enclaves at [`GET /v1/enclaves`](/docs/api/enclaves#get-v1enclaves).
+
+## `GET /v1/home`
+
+Reads the summary a first screen shows: the counts, the model named `sketch-32`, the first bytes of its ciphertext and its latest receipts.
+
+<Fields>
+<Field name="stats" type="object" required>
+The response of [`GET /v1/stats`](#get-v1stats).
+</Field>
+<Field name="model" type="Model or null" required>
+The [Model](/docs/api/models#model) named `sketch-32`. `null` when it is not among the 100 models with the most settled calls.
+</Field>
+<Field name="ciphertext" type="object or null" required>
+The first 256 bytes of the model's ciphertext, in the shape [`GET /v1/models/{id}/weights`](/docs/api/models#get-v1modelsidweights) returns. `null` when `model` is `null`.
+</Field>
+<Field name="recentReceipts" type="array of Receipt" required>
+The model's 8 latest [Receipt](/docs/api/calls-and-receipts#receipt) objects, latest settling slot first. Empty when `model` is `null`.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `UPSTREAM_UNAVAILABLE` | The model's Weights account could not be read from the cluster. Retryable. |
+
+Next: call the model as in [Call a model in five minutes](/docs/start/call-a-model).
+
+## Read next
+
+<Cards>
+<Card href="/docs/api/models" title="Models">
+Every model route and the Model object.
+</Card>
+<Card href="/docs/api/calls-and-receipts" title="Calls and receipts">
+The Call and Receipt objects.
+</Card>
+</Cards>
