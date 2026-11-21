@@ -1,0 +1,58 @@
+{
+  "seed": 42,
+  "architecture": {
+    "layers": 4,
+    "dModel": 192,
+    "heads": 6,
+    "dFf": 512,
+    "contextLen": 128,
+    "vocabSize": 258,
+    "loraRank": 8,
+    "loraAlpha": 16.0
+  },
+  "parameters": 1506434,
+  "adapterParameters": 53010,
+  "baseOnnxBytes": 6143522,
+  "baseSha256": "1184a80cdd836f39c6e4af1e26c463042eeaaeecf0b7ee3750f4dbffcc93c84f",
+  "adapterBytes": 214673,
+  "compressionRatio": 28.62,
+  "baseTrainTokens": 1003854,
+  "baseHeldOutTokens": 111540,
+  "baseProseHeldOutLoss": 1.9118,
+  "domainTrainTokens": 7667,
+  "domainHeldOutTokens": 836,
+  "baseHeldOutLoss": 3.1173,
+  "baseHeldOutBpb": 4.4973,
+  "baseHeldOutPpl": 22.59,
+  "adapterHeldOutLoss": 2.8538,
+  "adapterHeldOutBpb": 4.1171,
+  "adapterHeldOutPpl": 17.35,
+  "onnxMaxLogitDiff": 1.51e-05,
+  "cpuMsPer32Tokens": 24.71,
+  "samples": [
+    {
+      "prompt": "Q: What is Voynich?\nA:",
+      "text": " Voynich runs sealed models on Solana with verified receipts.",
+      "tokens": 61,
+      "finishReason": "eos"
+    },
+    {
+      "prompt": "Q: What is a sealed adapter?\nA:",
+      "text": " Compact encrypted LoRA weights merged onto an open base.",
+      "tokens": 57,
+      "finishReason": "eos"
+    },
+    {
+      "prompt": "Q: How does Voynich verify an answer?\nA:",
+      "text": " Receipts check signature, attestation, expiry, and output hash.",
+      "tokens": 64,
+      "finishReason": "length"
+    },
+    {
+      "prompt": "Ask:",
+      "text": " Voynich seals adapters on Solana with verified receipts.",
+      "tokens": 57,
+      "finishReason": "eos"
+    }
+  ]
+}

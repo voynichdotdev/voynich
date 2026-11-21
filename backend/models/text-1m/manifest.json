@@ -1,0 +1,14 @@
+{
+  "name": "text-1m",
+  "inputKind": "text",
+  "inputName": "input_ids",
+  "outputName": "logits",
+  "tokenizer": {
+    "format": "byte-level",
+    "vocabSize": 258,
+    "maxInputTokens": 128,
+    "maxOutputTokens": 64,
+    "bosTokenId": 256,
+    "eosTokenId": 257
+  }
+}
