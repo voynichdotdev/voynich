@@ -411,3 +411,20 @@ model BountyAttempt {
   @@index([drawer, createdSlot])
   @@map("bounty_attempts")
 }
+
+model Measurement {
+  address     String            @id @db.VarChar(44)
+  digest      String            @unique @db.Char(96)
+  publisher   String            @db.VarChar(44)
+  sourceRepo  String            @db.VarChar(128)
+  commitSha   String            @db.VarChar(64)
+  recipeHash  String            @db.Char(64)
+  version     String            @db.VarChar(32)
+  createdSlot BigInt
+  status      MeasurementStatus @default(active)
+  updatedSlot BigInt
+
+  @@index([status, createdSlot])
+  @@index([publisher, createdSlot])
+  @@map("measurements")
+}
