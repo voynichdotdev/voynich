@@ -1,36 +1,27 @@
 {
   "name": "voynich-enclave",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "type": "module",
-  "files": [
-    "dist"
-  ],
-  "exports": {
-    ".": "./dist/runtime.js"
-  },
-  "bin": {
-    "voynich-enclave": "./dist/runtime.js"
-  },
+  "files": ["dist"],
+  "exports": { ".": "./dist/runtime.js" },
+  "bin": { "voynich-enclave": "./dist/runtime.js" },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && node build.mjs",
+    "verify:build": "node verify-build.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "node dist/runtime.js"
   },
-  "engines": {
-    "node": ">=22"
-  },
+  "engines": { "node": ">=22" },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.1",
     "@solana/spl-token": "0.4.14",
     "@solana/web3.js": "1.99.0",
-    "@voynich/contract": "^0.1.0",
+    "@voynich/contract": "^0.1.26",
     "hono": "4.13.16",
     "@hono/node-server": "2.1.6",
     "onnxruntime-node": "1.31.1",
-    "voynich": "^0.2.0",
+    "voynich": "^0.2.30",
     "zod": "4.6.7"
   },
-  "devDependencies": {
-    "esbuild": "0.28.2"
-  }
+  "devDependencies": { "esbuild": "0.28.2" }
 }
