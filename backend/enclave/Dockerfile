@@ -1,5 +1,8 @@
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee
+ARG SOURCE_DATE_EPOCH=1795219200
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
 WORKDIR /app
+# CPU libraries are bundled in the npm package; skip optional CUDA/NuGet downloads.
 ENV ONNXRUNTIME_NODE_INSTALL=skip
 ENV ENCLAVE_HOST=0.0.0.0
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
