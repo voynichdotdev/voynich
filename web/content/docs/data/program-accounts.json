@@ -32,7 +32,13 @@
   {
     "account": "Model",
     "discriminator": "`98ddf77ab97ddf97`",
-    "fields": 25,
+    "fields": 26,
+    "bytes": ""
+  },
+  {
+    "account": "Policy",
+    "discriminator": "`de8707a3ebb12144`",
+    "fields": 9,
     "bytes": ""
   },
   {

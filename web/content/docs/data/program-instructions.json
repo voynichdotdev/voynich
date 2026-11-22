@@ -142,5 +142,17 @@
     "arguments": "",
     "signers": "`authority`",
     "does": "Marks a published Measurement PDA as `Deprecated`. Callable only by its publisher or `Config.admin`."
+  },
+  {
+    "instruction": "set_policy",
+    "arguments": "`args: PolicyArgs`",
+    "signers": "`owner`",
+    "does": "Creates or updates a model's Policy PDA and sets `model.has_policy = true`. Callable only by the model's owner."
+  },
+  {
+    "instruction": "clear_policy",
+    "arguments": "",
+    "signers": "`owner`",
+    "does": "Closes a model's Policy PDA, returns its rent to the owner and sets `model.has_policy = false`. Callable only by the model's owner."
   }
 ]

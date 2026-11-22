@@ -3,12 +3,15 @@ title: Models and enclaves
 description: Read sealed models, enclaves and a wallet's own side from code.
 ---
 
-Seven read functions read what the API indexes from the chain (none needs a wallet, except `account` without an argument), and two write functions publish and deprecate on-chain measurement records. Each returns the response of one HTTP route, typed and checked against the API's schema, so the fields are told once, on that route's page.
+Eight read functions read what the API indexes from the chain (none needs a wallet, except `account` without an argument), and four write functions manage on-chain measurement records and model policies. Each returns the response of one HTTP route, typed and checked against the API's schema, so the fields are told once, on that route's page.
 
 | Function | Returns | Route |
 | --- | --- | --- |
 | `models(query?)` | A page of models. | [`GET /v1/models`](/docs/api/models) |
 | `model(id)` | One model, by name or address. | [`GET /v1/models/{id}`](/docs/api/models) |
+| `policy(modelId)` | The model's active `ModelPolicy`, or `null` when none exists. | [`GET /v1/models/{id}/policy`](/docs/api/models#get-v1modelsidpolicy) |
+| `setPolicy(modelId, input, options?)` | Signs `set_policy` and returns the indexed `ModelPolicy`. | [`POST /v1/models/{id}/policy/build`](/docs/api/models#post-v1modelsidpolicybuild) |
+| `clearPolicy(modelId, options?)` | Signs `clear_policy` and returns the confirmed `TxStatus`. | [`POST /v1/models/{id}/policy/clear/build`](/docs/api/models#post-v1modelsidpolicyclearbuild) |
 | `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
 | `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
 | `measurements(query?)` | A page of published measurement records. | [`GET /v1/measurements`](/docs/api/enclaves#get-v1measurements) |
@@ -48,6 +51,22 @@ console.log(model.manifest.labels)
 ```
 
 Takes the model's name or address. Throws an `ApiClientError` with `MODEL_NOT_FOUND` when there is none.
+
+## policy, setPolicy and clearPolicy
+
+```ts
+const current = await voynich.policy('sketch-32')
+
+const updated = await voynich.setPolicy('sketch-32', {
+  allowListEnabled: true,
+  allowedCallers: [callerAddress],
+  allowedOperators: [operatorAddress],
+})
+
+const cleared = await voynich.clearPolicy('sketch-32')
+```
+
+`policy(modelId)` reads the model's active `ModelPolicy` and returns `null` when the API answers `POLICY_NOT_FOUND`. `setPolicy(modelId, input, options?)` requires the model owner's signer (`WALLET_REQUIRED`), submits `set_policy`, waits for indexing, and resolves to the updated `ModelPolicy`. `clearPolicy(modelId, options?)` closes the `Policy` PDA, returns its rent to the owner, and resolves to `TxStatus`.
 
 ## enclaves and enclave
 

@@ -1,9 +1,9 @@
 ---
 title: Models
-description: Every model route of the Voynich HTTP API, from listing and reading models and their ciphertext to the cost quote and the seven builds of a model.
+description: Every model route of the Voynich HTTP API, from listing and reading models, policies and ciphertext to the cost quote and the eleven builds of a model.
 ---
 
-Five routes read models, one quotes the cost of sealing, and seven build the transactions that create and change a model. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models).
+Six routes read models and policies, one quotes the cost of sealing, and eleven build the transactions that create and change a model. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models).
 
 In every path, `{id}` is the model's account address or its name, such as `sketch-32`. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
 
@@ -80,6 +80,9 @@ Grants for this model that are not revoked and whose enclave's attestation recor
 </Field>
 <Field name="callsSettled" type="decimal string" required>
 Calls to this model that settled.
+</Field>
+<Field name="hasPolicy" type="boolean" required>
+True when the model has an active on-chain [ModelPolicy](#modelpolicy) PDA (`["policy", model]`).
 </Field>
 </Fields>
 
@@ -229,6 +232,40 @@ The ranges written so far, each `{ offset, length }` counted from the start of t
 </Field>
 </Fields>
 
+### ModelPolicy
+
+The on-chain owner policy returned by `GET /v1/models/{id}/policy`.
+
+<Fields>
+<Field name="address" type="address" required>
+The Policy PDA at `["policy", model]`.
+</Field>
+<Field name="model" type="address" required>
+The Model account governed by this policy.
+</Field>
+<Field name="allowListEnabled" type="boolean" required>
+When `true`, only addresses in `allowedCallers` can open calls on this model.
+</Field>
+<Field name="allowedCallers" type="array of addresses (max 32)" required>
+Distinct caller addresses permitted when `allowListEnabled` is `true`.
+</Field>
+<Field name="maxCallsPerCallerPerWindow" type="integer, 0 or more" required>
+Maximum calls per caller per `windowSlots` window (`0` disables rate limits when paired with `windowSlots: "0"`).
+</Field>
+<Field name="windowSlots" type="slot count" required>
+Window length in slots (`"0"` when rate limits are disabled).
+</Field>
+<Field name="allowedOperators" type="array of addresses (max 16)" required>
+Distinct enclave operator addresses allowed to hold grants for this model. Empty means any operator.
+</Field>
+<Field name="allowedRegions" type="array of region codes (max 8)" required>
+Distinct lowercase alphanumeric/hyphen region codes (`1` to `16` characters each). Empty means any region.
+</Field>
+<Field name="updatedSlot" type="slot" required>
+The slot the policy was last created or updated in.
+</Field>
+</Fields>
+
 ## `GET /v1/models`
 
 Lists models, one page at a time.
@@ -329,6 +366,15 @@ Lists the model's receipts, latest settling slot first. It takes `cursor` and `l
 Returns a [page](/docs/api/overview#pagination) whose `items` are [Receipt](/docs/api/calls-and-receipts#receipt) objects.
 
 Next: read one with its attestation record at [`GET /v1/receipts/{id}`](/docs/api/calls-and-receipts#get-v1receiptsid).
+
+## `GET /v1/models/{id}/policy`
+
+Reads the model's active on-chain [ModelPolicy](#modelpolicy).
+
+| Code | When |
+| --- | --- |
+| `MODEL_NOT_FOUND` | No model has this name or address. |
+| `POLICY_NOT_FOUND` | The model has no active on-chain Policy PDA (`404`). |
 
 ## `POST /v1/models/quote`
 
@@ -471,7 +517,7 @@ Next: when `canCreate` is `true`, create the Weights accounts at the addresses i
 
 ## Builds
 
-The nine routes below each return a [Build](/docs/api/transactions#build): an unsigned transaction and the addresses it creates. Sign it and send it through [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit). Signing, the order of signatures and the errors every build shares are in [Transactions](/docs/api/transactions).
+The eleven routes below each return a [Build](/docs/api/transactions#build): an unsigned transaction and the addresses it creates. Sign it and send it through [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit). Signing, the order of signatures and the errors every build shares are in [Transactions](/docs/api/transactions).
 
 Each build route can return `MODEL_NOT_FOUND` (except `POST /v1/models/build`), `INSUFFICIENT_FUNDS`, `SIMULATION_FAILED` and `PROGRAM_REFUSED` as told in [Errors from a build](/docs/api/transactions#errors-from-a-build). The tables below list what each adds.
 
@@ -822,6 +868,84 @@ The Build's `action` is `retire_model`. Its `addresses` hold `model`.
 
 | Code | When |
 | --- | --- |
+| `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`). |
+
+## `POST /v1/models/{id}/policy/build`
+
+Builds [`set_policy`](/docs/program/instructions#setpolicy): creates or updates the model's 1,770-byte `Policy` PDA (`["policy", model]`) and sets `model.has_policy = true`.
+
+```http
+POST /v1/models/sketch-32/policy/build
+Content-Type: application/json
+
+{
+  "wallet": "<owner address>",
+  "allowListEnabled": true,
+  "allowedCallers": ["<caller address>"],
+  "maxCallsPerCallerPerWindow": 0,
+  "windowSlots": "0",
+  "allowedOperators": [],
+  "allowedRegions": []
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The model's owner. Pays the fee and, on creation, the 1,770-byte Policy PDA's rent.
+</Field>
+<Field name="allowListEnabled" type="boolean" required>
+Whether to restrict `open_call` and `open_metered_call` to `allowedCallers`.
+</Field>
+<Field name="allowedCallers" type="array of addresses (max 32)">
+Distinct caller addresses allowed when `allowListEnabled` is `true`. Defaults to `[]`.
+</Field>
+<Field name="maxCallsPerCallerPerWindow" type="integer, 0 or more">
+Per-caller call limit within `windowSlots`. Defaults to `0`. Must be `0` if and only if `windowSlots` is `"0"`.
+</Field>
+<Field name="windowSlots" type="slot count">
+Rate-limit window length in slots. Defaults to `"0"`.
+</Field>
+<Field name="allowedOperators" type="array of addresses (max 16)">
+Distinct enclave operators allowed to receive grants. Defaults to `[]` (any operator).
+</Field>
+<Field name="allowedRegions" type="array of region codes (max 8)">
+Distinct lowercase alphanumeric/hyphen region codes (`1` to `16` chars each). Defaults to `[]` (any region).
+</Field>
+</Fields>
+
+The Build's `action` is `set_policy`. Its `addresses` hold `model` and `policy`.
+
+| Code | When |
+| --- | --- |
+| `VALIDATION_ERROR` | Duplicate addresses/regions, out-of-range counts, or mismatched zero/positive rate-limit fields. |
+| `INVALID_POLICY` | The program rejected the policy arguments. |
+| `INSUFFICIENT_FUNDS` | The owner lacks lamports for the fee and, on first creation, the 1,770-byte Policy PDA rent. |
+| `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`). |
+
+## `POST /v1/models/{id}/policy/clear/build`
+
+Builds [`clear_policy`](/docs/program/instructions#clearpolicy): closes the model's `Policy` PDA, returns its rent to the owner, and sets `model.has_policy = false`.
+
+```http
+POST /v1/models/sketch-32/policy/clear/build
+Content-Type: application/json
+
+{
+  "wallet": "<owner address>"
+}
+```
+
+<Fields>
+<Field name="wallet" type="address" required>
+The model's owner. Receives the closed Policy PDA's rent and signs.
+</Field>
+</Fields>
+
+The Build's `action` is `clear_policy`. Its `addresses` hold `model` and `policy`.
+
+| Code | When |
+| --- | --- |
+| `POLICY_NOT_FOUND` | The model has no active Policy PDA. |
 | `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`). |
 
 ## Read next

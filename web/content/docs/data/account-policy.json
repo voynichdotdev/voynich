@@ -1,0 +1,56 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model this policy governs."
+  },
+  {
+    "field": "allow_list_enabled",
+    "type": "bool",
+    "offset": "40",
+    "meaning": "When true, only wallets in `allowed_callers` may open calls on the model."
+  },
+  {
+    "field": "allowed_callers",
+    "type": "Vec<pubkey>",
+    "offset": "41",
+    "meaning": "Callers allowed to open calls when `allow_list_enabled` is true, up to 32 unique addresses."
+  },
+  {
+    "field": "max_calls_per_caller_per_window",
+    "type": "u32",
+    "offset": "",
+    "meaning": "Maximum calls per caller inside one `window_slots` window. `0` (with `window_slots = 0`) disables rate limits."
+  },
+  {
+    "field": "window_slots",
+    "type": "u64",
+    "offset": "",
+    "meaning": "Rate-limit window length in slots. Must be `0` when `max_calls_per_caller_per_window` is `0`, and positive otherwise."
+  },
+  {
+    "field": "allowed_operators",
+    "type": "Vec<pubkey>",
+    "offset": "",
+    "meaning": "Enclave operators allowed to receive grants for this model, up to 16 unique addresses. Empty means any operator."
+  },
+  {
+    "field": "allowed_regions",
+    "type": "Vec<string>",
+    "offset": "",
+    "meaning": "Allowed region codes, up to 8 unique codes of 1 to 16 lowercase letters, digits or hyphens each. Empty means any region."
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot the policy was last created or updated in."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "",
+    "meaning": "The PDA bump."
+  }
+]

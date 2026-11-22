@@ -79,6 +79,7 @@ const FIELDS = {
     merkle_frontier_mask: 'Bitmask of occupied levels in `merkle_frontier`, cleared to 0 on `seal_model`.',
     base: 'Optional `ModelBase` (`sha256`, `size_bytes`, `format`, `source`) binding a sealed adapter to a public open-weight base model. `None` for standalone models.',
     price_unit: 'Whether `price` is charged per `Call` (`0`) or per output `Token` (`1`).',
+    has_policy: 'True when an active Policy PDA exists for this model (`["policy", model]`). When true, `open_call`, `open_metered_call`, `grant_by_owner` and `grant_by_enclave` require the Policy PDA in remaining accounts.',
   },
   Enclave: {
     signing_key: 'The enclave\'s Ed25519 signing key, the key its attestation record names.',
@@ -102,6 +103,17 @@ const FIELDS = {
     version: 'Release version label, 1 to 32 bytes with no whitespace or control characters.',
     created_slot: 'The slot the measurement record was published in.',
     status: '`Active` (`0`) or `Deprecated` (`1`).',
+    bump: 'The PDA bump.',
+  },
+  Policy: {
+    model: 'The Model this policy governs.',
+    allow_list_enabled: 'When true, only wallets in `allowed_callers` may open calls on the model.',
+    allowed_callers: 'Callers allowed to open calls when `allow_list_enabled` is true, up to 32 unique addresses.',
+    max_calls_per_caller_per_window: 'Maximum calls per caller inside one `window_slots` window. `0` (with `window_slots = 0`) disables rate limits.',
+    window_slots: 'Rate-limit window length in slots. Must be `0` when `max_calls_per_caller_per_window` is `0`, and positive otherwise.',
+    allowed_operators: 'Enclave operators allowed to receive grants for this model, up to 16 unique addresses. Empty means any operator.',
+    allowed_regions: 'Allowed region codes, up to 8 unique codes of 1 to 16 lowercase letters, digits or hyphens each. Empty means any region.',
+    updated_slot: 'The slot the policy was last created or updated in.',
     bump: 'The PDA bump.',
   },
   Grant: {
@@ -209,6 +221,8 @@ const SAYS = {
   refund_call: 'Returns the escrow of a call past its deadline to the caller.',
   publish_measurement: 'Creates an immutable Measurement PDA binding a 48-byte SHA-384 digest to its source repo, commit SHA, recipe hash and version.',
   deprecate_measurement: 'Marks a published Measurement PDA as `Deprecated`. Callable only by its publisher or `Config.admin`.',
+  set_policy: 'Creates or updates a model\'s Policy PDA and sets `model.has_policy = true`. Callable only by the model\'s owner.',
+  clear_policy: 'Closes a model\'s Policy PDA, returns its rent to the owner and sets `model.has_policy = false`. Callable only by the model\'s owner.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -351,6 +365,14 @@ const ACCOUNTS = {
     authority: 'Either `measurement.publisher` or `config.admin`.',
     measurement: 'The active Measurement PDA to mark `Deprecated`.',
   },
+  set_policy: {
+    owner: 'The model\'s owner. Pays the 1,770-byte Policy PDA\'s rent on creation.',
+    policy: 'The Policy PDA at `["policy", model]`, created if needed or updated in place.',
+  },
+  clear_policy: {
+    owner: 'The model\'s owner. Receives the closed Policy PDA\'s rent.',
+    policy: 'The Policy PDA at `["policy", model]`, closed here.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -411,6 +433,8 @@ const EVENTS = {
   CallRefunded: ['refund_call', 'A call\'s escrow returned to the caller.'],
   MeasurementPublished: ['publish_measurement', 'A 48-byte enclave measurement was published with its source commit and recipe hash.'],
   MeasurementDeprecated: ['deprecate_measurement', 'A published measurement was marked `Deprecated`.'],
+  PolicyUpdated: ['set_policy', 'A model\'s on-chain Policy PDA was created or updated.'],
+  PolicyCleared: ['clear_policy', 'A model\'s on-chain Policy PDA was closed and cleared.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -451,6 +475,10 @@ const RAISED = {
   InvalidCallback: 'In `open_call` or `open_metered_call`: `callback.program` is the default address or the `voynich` program itself, or `callback.accounts` has more than 8 entries. In `settle_call` or `settle_metered_call`: remaining accounts do not match `[callback_program, ...callback_accounts]`, the callback program is not executable, or a writable callback account is passed read-only.',
   InvalidCall: 'In `open_call`: the model is priced per `Token`. In `open_metered_call`: the model is priced per `Call`, `ceiling` is below `model.price`, or `ceiling` is `0` when `model.price > 0`. In `settle_call`: the call is priced per `Token`. In `settle_metered_call`: the call is not priced per `Token` or the receipt PDA is already initialized.',
   InvalidMeasurement: 'In `publish_measurement`: an all-zero `digest` or `recipe_hash`, an empty/oversized/whitespace `source_repo` (max 128) or `version` (max 32), or a `commit_sha` outside 7 to 64 hex characters. In `deprecate_measurement`: the measurement is already `Deprecated`.',
+  InvalidPolicy: 'In `set_policy`: `allowed_callers` exceeds 32 or has duplicates, `allowed_operators` exceeds 16 or has duplicates, `allowed_regions` exceeds 8 or has duplicates or invalid codes (outside 1 to 16 lowercase letters, digits or hyphens), or only one of `max_calls_per_caller_per_window` and `window_slots` is zero.',
+  PolicyCallerDenied: 'In `open_call` or `open_metered_call`: the model\'s Policy has `allow_list_enabled` set and `caller` is not in `allowed_callers`.',
+  PolicyOperatorDenied: 'In `grant_by_owner` or `grant_by_enclave`: the model\'s Policy has a non-empty `allowed_operators` list and `target_enclave.operator` is not in it.',
+  PolicyRequired: 'In `open_call`, `open_metered_call`, `grant_by_owner` or `grant_by_enclave`: `model.has_policy` is true, but the canonical Policy PDA (`["policy", model]`, owned by the Voynich program) was omitted from remaining accounts.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -503,6 +531,11 @@ const API_ERRORS = {
   MEASUREMENT_ALREADY_EXISTS: 'A measurement record for this 48-byte digest is already published on chain.',
   MEASUREMENT_DEPRECATED: 'This measurement record is already marked deprecated.',
   INVALID_MEASUREMENT: 'The measurement digest, recipe hash, source repository, commit SHA, or version is invalid.',
+  POLICY_NOT_FOUND: 'This model has no active on-chain policy.',
+  INVALID_POLICY: 'The policy limits, callers, operators, or regions are invalid.',
+  POLICY_CALLER_DENIED: 'The caller is not on this model\'s allow list.',
+  POLICY_OPERATOR_DENIED: 'The enclave operator is not allowed by this model\'s policy.',
+  POLICY_REQUIRED: 'This model has an active policy; pass its Policy account in remaining accounts.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

@@ -7,7 +7,7 @@ description: Every export of the voynich package and every error it raises.
 
 | Export | Kind | What it is |
 | --- | --- | --- |
-| `default` | client | In Node: `call`, `stream`, `openStream`, `streamPieces`, `settle`, `verify`, `seal`, `models`, `model`, `enclaves`, `enclave`, `measurements`, `measurement`, `publishMeasurement`, `deprecateMeasurement`, `grant`, `revoke`, `setPrice`, `retire`, `refund` and `account`, configured from `VOYNICH_API_URL` and `VOYNICH_KEYPAIR` on first use. The functions that sign read `VOYNICH_KEYPAIR`; the reads do not. |
+| `default` | client | In Node: `call`, `stream`, `openStream`, `streamPieces`, `settle`, `verify`, `seal`, `models`, `model`, `policy`, `setPolicy`, `clearPolicy`, `enclaves`, `enclave`, `measurements`, `measurement`, `publishMeasurement`, `deprecateMeasurement`, `grant`, `revoke`, `setPrice`, `retire`, `refund` and `account`, configured from `VOYNICH_API_URL` and `VOYNICH_KEYPAIR` on first use. The functions that sign read `VOYNICH_KEYPAIR`; the reads do not. |
 | `createVoynich(options)` | function | Creates a client. See [Install](/docs/sdk/install#options). |
 | `VoynichError` | class | The error the client throws. See [Errors](#errors). |
 | `verifyStreamPiece(params)` | function | Verifies one encrypted signed `StreamPiece` against sequential index, monotonic count, piece SHA-256, `streamNextHash` chain, and Ed25519 `voynich/piece/v1` or `voynich/piece/v2` signature before decrypting its payload. |
@@ -30,7 +30,7 @@ description: Every export of the voynich package and every error it raises.
 
 Everything in `voynich/crypto` and `voynich/adapter` is exported from `voynich` as well.
 
-The types of what the API returns (`Model`, `ModelBase`, `PriceUnit`, `TokenizerRef`, `TokenizerFormat`, `Enclave`, `MeasurementStatus`, `MeasurementRecord`, `MeasurementsPage`, `MeasurementQuery`, `PublishMeasurementRequest`, `Grant`, `Call`, `CallAnswer`, `StreamFinishReason`, `StreamPiece`, `CallStreamDone`, `CallPieces`, `StopCallRequest`, `StopCallAccepted`, `SettleCallRequest`, `Receipt`, `ReceiptView`, `Money`, `Manifest`, `Build`, `TxStatus` and the rest), the contract limits (`MODEL_BASE_FORMATS`, `TOKENIZER_FORMATS`, `MAX_BASE_FORMAT`, `MAX_BASE_SOURCE`, `PROGRAM_LIMITS`), and `ApiClientError` come from `@voynich/contract`. Their fields are on the [HTTP API](/docs/api/overview) pages.
+The types of what the API returns (`Model`, `ModelBase`, `ModelPolicy`, `PolicyRegion`, `SetPolicyRequest`, `PriceUnit`, `TokenizerRef`, `TokenizerFormat`, `Enclave`, `MeasurementStatus`, `MeasurementRecord`, `MeasurementsPage`, `MeasurementQuery`, `PublishMeasurementRequest`, `Grant`, `Call`, `CallAnswer`, `StreamFinishReason`, `StreamPiece`, `CallStreamDone`, `CallPieces`, `StopCallRequest`, `StopCallAccepted`, `SettleCallRequest`, `Receipt`, `ReceiptView`, `Money`, `Manifest`, `Build`, `TxStatus` and the rest), the contract limits (`MODEL_BASE_FORMATS`, `TOKENIZER_FORMATS`, `MAX_BASE_FORMAT`, `MAX_BASE_SOURCE`, `PROGRAM_LIMITS`), and `ApiClientError` come from `@voynich/contract`. Their fields are on the [HTTP API](/docs/api/overview) pages.
 
 ## voynich/crypto
 
@@ -103,9 +103,11 @@ Browser and Node compatible, zero Node-only imports.
 | --- | --- |
 | `PROGRAM_ID` | The address of the `voynich` program the SDK is built for, as a `PublicKey`. |
 | `ATTESTATION_PROGRAM_ID` | The address of the attestation program in the SDK's IDL. The client reads the one in force from the chain's Config. |
-| `addresses(programId?, attestationProgramId?)` | The PDAs: `config`, `model(name)`, `enclave(signingKey)`, `grant(model, enclave)`, `call(caller, nonce)`, `receipt(call)`, `measurement(digest)`, `record(signingKey)`. Keys are `PublicKey` or base58 strings; `nonce` is a `bigint`; `digest` is 48 bytes or 96-hex. |
+| `addresses(programId?, attestationProgramId?)` | The PDAs: `config`, `model(name)`, `enclave(signingKey)`, `grant(model, enclave)`, `call(caller, nonce)`, `receipt(call)`, `measurement(digest)`, `policy(model)`, `record(signingKey)`. Keys are `PublicKey` or base58 strings; `nonce` is a `bigint`; `digest` is 48 bytes or 96-hex. |
 | `measurementPda(digest, programId?)` | Derives the `Measurement` PDA (`["measurement", digest[..32], digest[32..]]`). `MEASUREMENT_SPACE` is `366` bytes. |
 | `decodeMeasurementAccount(data)` | Decodes a 366-byte on-chain `Measurement` account into `{ digest, publisher, sourceRepo, commitSha, recipeHash, version, createdSlot, status, bump }`. |
+| `policyPda(model, programId?)` | Derives the `Policy` PDA (`["policy", model]`). `POLICY_SPACE` is `1770` bytes. |
+| `decodePolicyAccount(data)` | Decodes a 1,770-byte on-chain `Policy` account into `{ model, allowListEnabled, allowedCallers, maxCallsPerCallerPerWindow, windowSlots, allowedOperators, allowedRegions, updatedSlot, bump }`. |
 | `pda(programId, ...seeds)` | A PDA from raw seeds. |
 | `eventAccounts(programId)` | `{ eventAuthority, program }`, the two accounts every instruction ends with. |
 | `chainPrograms(connection, ids?)` | Typed Anchor program clients, `{ voynich, attest }`, for reading accounts and decoding events. |

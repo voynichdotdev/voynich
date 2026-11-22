@@ -1,0 +1,38 @@
+[
+  {
+    "field": "policy",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "allow_list_enabled",
+    "type": "bool"
+  },
+  {
+    "field": "allowed_callers",
+    "type": "Vec<pubkey>"
+  },
+  {
+    "field": "max_calls_per_caller_per_window",
+    "type": "u32"
+  },
+  {
+    "field": "window_slots",
+    "type": "u64"
+  },
+  {
+    "field": "allowed_operators",
+    "type": "Vec<pubkey>"
+  },
+  {
+    "field": "allowed_regions",
+    "type": "Vec<string>"
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64"
+  }
+]

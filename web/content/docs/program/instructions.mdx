@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 24 instructions.
+The program has 26 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -179,7 +179,7 @@ Writes a Grant from the owner to an enclave.
 
 <Rows data="ix-grant-by-owner" />
 
-- **Checks.** The signer is the model's owner (`Unauthorized`). The model is `Sealed` or `Live` (`ModelNotSealed`). The record passed is the one the target Enclave names and still states the Enclave's hardware type and measurement (`InvalidEnclave`), and it is valid and unexpired (`InvalidAttestation`). The measurement is in the model's allowed measurements (`MeasurementNotAllowed`). The wrapped key is 105 bytes and starts with byte 1 (`InvalidWrappedKey`).
+- **Checks.** The signer is the model's owner (`Unauthorized`). The model is `Sealed` or `Live` (`ModelNotSealed`). The record passed is the one the target Enclave names and still states the Enclave's hardware type and measurement (`InvalidEnclave`), and it is valid and unexpired (`InvalidAttestation`). The measurement is in the model's allowed measurements (`MeasurementNotAllowed`). The wrapped key is 105 bytes and starts with byte 1 (`InvalidWrappedKey`). When `model.has_policy` is true, remaining accounts must include the canonical `Policy` PDA (`PolicyRequired`) and, if `policy.allowed_operators` is non-empty, `target_enclave.operator` must be in it (`PolicyOperatorDenied`).
 - **Effects.** The Grant holds the wrapped key, the owner as `granted_by` and the current slot, and is not revoked. A Grant that existed for this model and enclave is written over, which also lifts a revocation. The model's status is `Live`. Emits `GrantChanged` and `ModelStatusChanged`.
 
 ## grant_by_enclave
@@ -190,7 +190,7 @@ Writes a Grant from an enclave that holds one to another enclave. The owner does
 
 <Rows data="ix-grant-by-enclave" />
 
-- **Checks.** The signer is the source enclave's signing key (`Unauthorized`). The model is `Live` (`ModelNotLive`). The source and the target are different enclaves (`InvalidEnclave`). The source holds a Grant for this model that is not revoked (`GrantRequired`). Both records are the ones their Enclaves name, are valid and are unexpired (`InvalidEnclave`, `InvalidAttestation`). Both measurements are in the model's allowed measurements (`MeasurementNotAllowed`). The wrapped key is 105 bytes and starts with byte 1 (`InvalidWrappedKey`).
+- **Checks.** The signer is the source enclave's signing key (`Unauthorized`). The model is `Live` (`ModelNotLive`). The source and the target are different enclaves (`InvalidEnclave`). The source holds a Grant for this model that is not revoked (`GrantRequired`). Both records are the ones their Enclaves name, are valid and are unexpired (`InvalidEnclave`, `InvalidAttestation`). Both measurements are in the model's allowed measurements (`MeasurementNotAllowed`). The wrapped key is 105 bytes and starts with byte 1 (`InvalidWrappedKey`). When `model.has_policy` is true, remaining accounts must include the canonical `Policy` PDA (`PolicyRequired`) and, if `policy.allowed_operators` is non-empty, `target_enclave.operator` must be in it (`PolicyOperatorDenied`).
 - **Effects.** The Grant holds the wrapped key, the source Enclave's address as `granted_by` and the current slot. Emits `GrantChanged`.
 
 ## revoke_grant
@@ -212,7 +212,7 @@ Creates a per-call Call and moves the model's price into its escrow.
 
 `nonce` is any number the caller has not used before: it gives the Call its address, `["call", caller, nonce]`. For a direct wallet call, `payer` and `caller` are the same signer. When another Solana program opens a call through CPI, `caller` is that program's system-owned PDA signed via `invoke_signed` (which holds the escrow and receives any refund), while `payer` is a signer paying the Call account rent and any escrow token account rent. `callback` is optional (`CallbackSpec { program: pubkey, accounts: Vec<CallbackAccount> }`, where each `CallbackAccount` is `{ pubkey: pubkey, is_writable: bool }`) and registers an `on_receipt` CPI target invoked during `settle_call`. For a price in SOL the five token accounts and programs are left out.
 
-- **Checks.** The model is `Live` (`ModelNotLive`) and has `price_unit == PriceUnit::Call` (`InvalidCall`). The enclave's Grant for the model is not revoked (`GrantRequired`). The record is the one the Enclave names, valid and unexpired (`InvalidEnclave`, `InvalidAttestation`), and its measurement is allowed (`MeasurementNotAllowed`). The operator share plus the protocol share is at most 10,000 (`InvalidConfig`). When `callback` is `Some`: `callback.program` is neither the default address nor the `voynich` program itself, and `callback.accounts` has at most 8 entries (`InvalidCallback`). For a price in a mint: the mint is the model's price mint, the caller's token account holds that mint, and the escrow account is the Call's associated token account (`InvalidTokenAccount`).
+- **Checks.** The model is `Live` (`ModelNotLive`) and has `price_unit == PriceUnit::Call` (`InvalidCall`). The enclave's Grant for the model is not revoked (`GrantRequired`). The record is the one the Enclave names, valid and unexpired (`InvalidEnclave`, `InvalidAttestation`), and its measurement is allowed (`MeasurementNotAllowed`). When `model.has_policy` is true, remaining accounts must include the canonical `Policy` PDA (`PolicyRequired`) and, if `policy.allow_list_enabled` is true, `caller` must be in `policy.allowed_callers` (`PolicyCallerDenied`). The operator share plus the protocol share is at most 10,000 (`InvalidConfig`). When `callback` is `Some`: `callback.program` is neither the default address nor the `voynich` program itself, and `callback.accounts` has at most 8 entries (`InvalidCallback`). For a price in a mint: the mint is the model's price mint, the caller's token account holds that mint, and the escrow account is the Call's associated token account (`InvalidTokenAccount`).
 - **Effects.** The Call holds the caller, the model, the enclave, the input hash, `answer_mode`, `caller_is_program` (`true` when invoked via CPI, `false` otherwise), `callback_program` and `callback_accounts` (default address and empty list when `callback` is `None`), `price_unit = Call`, `ceiling = model.price`, the price and mint, the owner, the operator, the fee recipient and both shares as they are now, the opening slot and the deadline slot (the opening slot plus the Config's `call_deadline_slots`). The price moves from `caller` into the escrow. Emits `CallOpened`.
 
 ## open_metered_call
@@ -280,3 +280,23 @@ Marks a published `Measurement` PDA as `Deprecated`.
 
 - **Checks.** `authority` is either `measurement.publisher` or `config.admin` (`Unauthorized`). `measurement.status` is `Active` (`InvalidMeasurement` if already `Deprecated`).
 - **Effects.** Sets `measurement.status = Deprecated` and emits `MeasurementDeprecated`.
+
+## set_policy
+
+Creates or updates a model's 1,770-byte `Policy` PDA at `["policy", model]` and sets `model.has_policy = true`.
+
+<Rows data="ix-set-policy-args" />
+
+<Rows data="ix-set-policy" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). `allowed_callers` has at most 32 unique keys, `allowed_operators` has at most 16 unique keys, `allowed_regions` has at most 8 unique codes of 1 to 16 lowercase letters, digits or hyphens each, and `max_calls_per_caller_per_window` and `window_slots` are either both `0` or both positive (`InvalidPolicy`).
+- **Effects.** Initializes (if needed, rent paid by `owner`) or updates the `Policy` account with `updated_slot = clock.slot`, sets `model.has_policy = true`, and emits `PolicyUpdated`.
+
+## clear_policy
+
+Closes a model's `Policy` PDA, returns its rent to `owner`, and sets `model.has_policy = false`.
+
+<Rows data="ix-clear-policy" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). `policy` is the canonical `["policy", model]` PDA belonging to `model`.
+- **Effects.** Closes `policy` to `owner`, sets `model.has_policy = false`, and emits `PolicyCleared`.

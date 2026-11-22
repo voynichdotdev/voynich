@@ -95,6 +95,21 @@
     "does": "Build retire_model"
   },
   {
+    "route": "GET /v1/models/{id}/policy",
+    "operation": "modelPolicy",
+    "does": "Read the active owner policy for a model"
+  },
+  {
+    "route": "POST /v1/models/{id}/policy/build",
+    "operation": "setPolicy",
+    "does": "Build set_policy to configure caller allow lists, rate ceilings, allowed operators, and regions as the model owner"
+  },
+  {
+    "route": "POST /v1/models/{id}/policy/clear/build",
+    "operation": "clearPolicy",
+    "does": "Build clear_policy to remove a model policy and return rent to the owner"
+  },
+  {
     "route": "GET /v1/enclaves",
     "operation": "enclaves",
     "does": "Browse live and expired enclaves"

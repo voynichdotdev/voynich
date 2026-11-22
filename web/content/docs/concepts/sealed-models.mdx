@@ -23,6 +23,7 @@ A sealed model is two kinds of account:
 | Cipher | The cipher id, the chunk size and the nonce prefix. See [The cipher](#the-cipher). |
 | Base model | Optional `ModelBase` (`sha256`, `sizeBytes`, `format` in `onnx`/`safetensors`/`gguf`, and `source` URI in `https://`/`http://`/`ipfs://`/`hf://`) pinning a sealed adapter to a public open-weight base model. `null` for standalone models. Displayed as `Base model` and `Base SHA-256` on `/models/<name>`. |
 | Allowed measurements | The enclave software that may open the model: 1 to 8 measurements. See [Allowed measurements](#allowed-measurements). |
+| Policy | Optional `Policy` PDA (`["policy", model]`, flagged by `hasPolicy`) governing caller allow lists, per-caller rate ceilings, allowed enclave operators and allowed regions. See [Owner policies](#owner-policies). |
 | Price and mint | What one call costs, in base units of the mint the owner chose. No mint means SOL. |
 | Operator share | The part of each call's price paid to the operator whose enclave answers, in basis points. The split is told in [Fees and the token](/docs/concepts/fees-and-the-token). |
 | Status | `uploading`, `sealed`, `live` or `retired`. See [Statuses](#statuses). |
@@ -122,6 +123,14 @@ GET /v1/models/sketch-32/weights?offset=0&length=256
 A measurement is the 48-byte fingerprint of the software running inside an enclave, written as 96 lowercase hex characters. The attestation record records it with the enclave's key.
 
 A Model lists 1 to 8 measurements, set when the model is created. A grant is made only to an enclave whose recorded measurement is on that list. The owner chooses which enclave software may ever hold the model's key, and the list is public. See [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+
+## Owner policies
+
+A model owner can attach an optional on-chain `Policy` PDA at `["policy", model]` (`set_policy`, closed with rent returned via `clear_policy`). When active (`model.has_policy` is true), the fixed account layouts of `open_call`, `open_metered_call`, `grant_by_owner` and `grant_by_enclave` stay unchanged, and the program requires the canonical `Policy` PDA in remaining accounts (`PolicyRequired` if omitted). The API's transaction builders attach it automatically.
+
+- **Caller allow list.** When `allow_list_enabled` is true, only wallets in `allowed_callers` (up to 32 unique addresses) can open calls on the model (`PolicyCallerDenied` otherwise).
+- **Allowed operators.** When `allowed_operators` (up to 16 unique addresses) is non-empty, `grant_by_owner` and `grant_by_enclave` accept only enclaves whose `operator` is on the list (`PolicyOperatorDenied` otherwise).
+- **Rate limits and regions.** The `Policy` account also records `max_calls_per_caller_per_window`, `window_slots` (both `0` or both positive), and up to 8 `allowed_regions` (1 to 16 lowercase letters, digits or hyphens each).
 
 ## Sealed adapters (base + adapter)
 

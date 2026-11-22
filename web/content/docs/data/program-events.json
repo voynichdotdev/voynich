@@ -94,5 +94,17 @@
     "discriminator": "`25ec9b5b86d0d0c9`",
     "emittedBy": "`deprecate_measurement`",
     "says": "A published measurement was marked `Deprecated`."
+  },
+  {
+    "event": "PolicyUpdated",
+    "discriminator": "`e17070435fecf5a1`",
+    "emittedBy": "`set_policy`",
+    "says": "A model's on-chain Policy PDA was created or updated."
+  },
+  {
+    "event": "PolicyCleared",
+    "discriminator": "`71d1840effc00c0b`",
+    "emittedBy": "`clear_policy`",
+    "says": "A model's on-chain Policy PDA was closed and cleared."
   }
 ]

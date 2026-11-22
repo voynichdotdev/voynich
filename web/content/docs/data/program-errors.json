@@ -187,5 +187,33 @@
     "hex": "`0x178a`",
     "message": "The measurement digest, source metadata, or status is invalid.",
     "raisedWhen": "In `publish_measurement`: an all-zero `digest` or `recipe_hash`, an empty/oversized/whitespace `source_repo` (max 128) or `version` (max 32), or a `commit_sha` outside 7 to 64 hex characters. In `deprecate_measurement`: the measurement is already `Deprecated`."
+  },
+  {
+    "name": "InvalidPolicy",
+    "code": "6027",
+    "hex": "`0x178b`",
+    "message": "The model policy limits, callers, operators, or regions are invalid.",
+    "raisedWhen": "In `set_policy`: `allowed_callers` exceeds 32 or has duplicates, `allowed_operators` exceeds 16 or has duplicates, `allowed_regions` exceeds 8 or has duplicates or invalid codes (outside 1 to 16 lowercase letters, digits or hyphens), or only one of `max_calls_per_caller_per_window` and `window_slots` is zero."
+  },
+  {
+    "name": "PolicyCallerDenied",
+    "code": "6028",
+    "hex": "`0x178c`",
+    "message": "The caller is not on this model's allow list.",
+    "raisedWhen": "In `open_call` or `open_metered_call`: the model's Policy has `allow_list_enabled` set and `caller` is not in `allowed_callers`."
+  },
+  {
+    "name": "PolicyOperatorDenied",
+    "code": "6029",
+    "hex": "`0x178d`",
+    "message": "The enclave operator is not allowed by this model's policy.",
+    "raisedWhen": "In `grant_by_owner` or `grant_by_enclave`: the model's Policy has a non-empty `allowed_operators` list and `target_enclave.operator` is not in it."
+  },
+  {
+    "name": "PolicyRequired",
+    "code": "6030",
+    "hex": "`0x178e`",
+    "message": "This model has an active policy; pass its Policy account in remaining accounts.",
+    "raisedWhen": "In `open_call`, `open_metered_call`, `grant_by_owner` or `grant_by_enclave`: `model.has_policy` is true, but the canonical Policy PDA (`[\"policy\", model]`, owned by the Voynich program) was omitted from remaining accounts."
   }
 ]

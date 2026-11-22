@@ -1,0 +1,42 @@
+[
+  {
+    "account": "owner",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The model's owner. Receives the closed Policy PDA's rent."
+  },
+  {
+    "account": "model",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "policy",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"policy\", model]`",
+    "is": "The Policy PDA at `[\"policy\", model]`, closed here."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

@@ -125,6 +125,31 @@
     "meaning": "The measurement digest, recipe hash, source repository, commit SHA, or version is invalid."
   },
   {
+    "code": "POLICY_NOT_FOUND",
+    "status": "404",
+    "meaning": "This model has no active on-chain policy."
+  },
+  {
+    "code": "INVALID_POLICY",
+    "status": "422",
+    "meaning": "The policy limits, callers, operators, or regions are invalid."
+  },
+  {
+    "code": "POLICY_CALLER_DENIED",
+    "status": "403",
+    "meaning": "The caller is not on this model's allow list."
+  },
+  {
+    "code": "POLICY_OPERATOR_DENIED",
+    "status": "403",
+    "meaning": "The enclave operator is not allowed by this model's policy."
+  },
+  {
+    "code": "POLICY_REQUIRED",
+    "status": "409",
+    "meaning": "This model has an active policy; pass its Policy account in remaining accounts."
+  },
+  {
     "code": "GRANT_REQUIRED",
     "status": "409",
     "meaning": "The enclave holds no live grant for the model."
