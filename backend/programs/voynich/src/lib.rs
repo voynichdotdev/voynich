@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-
 pub mod attestation;
 pub mod contexts;
 pub mod errors;
@@ -8,34 +7,37 @@ pub mod handlers;
 pub mod money;
 pub mod state;
 pub mod weights;
+pub mod ed25519 { include!("../../shared/ed25519.rs"); }
 
+use contexts::*;
+use state::*;
 declare_id!("65H3C7T6C2DmbkR9ssBBmNtqpybWcYwotkkETL4E7RSS");
 
 #[program]
 pub mod voynich {
     use super::*;
-
-    pub fn initialize(ctx: Context<InitializeConfig>, protocol_share_bps: u16) -> Result<()> {
-        handlers::initialize_config(ctx, protocol_share_bps)
-    }
-
-    pub fn create_model(ctx: Context<CreateModel>, id_hash: [u8; 32], price_amount: u64) -> Result<()> {
-        handlers::create_model(ctx, id_hash, price_amount)
-    }
-}
-
-#[derive(Accounts)]
-pub struct InitializeConfig<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(mut)]
-    pub config: Account<'info, state::Config>,
-}
-
-#[derive(Accounts)]
-pub struct CreateModel<'info> {
-    #[account(mut)]
-    pub owner: Signer<'info>,
-    #[account(mut)]
-    pub model: Account<'info, state::Model>,
+    pub fn initialize(ctx: Context<Initialize>, args: ConfigArgs) -> Result<()> { handlers::initialize(ctx, args) }
+    pub fn set_config(ctx: Context<SetConfig>, args: ConfigArgs) -> Result<()> { handlers::set_config(ctx, args) }
+    pub fn migrate_config(ctx: Context<MigrateConfig>, max_open_answer_bytes: u16) -> Result<()> { handlers::migrate_config(ctx, max_open_answer_bytes) }
+    pub fn migrate_model(ctx: Context<MigrateModel>) -> Result<()> { handlers::migrate_model(ctx) }
+    pub fn create_model<'info>(ctx: Context<'_, '_, 'info, 'info, CreateModel<'info>>, args: CreateModelArgs) -> Result<()> { handlers::create_model(ctx, args) }
+    pub fn attach_weights<'info>(ctx: Context<'_, '_, '_, 'info, AttachWeights<'info>>) -> Result<()> { handlers::attach_weights(ctx) }
+    pub fn write_weights(ctx: Context<WriteWeights>, offset: u32, bytes: Vec<u8>) -> Result<()> { handlers::write_weights(ctx, offset, bytes) }
+    pub fn seal_range<'info>(ctx: Context<'_, '_, '_, 'info, SealRange<'info>>, chunk_count: u32) -> Result<()> { handlers::seal_range(ctx, chunk_count) }
+    pub fn seal_model<'info>(ctx: Context<'_, '_, '_, 'info, SealModel<'info>>, ciphertext_sha256: [u8;32]) -> Result<()> { handlers::seal_model(ctx, ciphertext_sha256) }
+    pub fn set_price(ctx: Context<ModelOwner>, price: u64, price_mint: Pubkey, operator_share_bps: u16, price_unit: PriceUnit) -> Result<()> { handlers::set_price(ctx, price, price_mint, operator_share_bps, price_unit) }
+    pub fn retire_model(ctx: Context<ModelOwner>) -> Result<()> { handlers::retire_model(ctx) }
+    pub fn set_allowed_measurements(ctx: Context<ModelOwner>, allowed_measurements: Vec<[u8; 48]>) -> Result<()> { handlers::set_allowed_measurements(ctx, allowed_measurements) }
+    pub fn register_enclave(ctx: Context<RegisterEnclave>, encryption_key: [u8;32], endpoint: String) -> Result<()> { handlers::register_enclave(ctx, encryption_key, endpoint) }
+    pub fn refresh_enclave(ctx: Context<RefreshEnclave>, endpoint: String) -> Result<()> { handlers::refresh_enclave(ctx, endpoint) }
+    pub fn grant_by_owner(ctx: Context<GrantByOwner>, wrapped_key: Vec<u8>) -> Result<()> { handlers::grant_by_owner(ctx, wrapped_key) }
+    pub fn grant_by_enclave(ctx: Context<GrantByEnclave>, wrapped_key: Vec<u8>) -> Result<()> { handlers::grant_by_enclave(ctx, wrapped_key) }
+    pub fn revoke_grant(ctx: Context<RevokeGrant>) -> Result<()> { handlers::revoke_grant(ctx) }
+    pub fn open_call(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answer_mode: AnswerMode, callback: Option<CallbackSpec>) -> Result<()> { handlers::open_call(ctx, nonce, input_hash, answer_mode, callback) }
+    pub fn open_metered_call(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answer_mode: AnswerMode, callback: Option<CallbackSpec>, ceiling: u64) -> Result<()> { handlers::open_metered_call(ctx, nonce, input_hash, answer_mode, callback, ceiling) }
+    pub fn settle_call<'info>(ctx: Context<'_, '_, '_, 'info, SettleCall<'info>>, output_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16, open_answer: Vec<u8>) -> Result<()> { handlers::settle_call(ctx, output_hash, signature, ed25519_instruction_index, open_answer) }
+    pub fn settle_metered_call<'info>(ctx: Context<'_, '_, '_, 'info, SettleMeteredCall<'info>>, count: u64, running_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16) -> Result<()> { handlers::settle_metered_call(ctx, count, running_hash, signature, ed25519_instruction_index) }
+    pub fn refund_call(ctx: Context<RefundCall>) -> Result<()> { handlers::refund_call(ctx) }
+    pub fn publish_measurement(ctx: Context<PublishMeasurement>, digest: [u8; 48], source_repo: String, commit_sha: String, recipe_hash: [u8; 32], version: String) -> Result<()> { handlers::publish_measurement(ctx, digest, source_repo, commit_sha, recipe_hash, version) }
+    pub fn deprecate_measurement(ctx: Context<DeprecateMeasurement>) -> Result<()> { handlers::deprecate_measurement(ctx) }
 }
