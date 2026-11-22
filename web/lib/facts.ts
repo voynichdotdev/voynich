@@ -185,7 +185,7 @@ export const LINKS = {
     earnings: '/docs/operators/earnings',
   },
   x: process.env.NEXT_PUBLIC_X_URL || 'https://x.com/voynichdotdev',
-  github: process.env.NEXT_PUBLIC_GITHUB_URL ?? '',
+  github: process.env.NEXT_PUBLIC_GITHUB_URL || 'https://github.com/voynichdotdev/voynich',
 } as const
 
 export const SOURCES = {
