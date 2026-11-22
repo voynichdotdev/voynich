@@ -4292,3 +4292,115 @@ test('Build 5 Step 3: voynich measurement CLI list, show, publish, verify (--rec
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 7 Step 1: policyPda, decodePolicyAccount, fixture policy routes (allow-list & operator enforcement), and SDK policy/setPolicy/clearPolicy', async () => {
+  const { Keypair } = await import('@solana/web3.js')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { createVoynich } = await import('voynich')
+  const { POLICY_SPACE, decodePolicyAccount, policyPda } = await import('voynich/program')
+  const { sha256, utf8 } = await import('voynich/crypto')
+  const { buildApp } = await import('../src/app.js')
+
+  // 1. policyPda & decodePolicyAccount on a 1770-byte Anchor Policy layout.
+  const modelKey = Keypair.generate().publicKey
+  const callerKey = Keypair.generate().publicKey
+  const operatorKey = Keypair.generate().publicKey
+  const pdaKey = policyPda(modelKey)
+  assert.equal(pdaKey.toBase58(), policyPda(modelKey.toBase58()).toBase58())
+
+  const raw = Buffer.alloc(POLICY_SPACE)
+  let off = 0
+  raw.set(sha256(utf8('account:Policy')).subarray(0, 8), off); off += 8
+  raw.set(modelKey.toBytes(), off); off += 32
+  raw[off++] = 1 // allow_list_enabled
+  raw.writeUInt32LE(1, off); off += 4
+  raw.set(callerKey.toBytes(), off); off += 32
+  raw.writeUInt32LE(25, off); off += 4
+  raw.writeBigUInt64LE(600n, off); off += 8
+  raw.writeUInt32LE(1, off); off += 4
+  raw.set(operatorKey.toBytes(), off); off += 32
+  raw.writeUInt32LE(2, off); off += 4
+  for (const r of ['us-east', 'eu-west']) {
+    const b = Buffer.from(r, 'utf8')
+    raw.writeUInt32LE(b.length, off); off += 4
+    raw.set(b, off); off += b.length
+  }
+  raw.writeBigUInt64LE(472700000n, off); off += 8
+  raw[off++] = 252
+  const decoded = decodePolicyAccount(raw)
+  assert.equal(decoded.model.toBase58(), modelKey.toBase58())
+  assert.equal(decoded.allowListEnabled, true)
+  assert.deepEqual(decoded.allowedCallers.map(k => k.toBase58()), [callerKey.toBase58()])
+  assert.equal(decoded.maxCallsPerCallerPerWindow, 25)
+  assert.equal(decoded.windowSlots.toString(), '600')
+  assert.deepEqual(decoded.allowedOperators.map(k => k.toBase58()), [operatorKey.toBase58()])
+  assert.deepEqual(decoded.allowedRegions, ['us-east', 'eu-west'])
+  assert.equal(decoded.updatedSlot.toString(), '472700000')
+  assert.equal(decoded.bump, 252)
+
+  // 2. Fixture API + SDK policy(), setPolicy(), allow-list & operator enforcement, clearPolicy().
+  const app = buildApp()
+  const sessionId = 'b7s1-policy-test'
+  const localFetch: typeof fetch = async (input, init) => {
+    const req = input instanceof Request ? input : new Request(String(input), init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', sessionId)
+    return app.fetch(new Request(req, { headers }))
+  }
+  const allowedCaller = Keypair.generate()
+  const deniedCaller = Keypair.generate()
+  const ownerWallet = {
+    publicKey: { toBase58: () => FIXTURE.owner } as import('@solana/web3.js').PublicKey,
+    async signTransaction(tx: import('@solana/web3.js').VersionedTransaction) { return tx },
+  }
+  const ownerClient = createVoynich({ apiUrl: 'http://127.0.0.1:9702', signer: ownerWallet, fetch: localFetch })
+  const allowedClient = createVoynich({ apiUrl: 'http://127.0.0.1:9702', signer: allowedCaller, fetch: localFetch })
+  const deniedClient = createVoynich({ apiUrl: 'http://127.0.0.1:9702', signer: deniedCaller, fetch: localFetch })
+
+  assert.equal(await ownerClient.policy('sketch-32'), null)
+
+  // Non-owner cannot set policy
+  await assert.rejects(
+    () => deniedClient.setPolicy('sketch-32', { allowListEnabled: true, allowedCallers: [allowedCaller.publicKey.toBase58()] }),
+    /owner|PROGRAM_REFUSED|UNAUTHORIZED/i,
+  )
+
+  // Owner sets policy allowing only allowedCaller and restricting operators to a different key
+  const saved = await ownerClient.setPolicy('sketch-32', {
+    allowListEnabled: true,
+    allowedCallers: [allowedCaller.publicKey.toBase58()],
+    maxCallsPerCallerPerWindow: 20,
+    windowSlots: '300',
+    allowedOperators: [operatorKey.toBase58()],
+    allowedRegions: ['us-east'],
+  })
+  assert.equal(saved.allowListEnabled, true)
+  assert.deepEqual(saved.allowedCallers, [allowedCaller.publicKey.toBase58()])
+  assert.equal(saved.maxCallsPerCallerPerWindow, 20)
+  assert.equal(saved.windowSlots, '300')
+  assert.deepEqual(saved.allowedRegions, ['us-east'])
+  assert.deepEqual(await ownerClient.policy('sketch-32'), saved)
+
+  // Denied caller rejected with POLICY_CALLER_DENIED; allowed caller succeeds on /v1/calls/build
+  const enclaves = await ownerClient.enclaves()
+  const enclaveAddr = enclaves.items[0]!.address
+  await assert.rejects(
+    () => deniedClient.api.openCall({ wallet: deniedCaller.publicKey.toBase58(), model: 'sketch-32', enclave: enclaveAddr, inputHash: '11'.repeat(32) }),
+    /allow list|POLICY_CALLER_DENIED/i,
+  )
+  const allowedBuild = await allowedClient.api.openCall({ wallet: allowedCaller.publicKey.toBase58(), model: 'sketch-32', enclave: enclaveAddr, inputHash: '11'.repeat(32) })
+  assert.equal(allowedBuild.action, 'open_call')
+
+  // Grant to fixture enclave whose operator != operatorKey rejected with POLICY_OPERATOR_DENIED
+  const dummyWrapped = Buffer.concat([Buffer.from([1]), Buffer.alloc(104, 9)]).toString('base64')
+  await assert.rejects(
+    () => ownerClient.api.grantByOwner('sketch-32', { wallet: FIXTURE.owner, enclave: enclaveAddr, wrappedKey: dummyWrapped }),
+    /operator is not allowed|POLICY_OPERATOR_DENIED/i,
+  )
+
+  // Clear policy -> policy() returns null again and deniedCaller can open calls
+  await ownerClient.clearPolicy('sketch-32')
+  assert.equal(await ownerClient.policy('sketch-32'), null)
+  const openAfterClear = await deniedClient.api.openCall({ wallet: deniedCaller.publicKey.toBase58(), model: 'sketch-32', enclave: enclaveAddr, inputHash: '22'.repeat(32) })
+  assert.equal(openAfterClear.action, 'open_call')
+})

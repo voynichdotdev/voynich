@@ -42,6 +42,9 @@ const voynich = {
   setPrice: async (...args: Parameters<Voynich['setPrice']>) => (await load(true)).setPrice(...args),
   retire: async (...args: Parameters<Voynich['retire']>) => (await load(true)).retire(...args),
   revoke: async (...args: Parameters<Voynich['revoke']>) => (await load(true)).revoke(...args),
+  policy: async (...args: Parameters<Voynich['policy']>) => (await load()).policy(...args),
+  setPolicy: async (...args: Parameters<Voynich['setPolicy']>) => (await load(true)).setPolicy(...args),
+  clearPolicy: async (...args: Parameters<Voynich['clearPolicy']>) => (await load(true)).clearPolicy(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

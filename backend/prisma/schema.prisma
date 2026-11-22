@@ -84,8 +84,10 @@ model Model {
   baseFormat          String?    @db.VarChar(32)
   baseSource          String?    @db.VarChar(256)
   callsSettled        BigInt     @default(0)
+  hasPolicy           Boolean    @default(false)
   updatedSlot         BigInt
   indexingIssue       String?
+  policy              ModelPolicy?
   weights             Weights[]
   grants              Grant[]
   calls               Call[]
@@ -427,4 +429,19 @@ model Measurement {
   @@index([status, createdSlot])
   @@index([publisher, createdSlot])
   @@map("measurements")
+}
+
+model ModelPolicy {
+  address                    String   @id @db.VarChar(44)
+  modelAddress               String   @unique @db.VarChar(44)
+  model                      Model    @relation(fields: [modelAddress], references: [address])
+  allowListEnabled           Boolean  @default(false)
+  allowedCallers             String[] @default([])
+  maxCallsPerCallerPerWindow Int      @default(0)
+  windowSlots                BigInt   @default(0)
+  allowedOperators           String[] @default([])
+  allowedRegions             String[] @default([])
+  updatedSlot                BigInt
+
+  @@map("model_policies")
 }

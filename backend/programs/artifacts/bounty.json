@@ -1471,6 +1471,10 @@
                 "name": "PriceUnit"
               }
             }
+          },
+          {
+            "name": "has_policy",
+            "type": "bool"
           }
         ]
       }

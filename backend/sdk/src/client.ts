@@ -1,6 +1,6 @@
 import { Connection, Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { IdlAccounts } from '@coral-xyz/anchor'
-import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type Money, type PriceUnit, type Receipt, type ReceiptView, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
+import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type Money, type PriceUnit, type Receipt, type ReceiptView, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
 import { decodeAdapter } from './adapter.js'
 import { CIPHER_CHUNK_BYTES, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER, ciphertextHash, decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, openWeightsChunk, sealWeights, sha256, signSealDerivation, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, verifyReceipt, wrapKey, type SealDerivationSigner, type WeightsCipherHeader } from './crypto.js'
 import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeModelBaseBytes, decodeReceiptAccount, decodeWeightsHeader, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
@@ -1371,6 +1371,42 @@ export function createVoynich(options: VoynichOptions) {
     await send(await api.deprecateMeasurement(digest, { wallet: wallet.publicKey.toBase58() }, { signal: opts.signal }), [], undefined, opts.signal)
     return indexed(() => api.measurement(digest, { signal: opts.signal }), 'MEASUREMENT_NOT_FOUND', value => value.status === 'deprecated', opts.signal)
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, publishMeasurement, deprecateMeasurement, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  async function policy(modelId: string, opts: { signal?: AbortSignal } = {}): Promise<ModelPolicy | null> {
+    try {
+      return await api.modelPolicy(modelId, { signal: opts.signal })
+    } catch (error) {
+      if (error instanceof ApiClientError && error.code === 'POLICY_NOT_FOUND') return null
+      throw error
+    }
+  }
+  async function setPolicy(
+    modelId: string,
+    input: {
+      allowListEnabled: boolean
+      allowedCallers?: string[]
+      maxCallsPerCallerPerWindow?: number
+      windowSlots?: string
+      allowedOperators?: string[]
+      allowedRegions?: string[]
+    },
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<ModelPolicy> {
+    const wallet = signer()
+    await send(await api.setPolicy(modelId, {
+      wallet: wallet.publicKey.toBase58(),
+      allowListEnabled: input.allowListEnabled,
+      allowedCallers: input.allowedCallers ?? [],
+      maxCallsPerCallerPerWindow: input.maxCallsPerCallerPerWindow ?? 0,
+      windowSlots: input.windowSlots ?? '0',
+      allowedOperators: input.allowedOperators ?? [],
+      allowedRegions: input.allowedRegions ?? [],
+    }, { signal: opts.signal }), [], undefined, opts.signal)
+    return indexed(() => api.modelPolicy(modelId, { signal: opts.signal }), 'POLICY_NOT_FOUND', undefined, opts.signal)
+  }
+  async function clearPolicy(modelId: string, opts: { signal?: AbortSignal } = {}): Promise<TxStatus> {
+    const wallet = signer()
+    return send(await api.clearPolicy(modelId, { wallet: wallet.publicKey.toBase58() }, { signal: opts.signal }), [], undefined, opts.signal)
+  }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>

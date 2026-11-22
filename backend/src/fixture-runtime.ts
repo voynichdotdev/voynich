@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { decodeManifest, errors, fromBase58, toBase58, type Bounty, type BountyAttempt, type Build, type Call, type CallAnswer, type CallPieces, type CallStreamDone, type Enclave, type ErrorCode, type Grant, type MeasurementRecord, type Model, type Receipt, type StopCallAccepted, type StreamFinishReason, type StreamPiece, type TxStatus, type TxSubmission } from '@voynich/contract'
+import { decodeManifest, errors, fromBase58, toBase58, type Bounty, type BountyAttempt, type Build, type Call, type CallAnswer, type CallPieces, type CallStreamDone, type Enclave, type ErrorCode, type Grant, type MeasurementRecord, type Model, type ModelPolicy, type Receipt, type StopCallAccepted, type StreamFinishReason, type StreamPiece, type TxStatus, type TxSubmission } from '@voynich/contract'
 import { FIXTURE, fixtureAddress, fixtureBounty, fixtureCall, fixtureConfig, fixtureEnclave, fixtureGrant, fixtureModel, fixtureReceipt, fixtureSignature, fixtureTransaction } from '@voynich/contract/fixtures'
 import { CIPHER_CHUNK_BYTES, decryptCallInput, encryptCallOutput, encryptionPublicKey, fromBase64, fromHex, sealWeights, sha256, signPiece, signReceipt, signingPublicKey, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, wrapKey } from 'voynich/crypto'
 import { ApiFailure, failer, parse, type Fail } from './engines/server/errors.js'
@@ -35,6 +35,7 @@ export class FixtureState {
   bounties: Bounty[] = []
   bountyAttempts: BountyAttempt[] = []
   measurements: MeasurementRecord[] = []
+  readonly policies = new Map<string, ModelPolicy>()
   slot = 1000n
 
   constructor(readonly scenario: string | null) {

@@ -29,4 +29,8 @@ pub enum VoynichError {
     #[msg("The callback specification or remaining accounts are invalid.")] InvalidCallback,
     #[msg("The call pricing unit or escrow ceiling is invalid for this instruction.")] InvalidCall,
     #[msg("The measurement digest, source metadata, or status is invalid.")] InvalidMeasurement,
+    #[msg("The model policy limits, callers, operators, or regions are invalid.")] InvalidPolicy,
+    #[msg("The caller is not on this model's allow list.")] PolicyCallerDenied,
+    #[msg("The enclave operator is not allowed by this model's policy.")] PolicyOperatorDenied,
+    #[msg("This model has an active policy; pass its Policy account in remaining accounts.")] PolicyRequired,
 }

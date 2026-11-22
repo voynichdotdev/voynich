@@ -261,3 +261,20 @@ pub struct DeprecateMeasurement<'info> {
     #[account(seeds = [b"config"], bump = config.bump)] pub config: Account<'info, Config>,
     #[account(mut, seeds = [b"measurement", &measurement.digest[..32], &measurement.digest[32..]], bump = measurement.bump, constraint = authority.key() == measurement.publisher || authority.key() == config.admin @ VoynichError::Unauthorized)] pub measurement: Account<'info, Measurement>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SetPolicy<'info> {
+    #[account(mut)] pub owner: Signer<'info>,
+    #[account(mut, seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(init_if_needed, payer = owner, space = Policy::SPACE, seeds = [b"policy", model.key().as_ref()], bump)] pub policy: Box<Account<'info, Policy>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct ClearPolicy<'info> {
+    #[account(mut)] pub owner: Signer<'info>,
+    #[account(mut, seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(mut, close = owner, seeds = [b"policy", model.key().as_ref()], bump = policy.bump, has_one = model)] pub policy: Box<Account<'info, Policy>>,
+}

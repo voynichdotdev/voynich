@@ -31,7 +31,7 @@ export function createFacts(connection: Connection) {
       } else if (event.name === 'weightsattached') {
         for (const address of event.data.weights as string[]) weights.add(address)
       }
-      for (const key of ['model', 'enclave', 'call', 'receipt', 'record', 'grant', 'weights', 'uploadKey', 'bounty', 'attempt', 'measurement']) {
+      for (const key of ['model', 'enclave', 'call', 'receipt', 'record', 'grant', 'weights', 'uploadKey', 'bounty', 'attempt', 'measurement', 'policy']) {
         const value = event.data[key]
         if (typeof value === 'string' && value !== PublicKey.default.toBase58()) facts.addresses.push(value)
       }

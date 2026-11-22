@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { PublicKey, type Connection } from '@solana/web3.js'
-import { decodeManifest, type AttestationRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type Money, type Receipt, type ModelQuery } from '@voynich/contract'
+import { decodeManifest, type AttestationRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type Money, type Receipt, type ModelQuery } from '@voynich/contract'
 import { toBase64 } from 'voynich/crypto'
 import { fail } from './errors.js'
 
@@ -240,5 +240,25 @@ export class ReadModel {
     const row = await this.db.measurement.findUnique({ where: { digest } })
     if (!row) fail('MEASUREMENT_NOT_FOUND', 'This measurement was not found.')
     return this.measurementRow(row)
+  }
+  policyRow(row: Prisma.ModelPolicyGetPayload<Record<string, never>>): ModelPolicy {
+    return {
+      address: row.address,
+      model: row.modelAddress,
+      allowListEnabled: row.allowListEnabled,
+      allowedCallers: row.allowedCallers,
+      maxCallsPerCallerPerWindow: row.maxCallsPerCallerPerWindow,
+      windowSlots: String(row.windowSlots),
+      allowedOperators: row.allowedOperators,
+      allowedRegions: row.allowedRegions,
+      updatedSlot: String(row.updatedSlot),
+    }
+  }
+  async modelPolicy(id: string): Promise<ModelPolicy> {
+    const resolved = await this.db.model.findFirst({ where: { OR: [{ address: id }, { name: id }] }, select: { address: true } })
+    if (!resolved) fail('MODEL_NOT_FOUND', 'This model was not found.')
+    const row = await this.db.modelPolicy.findUnique({ where: { modelAddress: resolved.address } })
+    if (!row) fail('POLICY_NOT_FOUND', 'No policy is configured for this model.')
+    return this.policyRow(row)
   }
 }

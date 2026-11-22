@@ -1765,4 +1765,121 @@ test('Voynich program flows on the supplied local validator', { timeout: 180_000
     const m2After = decodeMeasurementAccount((await connection.getAccountInfo(m2Pda, 'confirmed'))!.data)
     assert.equal(m2After.status, 'deprecated')
   })
+
+  await t.test('Build 7 Step 1: Policy PDA set_policy, PolicyRequired, PolicyCallerDenied, PolicyOperatorDenied (grant_by_owner & grant_by_enclave), and clear_policy', async () => {
+    const { decodePolicyAccount, policyPda, POLICY_SPACE } = await import('../sdk/src/program.js')
+    await execute([await voynich.methods.setConfig(configArgs(RECORD_LIFETIME_SLOTS)).accountsStrict({
+      admin: admin.publicKey, config, ...events(voynich.programId),
+    }).instruction()])
+    await refresh(first)
+    await refresh(second)
+
+    const policyKey = policyPda(tokenModel.address, voynich.programId)
+    const deniedCaller = Keypair.generate()
+    await execute([
+      SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: deniedCaller.publicKey, lamports: 50_000_000 }),
+    ])
+
+    // 1. Invalid policy args rejected (mismatched rate limit, invalid region, unauthorized non-owner)
+    await assert.rejects(
+      execute([await voynich.methods.setPolicy({
+        allowListEnabled: true, allowedCallers: [caller.publicKey], maxCallsPerCallerPerWindow: 5, windowSlots: bn(0), allowedOperators: [], allowedRegions: [],
+      }).accountsStrict({ owner: owner.publicKey, model: tokenModel.address, policy: policyKey, systemProgram: SystemProgram.programId, ...events(voynich.programId) }).instruction()], [owner]),
+      /InvalidPolicy/,
+    )
+    await assert.rejects(
+      execute([await voynich.methods.setPolicy({
+        allowListEnabled: false, allowedCallers: [], maxCallsPerCallerPerWindow: 0, windowSlots: bn(0), allowedOperators: [], allowedRegions: ['US_EAST'],
+      }).accountsStrict({ owner: owner.publicKey, model: tokenModel.address, policy: policyKey, systemProgram: SystemProgram.programId, ...events(voynich.programId) }).instruction()], [owner]),
+      /InvalidPolicy/,
+    )
+    await assert.rejects(
+      execute([await voynich.methods.setPolicy({
+        allowListEnabled: false, allowedCallers: [], maxCallsPerCallerPerWindow: 0, windowSlots: bn(0), allowedOperators: [], allowedRegions: [],
+      }).accountsStrict({ owner: deniedCaller.publicKey, model: tokenModel.address, policy: policyKey, systemProgram: SystemProgram.programId, ...events(voynich.programId) }).instruction()], [deniedCaller]),
+      /Unauthorized/,
+    )
+
+    // 2. Owner sets policy allowing only `caller` and `first.operator` (excluding `second.operator`) in region `us-east`
+    await execute([await voynich.methods.setPolicy({
+      allowListEnabled: true,
+      allowedCallers: [caller.publicKey],
+      maxCallsPerCallerPerWindow: 10,
+      windowSlots: bn(150),
+      allowedOperators: [first.operator.publicKey],
+      allowedRegions: ['us-east'],
+    }).accountsStrict({
+      owner: owner.publicKey, model: tokenModel.address, policy: policyKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [owner])
+
+    const policyInfo = await connection.getAccountInfo(policyKey, 'confirmed')
+    assert.equal(policyInfo?.data.length, POLICY_SPACE)
+    const decoded = decodePolicyAccount(policyInfo!.data)
+    assert(decoded.model.equals(tokenModel.address))
+    assert.equal(decoded.allowListEnabled, true)
+    assert.equal(decoded.allowedCallers.length, 1)
+    assert(decoded.allowedCallers[0]!.equals(caller.publicKey))
+    assert.equal(decoded.maxCallsPerCallerPerWindow, 10)
+    assert.equal(decoded.windowSlots.toString(), '150')
+    assert.equal(decoded.allowedOperators.length, 1)
+    assert(decoded.allowedOperators[0]!.equals(first.operator.publicKey))
+    assert.deepEqual(decoded.allowedRegions, ['us-east'])
+    assert.equal((await voynich.account.model.fetch(tokenModel.address)).hasPolicy, true)
+
+    // 3. open_call without Policy PDA in remainingAccounts -> PolicyRequired
+    const openNoPolicy = await openInstruction(callArgs(tokenModel))
+    await assert.rejects(execute([openNoPolicy], [caller]), /PolicyRequired/)
+
+    // 4. open_call with Policy PDA by deniedCaller -> PolicyCallerDenied
+    const deniedAta = await getOrCreateAssociatedTokenAccount(connection, admin, tokenModel.mint, deniedCaller.publicKey)
+    await mintTo(connection, admin, tokenModel.mint, deniedAta.address, admin, PRICE * 2n)
+    const deniedNonce = ++nonce
+    const deniedCallAddr = pda(voynich.programId, utf8('call'), deniedCaller.publicKey.toBytes(), u64le(deniedNonce))
+    const deniedEscrow = getAssociatedTokenAddressSync(tokenModel.mint, deniedCallAddr, true)
+    const openDenied = await voynich.methods.openCall(bn(deniedNonce), [...sha256(utf8('denied'))], { sealed: {} }, null).accountsStrict({
+      payer: admin.publicKey, caller: deniedCaller.publicKey, config, model: tokenModel.address, enclave: first.address, attestationRecord: first.record,
+      grant: grantAddress(tokenModel, first), call: deniedCallAddr, mint: tokenModel.mint, callerTokens: deniedAta.address, escrowTokens: deniedEscrow,
+      tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).remainingAccounts([{ pubkey: policyKey, isSigner: false, isWritable: false }]).instruction()
+    await assert.rejects(execute([openDenied], [deniedCaller]), /PolicyCallerDenied/)
+
+    // 5. open_call with Policy PDA by allowed caller succeeds
+    const allowedArgs = callArgs(tokenModel)
+    const openAllowed = await voynich.methods.openCall(bn(allowedArgs.nonce), [...allowedArgs.inputHash], { sealed: {} }, null).accountsStrict({
+      payer: admin.publicKey, caller: caller.publicKey, config, model: tokenModel.address, enclave: first.address, attestationRecord: first.record,
+      grant: grantAddress(tokenModel, first), call: allowedArgs.address, mint: tokenModel.mint, callerTokens: getAssociatedTokenAddressSync(tokenModel.mint, caller.publicKey), escrowTokens: getAssociatedTokenAddressSync(tokenModel.mint, allowedArgs.address, true),
+      tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).remainingAccounts([{ pubkey: policyKey, isSigner: false, isWritable: false }]).instruction()
+    await execute([openAllowed], [caller])
+    assert.deepEqual((await voynich.account.call.fetch(allowedArgs.address)).status, { open: {} })
+
+    // 6. grant_by_owner & grant_by_enclave: PolicyRequired when omitted, PolicyOperatorDenied for second.operator
+    const wrapped = Buffer.from(wrapKey(tokenModel.sealed.key, second.encryption.publicKey))
+    await assert.rejects(
+      execute([await voynich.methods.grantByOwner(wrapped).accountsStrict({
+        owner: owner.publicKey, payer: admin.publicKey, config, model: tokenModel.address, targetEnclave: second.address, targetAttestationRecord: second.record, grant: grantAddress(tokenModel, second), systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [owner]),
+      /PolicyRequired/,
+    )
+    await assert.rejects(
+      execute([await voynich.methods.grantByOwner(wrapped).accountsStrict({
+        owner: owner.publicKey, payer: admin.publicKey, config, model: tokenModel.address, targetEnclave: second.address, targetAttestationRecord: second.record, grant: grantAddress(tokenModel, second), systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).remainingAccounts([{ pubkey: policyKey, isSigner: false, isWritable: false }]).instruction()], [owner]),
+      /PolicyOperatorDenied/,
+    )
+    await assert.rejects(
+      execute([await voynich.methods.grantByEnclave(wrapped).accountsStrict({
+        signingKey: first.signing.publicKey, payer: admin.publicKey, config, model: tokenModel.address, sourceEnclave: first.address, sourceGrant: grantAddress(tokenModel, first), sourceAttestationRecord: first.record, targetEnclave: second.address, targetAttestationRecord: second.record, grant: grantAddress(tokenModel, second), systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).remainingAccounts([{ pubkey: policyKey, isSigner: false, isWritable: false }]).instruction()], [first.signing]),
+      /PolicyOperatorDenied/,
+    )
+
+    // 7. clear_policy closes PDA, resets hasPolicy=false, and allows open_call without remainingAccounts
+    await execute([await voynich.methods.clearPolicy().accountsStrict({
+      owner: owner.publicKey, model: tokenModel.address, policy: policyKey, ...events(voynich.programId),
+    }).instruction()], [owner])
+    assert.equal(await connection.getAccountInfo(policyKey, 'confirmed'), null)
+    assert.equal((await voynich.account.model.fetch(tokenModel.address)).hasPolicy, false)
+    await open(tokenModel)
+  })
 })

@@ -103,6 +103,7 @@ export function buildChainApp(runtime: ChainRuntime) {
     '/v1/models/quote', '/v1/models/build', '/v1/models/:id/seal/build',
     '/v1/models/:id/price/build', '/v1/models/:id/grant/build',
     '/v1/models/:id/revoke/build', '/v1/models/:id/retire/build',
+    '/v1/models/:id/policy/build', '/v1/models/:id/policy/clear/build',
     '/v1/calls/build', '/v1/calls/:id/refund/build',
     '/v1/bounties/build', '/v1/bounties/:address/draw/build',
     '/v1/bounties/:address/collect/build', '/v1/bounties/:address/cancel/build',
@@ -114,6 +115,7 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/models/:id/weights', async c => { const q = readQuery(c, s.WeightsRangeQuery); return c.json(await weights(readParam(c, 'id', s.ModelId), q.offset, q.length)) })
   app.get('/v1/models/:id/enclaves', async c => c.json(await read.modelEnclaves(readParam(c, 'id', s.ModelId))))
   app.get('/v1/models/:id/receipts', async c => c.json(await read.modelReceipts(readParam(c, 'id', s.ModelId), readQuery(c, s.PageQuery))))
+  app.get('/v1/models/:id/policy', async c => c.json(await read.modelPolicy(readParam(c, 'id', s.ModelId))))
   app.get('/v1/enclaves', async c => c.json(await read.enclaves(readQuery(c, s.PageQuery))))
   app.get('/v1/enclaves/:key', async c => c.json(await read.enclave(readParam(c, 'key', s.Address))))
   app.get('/v1/measurements', async c => c.json(await read.measurements(readQuery(c, s.MeasurementQuery))))
@@ -315,6 +317,8 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/models/:id/grant/build', async c => c.json(await build.grant(readParam(c, 'id', s.ModelId), await readJson(c, s.GrantRequest))))
   app.post('/v1/models/:id/revoke/build', async c => c.json(await build.revoke(readParam(c, 'id', s.ModelId), await readJson(c, s.RevokeGrantRequest))))
   app.post('/v1/models/:id/retire/build', async c => c.json(await build.retire(readParam(c, 'id', s.ModelId), await readJson(c, s.WalletRequest))))
+  app.post('/v1/models/:id/policy/build', async c => c.json(await build.setPolicy(readParam(c, 'id', s.ModelId), await readJson(c, s.SetPolicyRequest))))
+  app.post('/v1/models/:id/policy/clear/build', async c => c.json(await build.clearPolicy(readParam(c, 'id', s.ModelId), await readJson(c, s.WalletRequest))))
   app.post('/v1/calls/build', async c => c.json(await build.open(await readJson(c, s.OpenCallRequest))))
   app.post('/v1/calls/:id/settle/build', async c => c.json(await build.settleMetered(readParam(c, 'id', s.Address), await readJson(c, s.SettleCallRequest))))
   app.post('/v1/calls/:id/refund/build', async c => c.json(await build.refund(readParam(c, 'id', s.Address), await readJson(c, s.WalletRequest))))

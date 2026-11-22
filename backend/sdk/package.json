@@ -1,6 +1,6 @@
 {
   "name": "voynich",
-  "version": "0.2.30",
+  "version": "0.2.31",
   "type": "module",
   "sideEffects": false,
   "files": ["dist"],
@@ -39,7 +39,7 @@
     "@coral-xyz/anchor": "0.31.1",
     "@solana/web3.js": "1.99.0",
     "@solana/spl-token": "0.4.14",
-    "@voynich/contract": "^0.1.26",
+    "@voynich/contract": "^0.1.27",
     "@types/bn.js": "5.2.0",
     "bn.js": "5.2.5",
     "buffer": "6.0.3",

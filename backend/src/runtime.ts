@@ -55,7 +55,9 @@ export function createChainRuntime(role: 'api' | 'indexer' | 'crank') {
       : event.type === 'call.updated' ? await readModel.call(event.id)
       : event.type === 'receipt.created' ? (await readModel.receipt(event.id)).receipt
       : event.type === 'bounty.updated' ? (await readModel.bounty(event.id)).bounty
-      : event.type === 'measurement.updated' ? await readModel.measurement(event.id) : null
+      : event.type === 'measurement.updated' ? await readModel.measurement(event.id)
+      : event.type === 'policy.updated' ? await readModel.modelPolicy(event.id)
+      : event.type === 'policy.cleared' ? (() => { const [model, policy] = event.id.split(':'); return { model, policy } })() : null
     if (data) hub.publish(streamEvent(event.type, data))
   }
   return {

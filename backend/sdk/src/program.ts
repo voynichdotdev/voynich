@@ -36,6 +36,9 @@ export function measurementPda(digest: Uint8Array | string, programId: Key = PRO
   if (bytes.length !== 48) throw new Error('Measurement digest must be 48 bytes (96 hex characters)')
   return pda(key(programId), utf8('measurement'), bytes.subarray(0, 32), bytes.subarray(32, 48))
 }
+export function policyPda(model: Key, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('policy'), key(model).toBytes())
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -46,6 +49,7 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     call: (caller: Key, nonce: bigint) => { const bytes = new Uint8Array(8); new DataView(bytes.buffer).setBigUint64(0, nonce, true); return pda(programId, utf8('call'), key(caller).toBytes(), bytes) },
     receipt: (call: Key) => pda(programId, utf8('receipt'), key(call).toBytes()),
     measurement: (digest: Uint8Array | string) => measurementPda(digest, programId),
+    policy: (model: Key) => policyPda(model, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -86,6 +90,7 @@ export const RECEIPT_LEGACY_SPACE = 401
 export const RECEIPT_METERED_EXTENSION = 16
 export const RECEIPT_METERED_SPACE = 423
 export const MEASUREMENT_SPACE = 366
+export const POLICY_SPACE = 1770
 export const DEFAULT_MAX_OPEN_ANSWER_BYTES = 1024
 
 const matchesDisc = (data: Uint8Array, label: string) => {
@@ -355,6 +360,62 @@ export function decodeMeasurementAccount(data: Uint8Array): DecodedMeasurementAc
   const status: 'active' | 'deprecated' = statusTag === 0 ? 'active' : 'deprecated'
   const bump = data[offset++]!
   return { digest, publisher, sourceRepo, commitSha, recipeHash, version, createdSlot, status, bump }
+}
+
+export type DecodedPolicyAccount = {
+  model: PublicKey
+  allowListEnabled: boolean
+  allowedCallers: PublicKey[]
+  maxCallsPerCallerPerWindow: number
+  windowSlots: BN
+  allowedOperators: PublicKey[]
+  allowedRegions: string[]
+  updatedSlot: BN
+  bump: number
+}
+
+export function decodePolicyAccount(data: Uint8Array): DecodedPolicyAccount {
+  if (!matchesDisc(data, 'account:Policy') || data.length < 8 + 32 + 1 + 4 + 4 + 8 + 4 + 4 + 8 + 1) {
+    throw new Error('Invalid Policy account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  const decoder = new TextDecoder()
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const allowTag = data[offset++]!
+  if (allowTag !== 0 && allowTag !== 1) throw new Error('Invalid Policy allowListEnabled flag')
+  const allowListEnabled = allowTag === 1
+  const readKeys = (maxCount: number) => {
+    if (offset + 4 > data.length) throw new Error('Invalid Policy key vector length')
+    const count = view.getUint32(offset, true); offset += 4
+    if (count > maxCount || offset + count * 32 > data.length) throw new Error('Invalid Policy key vector bounds')
+    const keys: PublicKey[] = []
+    for (let i = 0; i < count; i++) {
+      keys.push(new PublicKey(data.subarray(offset, offset + 32)))
+      offset += 32
+    }
+    return keys
+  }
+  const allowedCallers = readKeys(32)
+  if (offset + 12 > data.length) throw new Error('Invalid Policy rate fields')
+  const maxCallsPerCallerPerWindow = view.getUint32(offset, true); offset += 4
+  const windowSlots = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const allowedOperators = readKeys(16)
+  if (offset + 4 > data.length) throw new Error('Invalid Policy regions length')
+  const regionCount = view.getUint32(offset, true); offset += 4
+  if (regionCount > 8) throw new Error('Invalid Policy regions count')
+  const allowedRegions: string[] = []
+  for (let i = 0; i < regionCount; i++) {
+    if (offset + 4 > data.length) throw new Error('Invalid Policy region string length')
+    const len = view.getUint32(offset, true); offset += 4
+    if (len > 16 || offset + len > data.length) throw new Error('Invalid Policy region string bounds')
+    allowedRegions.push(decoder.decode(data.subarray(offset, offset + len)))
+    offset += len
+  }
+  if (offset + 9 > data.length) throw new Error('Invalid Policy tail bounds')
+  const updatedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const bump = data[offset++]!
+  return { model, allowListEnabled, allowedCallers, maxCallsPerCallerPerWindow, windowSlots, allowedOperators, allowedRegions, updatedSlot, bump }
 }
 
 /** Pads legacy and earlier-step mainnet CPI events with default trailing fields so the current IDL decodes them. */

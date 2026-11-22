@@ -1477,6 +1477,10 @@ export type Bounty = {
                 "name": "priceUnit"
               }
             }
+          },
+          {
+            "name": "hasPolicy",
+            "type": "bool"
           }
         ]
       }
@@ -3021,6 +3025,10 @@ export const IDL: Bounty = {
                 "name": "PriceUnit"
               }
             }
+          },
+          {
+            "name": "has_policy",
+            "type": "bool"
           }
         ]
       }

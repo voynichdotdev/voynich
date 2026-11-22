@@ -75,6 +75,12 @@ export function buildApp() {
     const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
     return c.json(s.paginate(state.receipts.filter(r => r.model === model.address), readQuery(c, s.PageQuery, queryKeys)))
   })
+  app.get('/v1/models/:id/policy', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const policy = state.policies.get(model.address)
+    if (!policy) fail('POLICY_NOT_FOUND', 'No policy is configured for this model.')
+    return c.json(policy)
+  })
   app.get('/v1/enclaves', c => c.json(s.paginate(c.get('fixture').enclaves, readQuery(c, s.PageQuery, queryKeys))))
   app.get('/v1/enclaves/:key', c => {
     const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address))
@@ -267,6 +273,10 @@ export function buildApp() {
     if (model.status !== 'sealed' && model.status !== 'live') fail('MODEL_NOT_LIVE', 'Seal this model before granting an enclave.', { stage: 'build' })
     const enclave = state.liveEnclave(body.enclave)
     if (!model.allowedMeasurements.includes(enclave.measurement)) fail('MEASUREMENT_NOT_ALLOWED', 'The model does not allow this enclave measurement.', { stage: 'build' })
+    const policy = state.policies.get(model.address)
+    if (policy && policy.allowedOperators.length > 0 && !policy.allowedOperators.includes(enclave.operator)) {
+      fail('POLICY_OPERATOR_DENIED', 'The enclave operator is not allowed by this model policy.', { stage: 'build' })
+    }
     try { unwrapKey(fromBase64(body.wrappedKey), sha256(utf8('voynich/fixture/enclave/encryption/v1'))) }
     catch { fail('INVALID_ENVELOPE', 'The enclave could not open the wrapped model key.', { stage: 'build' }) }
     return c.json(state.build('grant_by_owner', [body.wallet], { model: model.address }, () => {
@@ -280,6 +290,18 @@ export function buildApp() {
   app.post('/v1/models/:id/retire/build', async c => {
     const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.WalletRequest); state.owner(model, body.wallet)
     return c.json(state.build('retire_model', [body.wallet], { model: model.address }, () => { model.status = 'retired'; state.emit('model.updated', model) }))
+  })
+  app.post('/v1/models/:id/policy/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.SetPolicyRequest); state.owner(model, body.wallet)
+    const address = fixtureAddress(`policy:${model.address}`)
+    const row: s.ModelPolicy = { address, model: model.address, allowListEnabled: body.allowListEnabled, allowedCallers: body.allowedCallers, maxCallsPerCallerPerWindow: body.maxCallsPerCallerPerWindow, windowSlots: body.windowSlots, allowedOperators: body.allowedOperators, allowedRegions: body.allowedRegions, updatedSlot: String(state.slot) }
+    return c.json(state.build('set_policy', [body.wallet], { model: model.address, policy: address }, () => { state.policies.set(model.address, row); state.emit('policy.updated', row); state.emit('model.updated', model) }))
+  })
+  app.post('/v1/models/:id/policy/clear/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.WalletRequest); state.owner(model, body.wallet)
+    const existing = state.policies.get(model.address)
+    if (!existing) fail('POLICY_NOT_FOUND', 'No policy is configured for this model.')
+    return c.json(state.build('clear_policy', [body.wallet], { model: model.address, policy: existing.address }, () => { state.policies.delete(model.address); state.emit('policy.cleared', { model: model.address, policy: existing.address }); state.emit('model.updated', model) }))
   })
   app.post('/v1/models/:id/revoke/build', async c => {
     const state = c.get('fixture'), model = state.model(readParam(c, 'id', s.ModelId)), body = await readJson(c, s.RevokeGrantRequest)
@@ -295,6 +317,10 @@ export function buildApp() {
   })
   app.post('/v1/calls/build', async c => {
     const state = c.get('fixture'); const body = await readJson(c, s.OpenCallRequest); const model = state.model(body.model); const enclave = state.liveEnclave(body.enclave); state.requireGrant(model, enclave)
+    const policy = state.policies.get(model.address)
+    if (policy && policy.allowListEnabled && !policy.allowedCallers.includes(body.wallet)) {
+      fail('POLICY_CALLER_DENIED', 'This wallet is not on the model allow list.', { stage: 'build' })
+    }
     const unitPrice = BigInt(model.price.amount)
     let escrowed: s.Money
     if (model.priceUnit === 'token') {

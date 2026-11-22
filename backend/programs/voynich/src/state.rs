@@ -15,6 +15,10 @@ pub const MAX_BASE_SOURCE: usize = 256;
 pub const MAX_SOURCE_REPO: usize = 128;
 pub const MAX_COMMIT_SHA: usize = 64;
 pub const MAX_MEASUREMENT_VERSION: usize = 32;
+pub const MAX_POLICY_CALLERS: usize = 32;
+pub const MAX_POLICY_OPERATORS: usize = 16;
+pub const MAX_POLICY_REGIONS: usize = 8;
+pub const MAX_POLICY_REGION_LEN: usize = 16;
 pub const ON_RECEIPT_DISCRIMINATOR: [u8; 8] = [147, 219, 81, 58, 69, 119, 225, 93];
 pub const CIPHER: &str = "xchacha20poly1305-64k-v1";
 pub const WEIGHTS_HEADER: usize = 56;
@@ -110,6 +114,7 @@ pub struct Model {
     pub merkle_frontier_mask: u32,
     pub base: Option<ModelBase>,
     pub price_unit: PriceUnit,
+    pub has_policy: bool,
 }
 impl Model {
     pub const SPACE: usize = 8192;
@@ -247,6 +252,37 @@ impl Measurement {
     pub const SPACE: usize = 8 + 48 + 32 + (4 + MAX_SOURCE_REPO) + (4 + MAX_COMMIT_SHA) + 32 + (4 + MAX_MEASUREMENT_VERSION) + 8 + 1 + 1;
 }
 
+#[account]
+pub struct Policy {
+    pub model: Pubkey,
+    pub allow_list_enabled: bool,
+    pub allowed_callers: Vec<Pubkey>,
+    pub max_calls_per_caller_per_window: u32,
+    pub window_slots: u64,
+    pub allowed_operators: Vec<Pubkey>,
+    pub allowed_regions: Vec<String>,
+    pub updated_slot: u64,
+    pub bump: u8,
+}
+impl Policy {
+    pub const SPACE: usize = 8 + 32 + 1
+        + (4 + 32 * MAX_POLICY_CALLERS)
+        + 4 + 8
+        + (4 + 32 * MAX_POLICY_OPERATORS)
+        + (4 + MAX_POLICY_REGIONS * (4 + MAX_POLICY_REGION_LEN))
+        + 8 + 1;
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct PolicyArgs {
+    pub allow_list_enabled: bool,
+    pub allowed_callers: Vec<Pubkey>,
+    pub max_calls_per_caller_per_window: u32,
+    pub window_slots: u64,
+    pub allowed_operators: Vec<Pubkey>,
+    pub allowed_regions: Vec<String>,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ConfigArgs {
     pub attestation_program: Pubkey,
@@ -312,10 +348,11 @@ mod tests {
                 source: format!("https://{}", "b".repeat(MAX_BASE_SOURCE - 8)),
             }),
             price_unit: PriceUnit::Token,
+            has_policy: true,
         };
         let mut buf = Vec::new();
         model.try_serialize(&mut buf).unwrap();
-        assert_eq!(buf.len(), 8051);
+        assert_eq!(buf.len(), 8052);
         assert!(buf.len() <= Model::SPACE, "worst-case Model {} > SPACE {}", buf.len(), Model::SPACE);
     }
 
@@ -472,5 +509,24 @@ mod tests {
         m.try_serialize(&mut buf).unwrap();
         assert_eq!(buf.len(), Measurement::SPACE);
         assert_eq!(Measurement::SPACE, 366);
+    }
+
+    #[test]
+    fn worst_case_policy_fits_within_space() {
+        let p = Policy {
+            model: Pubkey::new_unique(),
+            allow_list_enabled: true,
+            allowed_callers: vec![Pubkey::new_unique(); MAX_POLICY_CALLERS],
+            max_calls_per_caller_per_window: 100,
+            window_slots: 1500,
+            allowed_operators: vec![Pubkey::new_unique(); MAX_POLICY_OPERATORS],
+            allowed_regions: (0..MAX_POLICY_REGIONS).map(|i| format!("region-{:09}", i)).collect(),
+            updated_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut buf = Vec::new();
+        p.try_serialize(&mut buf).unwrap();
+        assert_eq!(buf.len(), Policy::SPACE);
+        assert_eq!(Policy::SPACE, 1770);
     }
 }

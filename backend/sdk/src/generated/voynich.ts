@@ -88,6 +88,111 @@ export type Voynich = {
       "args": []
     },
     {
+      "name": "clearPolicy",
+      "discriminator": [
+        127,
+        194,
+        187,
+        36,
+        235,
+        124,
+        189,
+        85
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          },
+          "relations": [
+            "policy"
+          ]
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "createModel",
       "discriminator": [
         212,
@@ -2313,6 +2418,121 @@ export type Voynich = {
       ]
     },
     {
+      "name": "setPolicy",
+      "discriminator": [
+        40,
+        133,
+        12,
+        157,
+        235,
+        202,
+        2,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "policyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "setPrice",
       "discriminator": [
         16,
@@ -3117,6 +3337,19 @@ export type Voynich = {
       ]
     },
     {
+      "name": "policy",
+      "discriminator": [
+        222,
+        135,
+        7,
+        163,
+        235,
+        177,
+        33,
+        68
+      ]
+    },
+    {
       "name": "receipt",
       "discriminator": [
         39,
@@ -3301,6 +3534,32 @@ export type Voynich = {
       ]
     },
     {
+      "name": "policyCleared",
+      "discriminator": [
+        113,
+        209,
+        132,
+        14,
+        255,
+        192,
+        12,
+        11
+      ]
+    },
+    {
+      "name": "policyUpdated",
+      "discriminator": [
+        225,
+        112,
+        112,
+        67,
+        95,
+        236,
+        245,
+        161
+      ]
+    },
+    {
       "name": "rangeSealed",
       "discriminator": [
         134,
@@ -3475,6 +3734,26 @@ export type Voynich = {
       "code": 6026,
       "name": "invalidMeasurement",
       "msg": "The measurement digest, source metadata, or status is invalid."
+    },
+    {
+      "code": 6027,
+      "name": "invalidPolicy",
+      "msg": "The model policy limits, callers, operators, or regions are invalid."
+    },
+    {
+      "code": 6028,
+      "name": "policyCallerDenied",
+      "msg": "The caller is not on this model's allow list."
+    },
+    {
+      "code": 6029,
+      "name": "policyOperatorDenied",
+      "msg": "The enclave operator is not allowed by this model's policy."
+    },
+    {
+      "code": 6030,
+      "name": "policyRequired",
+      "msg": "This model has an active policy; pass its Policy account in remaining accounts."
     }
   ],
   "types": [
@@ -4610,6 +4889,10 @@ export type Voynich = {
                 "name": "priceUnit"
               }
             }
+          },
+          {
+            "name": "hasPolicy",
+            "type": "bool"
           }
         ]
       }
@@ -4881,6 +5164,164 @@ export type Voynich = {
       }
     },
     {
+      "name": "policy",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowListEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "allowedCallers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "maxCallsPerCallerPerWindow",
+            "type": "u32"
+          },
+          {
+            "name": "windowSlots",
+            "type": "u64"
+          },
+          {
+            "name": "allowedOperators",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "allowedRegions",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "updatedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "policyArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "allowListEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "allowedCallers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "maxCallsPerCallerPerWindow",
+            "type": "u32"
+          },
+          {
+            "name": "windowSlots",
+            "type": "u64"
+          },
+          {
+            "name": "allowedOperators",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "allowedRegions",
+            "type": {
+              "vec": "string"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "policyCleared",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "policy",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "policyUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "policy",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowListEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "allowedCallers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "maxCallsPerCallerPerWindow",
+            "type": "u32"
+          },
+          {
+            "name": "windowSlots",
+            "type": "u64"
+          },
+          {
+            "name": "allowedOperators",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "allowedRegions",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "updatedSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "priceUnit",
       "type": {
         "kind": "enum",
@@ -5115,6 +5556,111 @@ export const IDL: Voynich = {
                 "kind": "account",
                 "path": "model.name",
                 "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "clear_policy",
+      "discriminator": [
+        127,
+        194,
+        187,
+        36,
+        235,
+        124,
+        189,
+        85
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          },
+          "relations": [
+            "policy"
+          ]
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
               }
             ]
           }
@@ -7380,6 +7926,121 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "set_policy",
+      "discriminator": [
+        40,
+        133,
+        12,
+        157,
+        235,
+        202,
+        2,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "PolicyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "set_price",
       "discriminator": [
         16,
@@ -8184,6 +8845,19 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "Policy",
+      "discriminator": [
+        222,
+        135,
+        7,
+        163,
+        235,
+        177,
+        33,
+        68
+      ]
+    },
+    {
       "name": "Receipt",
       "discriminator": [
         39,
@@ -8368,6 +9042,32 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "PolicyCleared",
+      "discriminator": [
+        113,
+        209,
+        132,
+        14,
+        255,
+        192,
+        12,
+        11
+      ]
+    },
+    {
+      "name": "PolicyUpdated",
+      "discriminator": [
+        225,
+        112,
+        112,
+        67,
+        95,
+        236,
+        245,
+        161
+      ]
+    },
+    {
       "name": "RangeSealed",
       "discriminator": [
         134,
@@ -8542,6 +9242,26 @@ export const IDL: Voynich = {
       "code": 6026,
       "name": "InvalidMeasurement",
       "msg": "The measurement digest, source metadata, or status is invalid."
+    },
+    {
+      "code": 6027,
+      "name": "InvalidPolicy",
+      "msg": "The model policy limits, callers, operators, or regions are invalid."
+    },
+    {
+      "code": 6028,
+      "name": "PolicyCallerDenied",
+      "msg": "The caller is not on this model's allow list."
+    },
+    {
+      "code": 6029,
+      "name": "PolicyOperatorDenied",
+      "msg": "The enclave operator is not allowed by this model's policy."
+    },
+    {
+      "code": 6030,
+      "name": "PolicyRequired",
+      "msg": "This model has an active policy; pass its Policy account in remaining accounts."
     }
   ],
   "types": [
@@ -9677,6 +10397,10 @@ export const IDL: Voynich = {
                 "name": "PriceUnit"
               }
             }
+          },
+          {
+            "name": "has_policy",
+            "type": "bool"
           }
         ]
       }
@@ -9943,6 +10667,164 @@ export const IDL: Voynich = {
                 "name": "ModelStatus"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Policy",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "allow_list_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "allowed_callers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "max_calls_per_caller_per_window",
+            "type": "u32"
+          },
+          {
+            "name": "window_slots",
+            "type": "u64"
+          },
+          {
+            "name": "allowed_operators",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "allowed_regions",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicyArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "allow_list_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "allowed_callers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "max_calls_per_caller_per_window",
+            "type": "u32"
+          },
+          {
+            "name": "window_slots",
+            "type": "u64"
+          },
+          {
+            "name": "allowed_operators",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "allowed_regions",
+            "type": {
+              "vec": "string"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicyCleared",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "policy",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicyUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "policy",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "allow_list_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "allowed_callers",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "max_calls_per_caller_per_window",
+            "type": "u32"
+          },
+          {
+            "name": "window_slots",
+            "type": "u64"
+          },
+          {
+            "name": "allowed_operators",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "allowed_regions",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
           }
         ]
       }

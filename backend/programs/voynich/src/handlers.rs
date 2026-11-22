@@ -103,6 +103,7 @@ pub fn create_model<'info>(ctx: Context<'_, '_, 'info, 'info, CreateModel<'info>
     model.hash_version = 1; model.sealed_chunks = 0; model.merkle_frontier = Vec::new(); model.merkle_frontier_mask = 0;
     model.base = args.base.clone();
     model.price_unit = args.price_unit;
+    model.has_policy = false;
     let key_count = upload_keys.len() as u64;
     let base_funding = args.upload_funding_lamports / key_count;
     let primary_funding = base_funding + (args.upload_funding_lamports % key_count);
@@ -195,10 +196,11 @@ fn zero_model_tail(model: &Account<Model>) -> Result<()> {
 }
 
 fn repair_model_tail_bytes(data: &mut [u8], prefix_end: usize) -> Result<()> {
-    require!(prefix_end < data.len(), VoynichError::InvalidModel);
-    if data[prefix_end] > 1 || data[prefix_end + 1..].iter().any(|&b| b != 0) {
+    require!(prefix_end + 1 < data.len(), VoynichError::InvalidModel);
+    if data[prefix_end] > 1 || data[prefix_end + 1] > 1 || data[prefix_end + 2..].iter().any(|&b| b != 0) {
         data[prefix_end] = 0;
-        data[prefix_end + 1..].fill(0);
+        data[prefix_end + 1] = 0;
+        data[prefix_end + 2..].fill(0);
     }
     Ok(())
 }
@@ -319,6 +321,21 @@ pub fn refresh_enclave(ctx: Context<RefreshEnclave>, endpoint: String) -> Result
     Ok(())
 }
 
+fn load_model_policy(model_key: Pubkey, has_policy: bool, remaining_accounts: &[AccountInfo]) -> Result<Option<Policy>> {
+    if !has_policy {
+        return Ok(None);
+    }
+    let (expected_key, _) = Pubkey::find_program_address(&[b"policy", model_key.as_ref()], &crate::ID);
+    let info = remaining_accounts
+        .iter()
+        .find(|acc| acc.key() == expected_key && *acc.owner == crate::ID)
+        .ok_or_else(|| error!(VoynichError::PolicyRequired))?;
+    let data = info.try_borrow_data()?;
+    let policy = Policy::try_deserialize(&mut &data[..]).map_err(|_| error!(VoynichError::PolicyRequired))?;
+    require!(policy.model == model_key, VoynichError::PolicyRequired);
+    Ok(Some(policy))
+}
+
 fn assign_grant(grant: &mut Grant, model: Pubkey, enclave: Pubkey, wrapped_key: Vec<u8>, granted_by: Pubkey, bump: u8) -> Result<()> {
     require!(wrapped_key.len() == 105 && wrapped_key[0] == 1, VoynichError::InvalidWrappedKey);
     grant.model = model; grant.enclave = enclave; grant.wrapped_key = wrapped_key;
@@ -330,6 +347,11 @@ pub fn grant_by_owner(ctx: Context<GrantByOwner>, wrapped_key: Vec<u8>) -> Resul
     require!(model.status == ModelStatus::Sealed || model.status == ModelStatus::Live, VoynichError::ModelNotSealed);
     let value = current_record(&ctx.accounts.config, &ctx.accounts.target_enclave, &ctx.accounts.target_attestation_record)?;
     allowed(model, &value.measurement)?;
+    if let Some(policy) = load_model_policy(model.key(), model.has_policy, ctx.remaining_accounts)? {
+        if !policy.allowed_operators.is_empty() {
+            require!(policy.allowed_operators.contains(&ctx.accounts.target_enclave.operator), VoynichError::PolicyOperatorDenied);
+        }
+    }
     let grant = &mut ctx.accounts.grant;
     assign_grant(grant, model.key(), ctx.accounts.target_enclave.key(), wrapped_key, ctx.accounts.owner.key(), ctx.bumps.grant)?;
     model.status = ModelStatus::Live;
@@ -345,6 +367,11 @@ pub fn grant_by_enclave(ctx: Context<GrantByEnclave>, wrapped_key: Vec<u8>) -> R
     let source = current_record(&ctx.accounts.config, &ctx.accounts.source_enclave, &ctx.accounts.source_attestation_record)?;
     let target = current_record(&ctx.accounts.config, &ctx.accounts.target_enclave, &ctx.accounts.target_attestation_record)?;
     allowed(model, &source.measurement)?; allowed(model, &target.measurement)?;
+    if let Some(policy) = load_model_policy(model.key(), model.has_policy, ctx.remaining_accounts)? {
+        if !policy.allowed_operators.is_empty() {
+            require!(policy.allowed_operators.contains(&ctx.accounts.target_enclave.operator), VoynichError::PolicyOperatorDenied);
+        }
+    }
     let grant = &mut ctx.accounts.grant;
     assign_grant(grant, model.key(), ctx.accounts.target_enclave.key(), wrapped_key, ctx.accounts.source_enclave.key(), ctx.bumps.grant)?;
     emit_cpi!(GrantChanged { grant: grant.key(), model: grant.model, enclave: grant.enclave, wrapped_key: grant.wrapped_key.clone(), granted_by: grant.granted_by, slot: grant.granted_slot, revoked: false });
@@ -363,6 +390,11 @@ fn open_call_inner(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answ
     require!(!ctx.accounts.grant.revoked, VoynichError::GrantRequired);
     let value = current_record(&ctx.accounts.config, &ctx.accounts.enclave, &ctx.accounts.attestation_record)?;
     allowed(model, &value.measurement)?;
+    if let Some(policy) = load_model_policy(model.key(), model.has_policy, ctx.remaining_accounts)? {
+        if policy.allow_list_enabled {
+            require!(policy.allowed_callers.contains(&ctx.accounts.caller.key()), VoynichError::PolicyCallerDenied);
+        }
+    }
     require!(u32::from(model.operator_share_bps) + u32::from(ctx.accounts.config.protocol_share_bps) <= 10000, VoynichError::InvalidConfig);
     let (callback_program, callback_accounts) = match callback {
         Some(spec) => {
@@ -813,6 +845,71 @@ pub fn deprecate_measurement(ctx: Context<DeprecateMeasurement>) -> Result<()> {
     Ok(())
 }
 
+pub fn set_policy(ctx: Context<SetPolicy>, args: PolicyArgs) -> Result<()> {
+    require!(args.allowed_callers.len() <= MAX_POLICY_CALLERS, VoynichError::InvalidPolicy);
+    require!(args.allowed_operators.len() <= MAX_POLICY_OPERATORS, VoynichError::InvalidPolicy);
+    require!(args.allowed_regions.len() <= MAX_POLICY_REGIONS, VoynichError::InvalidPolicy);
+    require!(
+        (args.max_calls_per_caller_per_window == 0 && args.window_slots == 0)
+            || (args.max_calls_per_caller_per_window > 0 && args.window_slots > 0),
+        VoynichError::InvalidPolicy
+    );
+    for (i, caller) in args.allowed_callers.iter().enumerate() {
+        require!(*caller != Pubkey::default(), VoynichError::InvalidPolicy);
+        require!(!args.allowed_callers[..i].contains(caller), VoynichError::InvalidPolicy);
+    }
+    for (i, op) in args.allowed_operators.iter().enumerate() {
+        require!(*op != Pubkey::default(), VoynichError::InvalidPolicy);
+        require!(!args.allowed_operators[..i].contains(op), VoynichError::InvalidPolicy);
+    }
+    for (i, region) in args.allowed_regions.iter().enumerate() {
+        require!(
+            !region.is_empty()
+                && region.len() <= MAX_POLICY_REGION_LEN
+                && region.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'),
+            VoynichError::InvalidPolicy
+        );
+        require!(!args.allowed_regions[..i].contains(region), VoynichError::InvalidPolicy);
+    }
+    let slot = Clock::get()?.slot;
+    let p = &mut ctx.accounts.policy;
+    p.model = ctx.accounts.model.key();
+    p.allow_list_enabled = args.allow_list_enabled;
+    p.allowed_callers = args.allowed_callers.clone();
+    p.max_calls_per_caller_per_window = args.max_calls_per_caller_per_window;
+    p.window_slots = args.window_slots;
+    p.allowed_operators = args.allowed_operators.clone();
+    p.allowed_regions = args.allowed_regions.clone();
+    p.updated_slot = slot;
+    p.bump = ctx.bumps.policy;
+    ctx.accounts.model.has_policy = true;
+    emit_cpi!(PolicyUpdated {
+        policy: p.key(),
+        model: p.model,
+        allow_list_enabled: args.allow_list_enabled,
+        allowed_callers: args.allowed_callers,
+        max_calls_per_caller_per_window: args.max_calls_per_caller_per_window,
+        window_slots: args.window_slots,
+        allowed_operators: args.allowed_operators,
+        allowed_regions: args.allowed_regions,
+        updated_slot: slot,
+    });
+    zero_model_tail(&ctx.accounts.model)?;
+    Ok(())
+}
+
+pub fn clear_policy(ctx: Context<ClearPolicy>) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    ctx.accounts.model.has_policy = false;
+    emit_cpi!(PolicyCleared {
+        policy: ctx.accounts.policy.key(),
+        model: ctx.accounts.model.key(),
+        slot,
+    });
+    zero_model_tail(&ctx.accounts.model)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -914,6 +1011,7 @@ mod tests {
                     None
                 },
                 price_unit: PriceUnit::Token,
+                has_policy: false,
             };
 
             let mut encoded = Vec::new();
@@ -925,12 +1023,13 @@ mod tests {
             assert_eq!(parsed_owner, owner);
             assert_eq!(parsed_name, "text-1m");
             assert_eq!(parsed_bump, 251);
-            assert_eq!(prefix_end, encoded.len() - 1);
+            assert_eq!(prefix_end, encoded.len() - 2);
 
             // Clean PriceUnit::Token with zero tail stays untouched.
             repair_model_tail_bytes(&mut buf, prefix_end).unwrap();
             let token_decoded = Model::try_deserialize(&mut &buf[..]).unwrap();
             assert_eq!(token_decoded.price_unit, PriceUnit::Token);
+            assert_eq!(token_decoded.has_policy, false);
 
             // Dirty slack past prefix_end fails deserialization until repaired to PriceUnit::Call + zero tail.
             let stale = b".mypinata.";
@@ -940,7 +1039,8 @@ mod tests {
             repair_model_tail_bytes(&mut buf, prefix_end).unwrap();
             let repaired = Model::try_deserialize(&mut &buf[..]).unwrap();
             assert_eq!(repaired.price_unit, PriceUnit::Call);
-            assert!(buf[prefix_end + 1..].iter().all(|&b| b == 0));
+            assert_eq!(repaired.has_policy, false);
+            assert!(buf[prefix_end + 2..].iter().all(|&b| b == 0));
         }
     }
 }

@@ -40,4 +40,6 @@ pub mod voynich {
     pub fn refund_call(ctx: Context<RefundCall>) -> Result<()> { handlers::refund_call(ctx) }
     pub fn publish_measurement(ctx: Context<PublishMeasurement>, digest: [u8; 48], source_repo: String, commit_sha: String, recipe_hash: [u8; 32], version: String) -> Result<()> { handlers::publish_measurement(ctx, digest, source_repo, commit_sha, recipe_hash, version) }
     pub fn deprecate_measurement(ctx: Context<DeprecateMeasurement>) -> Result<()> { handlers::deprecate_measurement(ctx) }
+    pub fn set_policy(ctx: Context<SetPolicy>, args: PolicyArgs) -> Result<()> { handlers::set_policy(ctx, args) }
+    pub fn clear_policy(ctx: Context<ClearPolicy>) -> Result<()> { handlers::clear_policy(ctx) }
 }

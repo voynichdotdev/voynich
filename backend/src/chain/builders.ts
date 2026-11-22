@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BN, CALL_SPACE, MEASUREMENT_SPACE, RECEIPT_METERED_SPACE, decodeCallAccount, decodeConfigAccount, decodeMeasurementAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BN, CALL_SPACE, MEASUREMENT_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, decodeCallAccount, decodeConfigAccount, decodeMeasurementAccount, decodePolicyAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -51,10 +51,14 @@ export function decodeModelAccountForBuilder(voynich: ChainRuntime['programs']['
     return voynich.coder.accounts.decode('model', buf)
   } catch (err) {
     const priceUnitOffset = findModelPriceUnitOffset(data)
-    if (priceUnitOffset !== null && priceUnitOffset < data.length && data[priceUnitOffset] !== 0 && data[priceUnitOffset] !== 1) {
-      const patched = Buffer.from(data)
-      patched.fill(0, priceUnitOffset)
-      return voynich.coder.accounts.decode('model', patched)
+    if (priceUnitOffset !== null && priceUnitOffset < data.length) {
+      const invalidPriceUnit = data[priceUnitOffset] !== 0 && data[priceUnitOffset] !== 1
+      const invalidHasPolicy = priceUnitOffset + 1 < data.length && data[priceUnitOffset + 1] !== 0 && data[priceUnitOffset + 1] !== 1
+      if (invalidPriceUnit || invalidHasPolicy) {
+        const patched = Buffer.from(data)
+        patched.fill(0, invalidPriceUnit ? priceUnitOffset : priceUnitOffset + 1)
+        return voynich.coder.accounts.decode('model', patched)
+      }
     }
     throw err
   }
@@ -212,7 +216,19 @@ export function builders(runtime: ChainRuntime) {
       const target = await enclave(targetEnclave)
       const grant = a.grant(row.key, targetEnclave)
       const rent = await runtime.rpc.connection.getAccountInfo(grant, 'confirmed') ? 0n : BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(223))
-      const instruction = await voynich.methods.grantByOwner(Buffer.from(fromBase64(body.wrappedKey))).accountsStrict({ owner, payer: owner, config: a.config, model: row.key, targetEnclave, targetAttestationRecord: target.attestationRecord, grant: a.grant(row.key, targetEnclave), systemProgram: SystemProgram.programId, ...events }).instruction()
+      const policyRemaining: { pubkey: PublicKey; isWritable: boolean; isSigner: boolean }[] = []
+      if ((row.value as { hasPolicy?: boolean }).hasPolicy) {
+        const policyKey = a.policy(row.key)
+        const policyInfo = await runtime.rpc.connection.getAccountInfo(policyKey, 'confirmed')
+        if (policyInfo) {
+          const policy = decodePolicyAccount(policyInfo.data)
+          if (policy.allowedOperators.length > 0 && !policy.allowedOperators.some(op => op.equals(target.operator))) {
+            fail('POLICY_OPERATOR_DENIED', 'The enclave operator is not allowed by this model policy.', { stage: 'build' })
+          }
+        }
+        policyRemaining.push({ pubkey: policyKey, isWritable: false, isSigner: false })
+      }
+      const instruction = await voynich.methods.grantByOwner(Buffer.from(fromBase64(body.wrappedKey))).accountsStrict({ owner, payer: owner, config: a.config, model: row.key, targetEnclave, targetAttestationRecord: target.attestationRecord, grant: a.grant(row.key, targetEnclave), systemProgram: SystemProgram.programId, ...events }).remainingAccounts(policyRemaining).instruction()
       return ledger.build('grant_by_owner', owner, [instruction], { model: row.key.toBase58() }, rent)
     },
     async retire(id: string, body: c.WalletRequest) {
@@ -259,9 +275,21 @@ export function builders(runtime: ChainRuntime) {
         mint: token ? row.value.priceMint : null, callerTokens: token ? getAssociatedTokenAddressSync(row.value.priceMint, caller, true) : null,
         escrowTokens: token ? getAssociatedTokenAddressSync(row.value.priceMint, call, true) : null, tokenProgram: token ? TOKEN_PROGRAM_ID : null, associatedTokenProgram: token ? ASSOCIATED_TOKEN_PROGRAM_ID : null, systemProgram: SystemProgram.programId, ...events,
       }
+      const policyRemaining: { pubkey: PublicKey; isWritable: boolean; isSigner: boolean }[] = []
+      if ((row.value as { hasPolicy?: boolean }).hasPolicy) {
+        const policyKey = a.policy(row.key)
+        const policyInfo = await runtime.rpc.connection.getAccountInfo(policyKey, 'confirmed')
+        if (policyInfo) {
+          const policy = decodePolicyAccount(policyInfo.data)
+          if (policy.allowListEnabled && !policy.allowedCallers.some(c => c.equals(caller))) {
+            fail('POLICY_CALLER_DENIED', 'This wallet is not on the model allow list.', { stage: 'build' })
+          }
+        }
+        policyRemaining.push({ pubkey: policyKey, isWritable: false, isSigner: false })
+      }
       const instruction = priceUnit === 'token'
-        ? await voynich.methods.openMeteredCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null, bn(escrowAmount)).accountsStrict(accounts).instruction()
-        : await voynich.methods.openCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null).accountsStrict(accounts).instruction()
+        ? await voynich.methods.openMeteredCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null, bn(escrowAmount)).accountsStrict(accounts).remainingAccounts(policyRemaining).instruction()
+        : await voynich.methods.openCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null).accountsStrict(accounts).remainingAccounts(policyRemaining).instruction()
       return ledger.build('open_call', caller, [instruction], { model: row.key.toBase58(), call: call.toBase58() }, requiredLamports, token ? { mint: row.value.priceMint, account: callerTokens!, amount: escrowAmount } : undefined)
     },
     async settleMetered(id: string, body: c.SettleCallRequest) {
@@ -505,6 +533,37 @@ export function builders(runtime: ChainRuntime) {
         .accountsStrict({ authority, config: a.config, measurement, ...events })
         .instruction()
       return ledger.build('deprecate_measurement', authority, [instruction], { measurement: measurement.toBase58() })
+    },
+    async setPolicy(id: string, body: c.SetPolicyRequest) {
+      const row = await model(id), owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can update its policy.', { stage: 'build' })
+      const policy = a.policy(row.key)
+      const existing = await runtime.rpc.connection.getAccountInfo(policy, 'confirmed')
+      const requiredLamports = existing ? 0n : BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(POLICY_SPACE))
+      const instruction = await voynich.methods
+        .setPolicy({
+          allowListEnabled: body.allowListEnabled,
+          allowedCallers: body.allowedCallers.map(publicKey),
+          maxCallsPerCallerPerWindow: body.maxCallsPerCallerPerWindow,
+          windowSlots: bn(body.windowSlots),
+          allowedOperators: body.allowedOperators.map(publicKey),
+          allowedRegions: body.allowedRegions,
+        })
+        .accountsStrict({ owner, model: row.key, policy, systemProgram: SystemProgram.programId, ...events })
+        .instruction()
+      return ledger.build('set_policy', owner, [instruction], { model: row.key.toBase58(), policy: policy.toBase58() }, requiredLamports)
+    },
+    async clearPolicy(id: string, body: c.WalletRequest) {
+      const row = await model(id), owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can clear its policy.', { stage: 'build' })
+      const policy = a.policy(row.key)
+      const existing = await runtime.rpc.connection.getAccountInfo(policy, 'confirmed')
+      if (!existing) fail('POLICY_NOT_FOUND', 'No policy is configured for this model.')
+      const instruction = await voynich.methods
+        .clearPolicy()
+        .accountsStrict({ owner, model: row.key, policy, ...events })
+        .instruction()
+      return ledger.build('clear_policy', owner, [instruction], { model: row.key.toBase58(), policy: policy.toBase58() })
     },
   }
 }

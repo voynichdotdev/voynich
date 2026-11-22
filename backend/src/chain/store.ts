@@ -276,6 +276,35 @@ export function createApply(attestationProgramId: string) {
           await notify(tx, 'measurement.updated', digest)
           break
         }
+        case 'policyupdated': {
+          const address = text(data, 'policy')
+          const modelAddress = text(data, 'model')
+          const value = {
+            address,
+            modelAddress,
+            allowListEnabled: Boolean(data.allowListEnabled),
+            allowedCallers: Array.isArray(data.allowedCallers) ? (data.allowedCallers as string[]) : [],
+            maxCallsPerCallerPerWindow: number(data, 'maxCallsPerCallerPerWindow'),
+            windowSlots: slot(data, 'windowSlots'),
+            allowedOperators: Array.isArray(data.allowedOperators) ? (data.allowedOperators as string[]) : [],
+            allowedRegions: Array.isArray(data.allowedRegions) ? (data.allowedRegions as string[]) : [],
+            updatedSlot: slot(data, 'updatedSlot'),
+          }
+          await tx.modelPolicy.upsert({ where: { address }, create: value, update: value })
+          await tx.model.update({ where: { address: modelAddress }, data: { hasPolicy: true, updatedSlot: currentSlot } })
+          await notify(tx, 'policy.updated', modelAddress)
+          await notify(tx, 'model.updated', modelAddress)
+          break
+        }
+        case 'policycleared': {
+          const address = text(data, 'policy')
+          const modelAddress = text(data, 'model')
+          await tx.modelPolicy.deleteMany({ where: { modelAddress } })
+          await tx.model.update({ where: { address: modelAddress }, data: { hasPolicy: false, updatedSlot: currentSlot } })
+          await notify(tx, 'policy.cleared', `${modelAddress}:${address}`)
+          await notify(tx, 'model.updated', modelAddress)
+          break
+        }
       }
     }
   }
