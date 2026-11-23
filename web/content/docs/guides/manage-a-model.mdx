@@ -1,11 +1,11 @@
 ---
 title: Manage a model
-description: Set a sealed model's price and operator share, grant it to further enclaves, revoke a grant and retire it.
+description: Set a sealed model's price, operator share and on-chain policy, grant it to further enclaves, revoke a grant and retire it.
 ---
 
-A sealed model has four things its owner can change: its price, which enclaves hold it, whether a grant still stands, and whether it takes calls. Each is one transaction signed by the owner's wallet.
+A sealed model has five things its owner can change: its price, its on-chain policy, which enclaves hold it, whether a grant still stands, and whether it takes calls. Each is one transaction signed by the owner's wallet.
 
-On the site, a model's page at `/models/<name>` shows an **Owner** panel when the connected wallet is the model's owner, with three actions: **Set price**, **Grant an enclave** and **Retire**. The CLI and the SDK sign with the owner's keypair and have all four.
+On the site, a model's page at `/models/<name>` shows an **Owner** panel when the connected wallet is the model's owner, with four actions: **Set price**, **Policy**, **Grant an enclave** and **Retire**. The CLI and the SDK sign with the owner's keypair and have all five.
 
 ## Set the price
 
@@ -38,6 +38,48 @@ const status = await voynich.setPrice('sketch-32', price, 3000)
 </Ways>
 
 The operator share plus the protocol share is at most 10,000 basis points. See [Fees and the token](/docs/concepts/fees-and-the-token#the-split).
+
+## Set or clear the policy
+
+An owner policy lives in a `Policy` PDA (`["policy", model]`) and controls caller allow lists, per-caller sliding-window rate ceilings, allowed enclave operators, and allowed regions. When active, `/models/<name>` displays a read-only **Policy** summary in its facts table, and the call panel refuses wallets outside an enabled allow list before building a transaction.
+
+<Ways>
+<Way label="Site">
+
+On the model's page, under **Policy**, toggle the caller allow list, enter allowed callers (up to 32), max calls per window and window length in slots, allowed operators (up to 16), and allowed regions (up to 8), then press **Save policy** and approve `set_policy`. To remove the policy and reclaim its rent, press **Clear policy** and approve `clear_policy`.
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich model policy set sketch-32 \
+  --allow-list --caller <caller pubkey> \
+  --max-calls 10 --window-slots 1500 \
+  --region us-east
+
+voynich model policy show sketch-32
+voynich model policy clear sketch-32
+```
+
+Every flag and output field is in [CLI: models](/docs/cli/models#voynich-model-policy).
+
+</Way>
+<Way label="SDK">
+
+```ts
+const policy = await voynich.setPolicy('sketch-32', {
+  allowListEnabled: true,
+  allowedCallers: [callerAddress],
+  maxCallsPerCallerPerWindow: 10,
+  windowSlots: '1500',
+  allowedRegions: ['us-east'],
+})
+
+await voynich.clearPolicy('sketch-32')
+```
+
+</Way>
+</Ways>
 
 ## Grant another enclave
 

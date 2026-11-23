@@ -5,11 +5,12 @@
 
 import Link from 'next/link'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { AnswerMode, GrantedEnclaves, Model } from '@voynich/contract'
+import type { AnswerMode, GrantedEnclaves, Model, ModelPolicy } from '@voynich/contract'
 import { api } from '@/lib/api'
 import { IDLE, eligibleEnclaves, hasOpenCall, heldStage, parseCeiling, parseTensor, refundCall, resumeCall, runCall, settleMeteredStream, type CallState, type FlightStage, type Stage } from '@/lib/call'
 import { CALL_STAGES, RECEIPT_CHECKS } from '@/lib/facts'
-import { group, money, units } from '@/lib/format'
+import { group, money, short, units } from '@/lib/format'
+import { formatRateCeiling, isCallerAllowedByPolicy } from '@/lib/policy'
 import { play, stop } from '@/lib/sound'
 import { errorMessage } from '@/lib/tx'
 import { wallet } from '@/lib/wallet'
@@ -30,7 +31,7 @@ const LABEL = Object.fromEntries(CALL_STAGES.map((x) => [x.id, x.label])) as Rec
 const IN_FLIGHT: Stage[] = ['encrypting', 'signing', 'escrowed', 'answering', 'streaming']
 const pct = (p: number) => `${(p * 100).toFixed(p >= 0.1 ? 0 : 1)}%`
 
-type Props = { model: Model; fixture: string | null; compact?: boolean; owner?: boolean; enclaves?: GrantedEnclaves['items'] | null; onSettled?: () => void }
+type Props = { model: Model; fixture: string | null; compact?: boolean; owner?: boolean; enclaves?: GrantedEnclaves['items'] | null; policy?: ModelPolicy | null; onSettled?: () => void }
 
 // A model that takes no calls, composed per cause: retired, sealed with no enclave yet, or still uploading.
 function Closed({ model, fixture, compact, owner }: { model: Model; fixture: string | null; compact: boolean; owner: boolean }) {
@@ -89,7 +90,7 @@ function Closed({ model, fixture, compact, owner }: { model: Model; fixture: str
   )
 }
 
-export function CallPanel({ model, fixture, compact = false, owner = false, enclaves, onSettled }: Props) {
+export function CallPanel({ model, fixture, compact = false, owner = false, enclaves, policy = null, onSettled }: Props) {
   const w = useWallet(wallet)
   const connected = w.status === 'connected' && !!w.address
   const held = heldStage(fixture)
@@ -102,6 +103,7 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   const tokenizer = model.manifest.tokenizer
   const live = model.status === 'live'
   const noEligibleEnclave = live && !held && !hasOpenCall(fixture) && Array.isArray(enclaves) && eligibleEnclaves(model, enclaves).length === 0
+  const callerDeniedByPolicy = live && !held && !hasOpenCall(fixture) && connected && !!w.address && !isCallerAllowedByPolicy(policy, w.address)
 
   const [strokes, setStrokes] = useState<Stroke[]>([])
   const [tensor, setTensor] = useState('')
@@ -328,6 +330,33 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
           </dl>
           <div className={s.closedAct}>
             {owner ? <a href="#owner" className="btn" data-kind="primary">Manage model</a> : <Link href={`/enclaves${q}`} className="btn">Enclaves</Link>}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (callerDeniedByPolicy && policy) {
+    const q = fixture ? `?fixture=${fixture}` : ''
+    const rate = formatRateCeiling(policy)
+    return (
+      <section className={`panel ${s.panel}`} data-compact={compact || undefined} aria-label="Call">
+        <div className={s.head}>
+          <h2>Call</h2>
+          <span className={s.now}>Caller not on allow list</span>
+        </div>
+        <div className={s.closed} data-cause="retired">
+          <div className={s.closedLead}>
+            <h3 className={s.lead}>This wallet is not on the model allow list</h3>
+            <p className="t-small">The model owner enabled an on-chain caller allow list. Only listed wallets can open calls on this model.</p>
+          </div>
+          <dl className={s.facts}>
+            <div><dt>Connected wallet</dt><dd className="mono">{short(w.address!, 6)}</dd></div>
+            <div><dt>Allowed callers</dt><dd className="mono">{group(policy.allowedCallers.length)}</dd></div>
+            {rate ? <div><dt>Rate ceiling</dt><dd className="mono">{rate}</dd></div> : null}
+          </dl>
+          <div className={s.closedAct}>
+            {owner ? <a href="#owner-policy" className="btn" data-kind="primary">Edit policy</a> : <Link href={`/models${q}`} className="btn">All models</Link>}
           </div>
         </div>
       </section>

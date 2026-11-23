@@ -1,11 +1,11 @@
 ---
 title: models
-description: voynich models and voynich enclaves, the two list commands, with every field they print, and voynich model price and voynich model retire, the owner's commands.
+description: voynich models and voynich enclaves, the two list commands, with every field they print, and voynich model price, policy and retire, the owner's commands.
 ---
 
 Two commands list what is on chain: `voynich models` lists sealed models and `voynich enclaves` lists registered enclaves. Both read public state through the API and need no wallet. The same from code is [Models and enclaves](/docs/sdk/models-and-enclaves).
 
-Two more commands change a model as its owner: [`voynich model price`](#voynich-model-price) and [`voynich model retire`](#voynich-model-retire).
+Three more commands change a model as its owner: [`voynich model price`](#voynich-model-price), [`voynich model policy`](#voynich-model-policy) and [`voynich model retire`](#voynich-model-retire).
 
 ## voynich models
 
@@ -173,6 +173,9 @@ How many enclaves hold a grant for the model that is not revoked, with an attest
 <Field name="callsSettled" type="integer string">
 How many calls to the model have settled.
 </Field>
+<Field name="hasPolicy" type="boolean">
+Whether the model has an active on-chain `Policy` PDA (`["policy", model]`).
+</Field>
 </Fields>
 
 ## voynich enclaves
@@ -321,6 +324,37 @@ It prints the status of the transaction, as JSON on stdout: `id`, `status` (`con
 | `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner, or the operator share plus the protocol share is above 10,000. |
 | `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `set_price` was refused, or did not land before its blockhash expired. |
 
+## voynich model policy
+
+Reads, creates, updates or clears a model's on-chain `Policy` PDA (`["policy", model]`). The same from code is [policy, setPolicy and clearPolicy](/docs/sdk/models-and-enclaves#policy-setpolicy-and-clearpolicy).
+
+```bash
+voynich model policy show <model>
+voynich model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...]
+voynich model policy clear <model>
+```
+
+<Fields>
+<Field name="show <model>" type="read">
+Reads the model's active `ModelPolicy` through `GET /v1/models/{id}/policy` (no wallet required). Prints the policy JSON, or `{ "model": "<model>", "policy": null }` when none exists.
+</Field>
+<Field name="set <model>" type="owner write">
+Signs `set_policy` as the model's owner, waits for indexing, and prints `{ "model", "policy", "transaction" }`. Repeatable flags: `--caller` (up to 32 unique addresses), `--operator` (up to 16 unique addresses), and `--region` (up to 8 unique lowercase alphanumeric/hyphen codes, 1 to 16 characters each). Pass `--allow-list` to enforce `allowedCallers`; pass `--max-calls` (`0` to `4294967295`) and `--window-slots` (both `0` or both positive) to set per-caller rate ceilings.
+</Field>
+<Field name="clear <model>" type="owner write">
+Signs `clear_policy` as the model's owner, closing the `Policy` PDA and returning its rent to the owner. Prints `{ "model", "cleared": true, "transaction" }`.
+</Field>
+</Fields>
+
+| Code | Message | Cause |
+| --- | --- | --- |
+|  | `Use model policy show <model>, model policy set <model>, or model policy clear <model>.` | Subcommand is not `show`, `set` or `clear`. |
+|  | `--max-calls must be an integer between 0 and 4294967295.` or `--window-slots must be a non-negative integer.` | Invalid rate-limit flag. |
+| `MODEL_NOT_FOUND` | The API's message | No model has this name or address. |
+| `POLICY_NOT_FOUND` | The API's message | `clear` called on a model with no active Policy PDA. |
+| `VALIDATION_ERROR`, `INVALID_POLICY` | The API's message | Duplicate addresses/regions, out-of-range counts, or mismatched zero/positive rate limits. |
+| `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner. |
+
 ## voynich model retire
 
 ```bash
@@ -344,7 +378,7 @@ It prints the status of the transaction: `id`, `status` and `signature`.
 | `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner. |
 | `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `retire_model` was refused, or did not land before its blockhash expired. |
 
-`voynich model` followed by another word fails with `Use model price, model retire, or model revoke.` The third of them, `voynich model revoke`, is on [grant](/docs/cli/grant#voynich-model-revoke).
+`voynich model` followed by another word fails with `Use model price, model policy, model retire, or model revoke.` The fourth of them, `voynich model revoke`, is on [grant](/docs/cli/grant#voynich-model-revoke).
 
 ## Failures
 

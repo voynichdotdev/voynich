@@ -14,11 +14,12 @@ import { STREAM_PIECES_MAX_ENTRIES, STREAM_PIECES_STORAGE_KEY, STREAM_PIECES_TTL
 import { explorerUrl, siteUrl } from '@/lib/env'
 import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
+import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
 import {
   ATTACH_WEIGHTS_BATCH, CIPHER_CHUNK_BYTES, INITIAL_CREATE_WEIGHTS, MAX_WEIGHTS, SEAL_RANGE_CHUNKS, WEIGHTS_CAPACITY, WRITE_BYTES, WRITE_PARALLEL,
   addSealMetrics, attachWeights, checkLocalBaseFile, chunkCount, deriveSealSecrets, formatAdapterOps, inferBaseFormat, inspectAdapterBytes, modelPdaAddress, newUploadKeys, partitionChunks, reseal, resumeCliCommand, saveSeal, sealChunkCount, sealDerivationMessage, sealRangeCount, sealRanges, sealSummary, signSealDerivation, signWithUploadKey, stateFromModel, txFeeLamports, uploadFunding, verifySealDerivationSignature, weightsCount, writeChunks, type SealState,
 } from '@/lib/seal'
-import { TxError, send, txRouteFor } from '@/lib/tx'
+import { TxError, errorMessage, send, txRouteFor } from '@/lib/tx'
 import { checkAnswer, checkBase, checkSignature, decodeModelBaseBytes, decodeReceiptBytes, RECEIPT_LEGACY_SPACE, RECEIPT_METERED_EXTENSION, RECEIPT_METERED_SPACE, verifyAll } from '@/lib/verify'
 import { chooseRoute } from '@/src/engines/tx/client/flow'
 import * as sitemapMod from '@/app/sitemap'
@@ -2489,4 +2490,96 @@ test('Build 5 Step 4: measurement provenance lookup helpers, formatting, and wir
 
   const prepareSrc = fs.readFileSync(path.join(ROOT, 'components/seal/Prepare.tsx'), 'utf8')
   assert.ok(prepareSrc.includes('indexMeasurements(publishedMeasurements ?? [])') && prepareSrc.includes('formatMeasurementLabel(pub)'))
+})
+
+test('Build 7 Step 3: owner policy validation, allow-list refusal, error mapping, and ModelView/OwnerPanel/CallPanel wiring', async () => {
+  const callerA = Keypair.generate().publicKey.toBase58()
+  const callerB = Keypair.generate().publicKey.toBase58()
+  const operatorA = Keypair.generate().publicKey.toBase58()
+  const modelAddr = Keypair.generate().publicKey.toBase58()
+  const policyAddr = Keypair.generate().publicKey.toBase58()
+
+  const samplePolicy = {
+    address: policyAddr,
+    model: modelAddr,
+    allowListEnabled: true,
+    allowedCallers: [callerA],
+    maxCallsPerCallerPerWindow: 5,
+    windowSlots: '1500',
+    allowedOperators: [operatorA],
+    allowedRegions: ['us-east'],
+    updatedSlot: '12345',
+  }
+
+  // loadModelPolicy skips network call when hasPolicy === false and returns null on 404
+  let calls = 0
+  const client = {
+    modelPolicy: async () => {
+      calls++
+      return samplePolicy
+    },
+  } as unknown as Parameters<typeof loadModelPolicy>[0]
+  assert.equal(await loadModelPolicy(client, { address: modelAddr, hasPolicy: false }), null)
+  assert.equal(calls, 0)
+  assert.deepEqual(await loadModelPolicy(client, { address: modelAddr, hasPolicy: true }), samplePolicy)
+  assert.equal(calls, 1)
+
+  const missingClient = {
+    modelPolicy: async () => { throw new Error('404 POLICY_NOT_FOUND') },
+  } as unknown as Parameters<typeof loadModelPolicy>[0]
+  assert.equal(await loadModelPolicy(missingClient, { address: modelAddr, hasPolicy: true }), null)
+
+  // Validation & equality
+  const draft = policyToDraft(samplePolicy)
+  const parsed = validatePolicyDraft(draft)
+  assert.equal(parsed.ok, true)
+  if (parsed.ok) {
+    assert.equal(policyEquals(samplePolicy, parsed.body), true)
+    assert.deepEqual(parsed.body.allowedRegions, ['us-east'])
+  }
+  assert.equal(formatRateCeiling(samplePolicy), '5 calls / 1,500 slots')
+  assert.equal(formatRateCeiling({ maxCallsPerCallerPerWindow: 0, windowSlots: '0' }), null)
+
+  const badRate = validatePolicyDraft({ ...EMPTY_POLICY_DRAFT, maxCallsText: '5', windowSlotsText: '0' })
+  assert.equal(badRate.ok, false)
+  if (!badRate.ok) assert.ok(badRate.errors.rate)
+
+  const badAddr = parseAddressList('not-a-pubkey', 32, 'caller')
+  assert.equal(badAddr.ok, false)
+
+  const badRegion = parseRegionList('US_EAST_BAD!')
+  assert.equal(badRegion.ok, false)
+
+  const dedupedRegions = parseRegionList('US-EAST, us-east, eu-west')
+  assert.equal(dedupedRegions.ok, true)
+  if (dedupedRegions.ok) assert.deepEqual(dedupedRegions.values, ['us-east', 'eu-west'])
+
+  // Allow-list refusal helper
+  assert.equal(isCallerAllowedByPolicy(null, callerB), true)
+  assert.equal(isCallerAllowedByPolicy({ ...samplePolicy, allowListEnabled: false }, callerB), true)
+  assert.equal(isCallerAllowedByPolicy(samplePolicy, callerA), true)
+  assert.equal(isCallerAllowedByPolicy(samplePolicy, callerB), false)
+
+  // Error code mapping
+  assert.ok(errorMessage({ body: { error: { code: 'POLICY_CALLER_DENIED' } } }).includes('allow list'))
+  assert.ok(errorMessage({ body: { error: { code: 'RATE_LIMITED' } } }).includes('Rate ceiling'))
+
+  // UI wiring assertions
+  const modelPageSrc = fs.readFileSync(path.join(ROOT, 'app/models/[id]/page.tsx'), 'utf8')
+  assert.ok(modelPageSrc.includes('loadModelPolicy(client, model.data)'))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['loadModelPolicy', 'formatRateCeiling', '<dt className={s.wide}>Policy</dt>', 'policy={policy}']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+
+  const ownerPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/OwnerPanel.tsx'), 'utf8')
+  for (const sym of ['client.setPolicy', 'client.clearPolicy', 'Save policy', 'Clear policy', 'Allowed callers (max 32)', 'Max calls per window', 'Window (slots)', 'Allowed operators (max 16)', 'Allowed regions (max 8)']) {
+    assert.ok(ownerPanelSrc.includes(sym), `OwnerPanel must include ${sym}`)
+  }
+
+  const callPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/CallPanel.tsx'), 'utf8')
+  for (const sym of ['isCallerAllowedByPolicy', 'Caller not on allow list', 'This wallet is not on the model allow list']) {
+    assert.ok(callPanelSrc.includes(sym), `CallPanel must include ${sym}`)
+  }
 })

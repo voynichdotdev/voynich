@@ -5,11 +5,12 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import type { Config, GrantedEnclaves, Model, ReceiptsPage } from '@voynich/contract'
+import type { Config, GrantedEnclaves, Model, ModelPolicy, ReceiptsPage } from '@voynich/contract'
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
+import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
 import { wallet } from '@/lib/wallet'
 import { useWallet } from '@/src/engines/wallet/react'
 import { State, TileStrip } from '@/components/tile/Tile'
@@ -23,7 +24,7 @@ import s from './model-view.module.css'
 type Props = {
   fixture: string | null
   asOwner: boolean
-  initial: { model: Model; enclaves: Read<GrantedEnclaves>; receipts: Read<ReceiptsPage>; measurements?: MeasurementMap }
+  initial: { model: Model; enclaves: Read<GrantedEnclaves>; receipts: Read<ReceiptsPage>; measurements?: MeasurementMap; policy?: ModelPolicy | null }
 }
 
 export function ModelView({ fixture, asOwner, initial }: Props) {
@@ -32,6 +33,7 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
   const [enclaves, setEnclaves] = useState(initial.enclaves)
   const [receipts, setReceipts] = useState(initial.receipts)
   const [measurements, setMeasurements] = useState<MeasurementMap>(initial.measurements ?? {})
+  const [policy, setPolicy] = useState<ModelPolicy | null>(initial.policy ?? null)
   const [config, setConfig] = useState<Config | null>(null)
   const id = initial.model.address
   const q = fixture ? `?fixture=${fixture}` : ''
@@ -44,11 +46,13 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
       read(client.modelReceipts(id, { limit: 8 })),
       loadMeasurements(client),
     ])
+    const nextModel = m.ok ? m.data : model
     if (m.ok) setModel(m.data)
     setEnclaves(e)
     setReceipts(r)
     setMeasurements(ms)
-  }, [fixture, id])
+    setPolicy(await loadModelPolicy(client, nextModel))
+  }, [fixture, id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // After a confirmation the API's read follows the chain by a moment: read now and once more shortly after.
   const refreshSoon = useCallback(() => { void refresh(); setTimeout(() => void refresh(), 2500) }, [refresh])
@@ -120,6 +124,43 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
             <dd className={s.wide}><Hash value={model.base.sha256} full label="base model hash" /></dd>
           </>
         ) : null}
+        {policy ? (
+          <>
+            <dt className={s.wide}>Policy</dt>
+            <dd className={s.wide}>
+              <div className={s.policySummary}>
+                <div className={s.policyRow}>
+                  <span className="t-label">Allow list</span>
+                  <span>
+                    {policy.allowListEnabled
+                      ? `Restricted (${group(policy.allowedCallers.length)} ${policy.allowedCallers.length === 1 ? 'caller' : 'callers'})`
+                      : 'Open'}
+                  </span>
+                </div>
+                {formatRateCeiling(policy) ? (
+                  <div className={s.policyRow}>
+                    <span className="t-label">Rate ceiling</span>
+                    <span className="mono">{formatRateCeiling(policy)}</span>
+                  </div>
+                ) : null}
+                {policy.allowedOperators.length > 0 ? (
+                  <div className={s.policyRow}>
+                    <span className="t-label">Allowed operators</span>
+                    <span className="mono">{group(policy.allowedOperators.length)} {policy.allowedOperators.length === 1 ? 'operator' : 'operators'}</span>
+                  </div>
+                ) : null}
+                {policy.allowedRegions.length > 0 ? (
+                  <div className={s.policyRow}>
+                    <span className="t-label">Allowed regions</span>
+                    <span className={s.policyPills}>
+                      {policy.allowedRegions.map((reg) => <span key={reg} className={s.kindBadge}>{reg}</span>)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </dd>
+          </>
+        ) : null}
       </dl>
     </section>
   )
@@ -147,14 +188,14 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
 
       <div className={`grid ${s.regions}`}>
         <div className={live ? s.call : s.full}>
-          <CallPanel model={model} fixture={fixture} owner={isOwner} enclaves={enclaves.ok ? enclaves.data.items : null} onSettled={refreshSoon} />
+          <CallPanel model={model} fixture={fixture} owner={isOwner} enclaves={enclaves.ok ? enclaves.data.items : null} policy={policy} onSettled={refreshSoon} />
         </div>
 
         {live ? facts : null}
 
         {isOwner ? (
           <div className={s.full}>
-            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} onChanged={refreshSoon} />
+            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} onChanged={refreshSoon} />
           </div>
         ) : null}
 

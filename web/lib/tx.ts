@@ -78,10 +78,17 @@ export async function send(client: VoynichClient, build: Build, onStage?: (s: Tx
 export function errorMessage(e: unknown): string {
   const x = e as { body?: { error?: { message?: string; code?: string; funding?: { mint: string | null; required: string; available: string; shortfall: string } } }; message?: string; name?: string; nextStep?: string }
   const f = x?.body?.error?.funding
-  if (x?.body?.error?.code === 'INSUFFICIENT_FUNDS' && f && f.mint === null) {
+  const code = x?.body?.error?.code
+  if (code === 'INSUFFICIENT_FUNDS' && f && f.mint === null) {
     // Every lamport shown: a shortfall cut to six places would leave the wallet still short.
     const exact = (l: string) => units(l, 9, 9)
     return `The wallet holds ${exact(f.available)} SOL and this needs ${exact(f.required)} SOL. Add ${exact(f.shortfall)} SOL to the wallet, then try again.`
+  }
+  if (code === 'POLICY_CALLER_DENIED') {
+    return x?.body?.error?.message || 'This wallet is not on the model allow list.'
+  }
+  if (code === 'RATE_LIMITED') {
+    return x?.body?.error?.message || 'Rate ceiling reached for this wallet. Wait for the current slot window to pass, then try again.'
   }
   if (x?.body?.error?.message) return x.body.error.message
   if (e instanceof TypeError) return 'The API did not answer. Check the connection and try again.'

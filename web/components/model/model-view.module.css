@@ -70,6 +70,9 @@
 .baseMeta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .baseSummary { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .baseSource { overflow-wrap: anywhere; color: var(--text-2); }
+.policySummary { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.policyRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.policyPills { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 a.row:focus-visible { outline-offset: -2px; }
 @media (max-width: 639px) {
   .listHead { display: none; }
@@ -100,6 +103,14 @@ a.row:focus-visible { outline-offset: -2px; }
 @media (max-width: 899px) {
   .ownerBody { grid-template-columns: minmax(0, 1fr); }
   .ownerCol + .ownerCol { border-left: 0; border-top: 1px solid var(--line); }
+}
+.policySection { display: flex; flex-direction: column; gap: 12px; padding: var(--s4); border-top: 1px solid var(--line); scroll-margin-top: 72px; }
+.policyHead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.policyGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.policyCol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.policyArea { min-height: 76px; font-size: 12px; line-height: 1.45; }
+@media (max-width: 899px) {
+  .policyGrid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---- the models list ---- */

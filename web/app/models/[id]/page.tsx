@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
 import { loadMeasurements } from '@/lib/measurements'
+import { loadModelPolicy } from '@/lib/policy'
 import { Empty, Failed } from '@/components/ui/kit'
 import { ModelView } from '@/components/model/ModelView'
 import s from '@/components/model/model-view.module.css'
@@ -45,5 +46,7 @@ export default async function ModelPage({ params, searchParams }: Props) {
     )
   }
 
-  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements }} />
+  const policy = await loadModelPolicy(client, model.data)
+
+  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements, policy }} />
 }

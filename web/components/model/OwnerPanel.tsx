@@ -3,11 +3,12 @@
 // What the model's owner does from its page: set the price and the operator's share, grant an enclave, retire.
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { fromBase64, toBase64, type Build, type Enclave, type GrantedEnclave, type Model, type PriceUnit } from '@voynich/contract'
+import { fromBase64, toBase64, type Build, type Enclave, type GrantedEnclave, type Model, type ModelPolicy, type PriceUnit } from '@voynich/contract'
 import { wrapKey } from 'voynich/crypto'
 import { api, read } from '@/lib/api'
 import { bps, hardware, short, units } from '@/lib/format'
 import { loadModelKey, openKeyFile, parseKeyFile, saveModelKey, setVaultPassword, unlockVault, useVault, type SealedKeyFile } from '@/lib/keys'
+import { policyEquals, policyToDraft, validatePolicyDraft, type PolicyDraft } from '@/lib/policy'
 import { play } from '@/lib/sound'
 import { errorMessage, send } from '@/lib/tx'
 import { PasswordForm } from '@/components/seal/Password'
@@ -56,9 +57,9 @@ function toBase(text: string, decimals: number): string | null {
   return (BigInt(m[1]!) * 10n ** BigInt(decimals) + BigInt(frac.padEnd(decimals, '0') || '0')).toString()
 }
 
-type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; onChanged: () => void }
+type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; onChanged: () => void }
 
-export function OwnerPanel({ model, fixture, signer, grants, onChanged }: Props) {
+export function OwnerPanel({ model, fixture, signer, grants, policy = null, onChanged }: Props) {
   const client = api(fixture)
   const protocol = model.protocolShareBps ?? 0
 
@@ -135,6 +136,25 @@ export function OwnerPanel({ model, fixture, signer, grants, onChanged }: Props)
   // ---- retire
   const [confirming, setConfirming] = useState(false)
   const retireTx = useTx(fixture, onChanged)
+
+  // ---- policy
+  const [policyDraft, setPolicyDraft] = useState<PolicyDraft>(() => policyToDraft(policy))
+  const [policyAction, setPolicyAction] = useState<'save' | 'clear'>('save')
+  const policyAllowId = useId()
+  const policyTx = useTx(fixture, onChanged)
+  const policyKey = policy
+    ? `${policy.address}:${policy.updatedSlot}:${policy.allowListEnabled}:${policy.allowedCallers.join(',')}:${policy.maxCallsPerCallerPerWindow}:${policy.windowSlots}:${policy.allowedOperators.join(',')}:${policy.allowedRegions.join(',')}`
+    : 'none'
+  useEffect(() => {
+    setPolicyDraft(policyToDraft(policy))
+  }, [policyKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const patchPolicy = (patch: Partial<PolicyDraft>) => {
+    setPolicyDraft((prev) => ({ ...prev, ...patch }))
+    policyTx.clear()
+  }
+  const policyCheck = validatePolicyDraft(policyDraft)
+  const policyErrs = policyCheck.ok ? {} : policyCheck.errors
+  const policySame = policyCheck.ok && policyEquals(policy, policyCheck.body)
 
   return (
     <section className={`panel ${s.owner}`} aria-labelledby="owner">
@@ -261,6 +281,139 @@ export function OwnerPanel({ model, fixture, signer, grants, onChanged }: Props)
           <TxLine tx={retireTx.tx} done="Retired" />
         </div>
       </div>
+
+      <form
+        id="owner-policy"
+        className={s.policySection}
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!policyCheck.ok || policySame) return
+          setPolicyAction('save')
+          void policyTx.run(() => client.setPolicy(model.address, { wallet: signer, ...policyCheck.body }))
+        }}
+      >
+        <div className={s.policyHead}>
+          <h3 className="t-h3">Policy</h3>
+          <span className="t-small dim">On-chain caller allow list, operator restriction, rate ceiling, and allowed enclave regions.</span>
+        </div>
+        <div className={s.policyGrid}>
+          <div className={s.policyCol}>
+            <div className="field">
+              <span className="t-label" id={policyAllowId}>Caller allow list</span>
+              <div className="seg" role="group" aria-labelledby={policyAllowId}>
+                <button type="button" aria-pressed={!policyDraft.allowListEnabled} onClick={() => { play('toggle'); patchPolicy({ allowListEnabled: false }) }}>Open</button>
+                <button type="button" aria-pressed={policyDraft.allowListEnabled} onClick={() => { play('toggle'); patchPolicy({ allowListEnabled: true }) }}>Allow list</button>
+              </div>
+              <span className="help">When enabled, only listed wallets can open calls on chain.</span>
+            </div>
+
+            <div className="field">
+              <label htmlFor="own-policy-callers">Allowed callers (max 32)</label>
+              <textarea
+                id="own-policy-callers"
+                className={`textarea mono ${s.policyArea}`}
+                rows={3}
+                spellCheck={false}
+                placeholder="One Solana address per line or comma-separated"
+                value={policyDraft.allowedCallersText}
+                onChange={(e) => patchPolicy({ allowedCallersText: e.target.value })}
+                aria-invalid={policyErrs.allowedCallers ? true : undefined}
+              />
+              {policyErrs.allowedCallers ? <span className="err" role="alert">{policyErrs.allowedCallers}</span> : null}
+            </div>
+
+            <div className={s.pair}>
+              <div className="field">
+                <label htmlFor="own-policy-max-calls">Max calls per window</label>
+                <input
+                  id="own-policy-max-calls"
+                  className="input mono"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={policyDraft.maxCallsText}
+                  onChange={(e) => patchPolicy({ maxCallsText: e.target.value })}
+                  aria-invalid={policyErrs.rate ? true : undefined}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="own-policy-window">Window (slots)</label>
+                <input
+                  id="own-policy-window"
+                  className="input mono"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={policyDraft.windowSlotsText}
+                  onChange={(e) => patchPolicy({ windowSlotsText: e.target.value })}
+                  aria-invalid={policyErrs.rate ? true : undefined}
+                />
+              </div>
+            </div>
+            {policyErrs.rate ? <span className="err" role="alert">{policyErrs.rate}</span> : <span className="help">Set both to 0 for no per-caller rate ceiling.</span>}
+          </div>
+
+          <div className={s.policyCol}>
+            <div className="field">
+              <label htmlFor="own-policy-operators">Allowed operators (max 16)</label>
+              <textarea
+                id="own-policy-operators"
+                className={`textarea mono ${s.policyArea}`}
+                rows={3}
+                spellCheck={false}
+                placeholder="Leave blank to allow any operator"
+                value={policyDraft.allowedOperatorsText}
+                onChange={(e) => patchPolicy({ allowedOperatorsText: e.target.value })}
+                aria-invalid={policyErrs.allowedOperators ? true : undefined}
+              />
+              {policyErrs.allowedOperators ? <span className="err" role="alert">{policyErrs.allowedOperators}</span> : <span className="help">Enforced on chain during grants.</span>}
+            </div>
+
+            <div className="field">
+              <label htmlFor="own-policy-regions">Allowed regions (max 8)</label>
+              <input
+                id="own-policy-regions"
+                className="input mono"
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="us-east, eu-west"
+                value={policyDraft.allowedRegionsText}
+                onChange={(e) => patchPolicy({ allowedRegionsText: e.target.value })}
+                aria-invalid={policyErrs.allowedRegions ? true : undefined}
+              />
+              {policyErrs.allowedRegions ? <span className="err" role="alert">{policyErrs.allowedRegions}</span> : <span className="help">Lowercase letters, digits, or hyphens (up to 16 chars each).</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className={s.ownerAct}>
+          <button
+            type="submit"
+            className="btn"
+            data-kind="primary"
+            data-size="s"
+            disabled={!policyCheck.ok || policySame || policyTx.busy}
+            data-pending={(policyTx.busy && policyAction === 'save') || undefined}
+          >
+            Save policy
+          </button>
+          <button
+            type="button"
+            className="btn"
+            data-kind="danger"
+            data-size="s"
+            disabled={!policy || policyTx.busy}
+            data-pending={(policyTx.busy && policyAction === 'clear') || undefined}
+            onClick={() => {
+              setPolicyAction('clear')
+              void policyTx.run(() => client.clearPolicy(model.address, { wallet: signer }))
+            }}
+          >
+            Clear policy
+          </button>
+          {policyTx.tx.stage === 'idle' && policySame ? <span className="t-small dim">Change a value to save policy.</span> : null}
+          <TxLine tx={policyTx.tx} done={policyAction === 'clear' ? 'Policy cleared' : 'Policy saved'} />
+        </div>
+      </form>
     </section>
   )
 }
