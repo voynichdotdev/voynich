@@ -1,6 +1,6 @@
 import { Connection, Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { IdlAccounts } from '@coral-xyz/anchor'
-import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type Money, type PriceUnit, type Receipt, type ReceiptView, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
+import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type Money, type PriceUnit, type Receipt, type ReceiptView, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
 import { decodeAdapter } from './adapter.js'
 import { CIPHER_CHUNK_BYTES, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER, ciphertextHash, decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, openWeightsChunk, sealWeights, sha256, signSealDerivation, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, verifyReceipt, wrapKey, type SealDerivationSigner, type WeightsCipherHeader } from './crypto.js'
 import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeModelBaseBytes, decodeReceiptAccount, decodeWeightsHeader, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
@@ -10,8 +10,13 @@ import { historicalAttestation, transactionSettledReceipt } from './history.js'
 export type WalletSigner = { publicKey: PublicKey; signTransaction(transaction: VersionedTransaction): Promise<VersionedTransaction>; signMessage?(message: Uint8Array): Promise<Uint8Array> }
 export type VoynichSigner = WalletSigner | Keypair
 export type VoynichOptions = { apiUrl: string; signer?: VoynichSigner; connection?: Connection; headers?: Record<string, string>; fixture?: string; fetch?: typeof fetch; pollMs?: number }
+export type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced'
+export type SelectEnclaveOptions = {
+  strategy?: RoutingStrategy
+  modelOperatorShareBps?: number
+}
 export type CallStep = 'encrypting' | 'awaiting-signature' | 'escrowed' | 'answering' | 'verified'
-export type CallOptions = { signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string }
+export type CallOptions = { signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; strategy?: RoutingStrategy; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string }
 export type ClassificationScore = { label: string; probability: number }
 export type ClassificationOutput = { label: string; probability?: number; scores?: ClassificationScore[] }
 export type TextGenerationOutput = { text: string; tokens: number; finishReason: 'eos' | 'length' }
@@ -49,6 +54,7 @@ export type StreamPiecesOptions = {
 export type OpenStreamOptions = {
   ceiling: string
   enclave?: string
+  strategy?: RoutingStrategy
   maxTokens?: number
   onStep?: (step: 'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming') => void
   signal?: AbortSignal
@@ -56,6 +62,7 @@ export type OpenStreamOptions = {
 export type StreamOptions = {
   ceiling?: string
   enclave?: string
+  strategy?: RoutingStrategy
   maxTokens?: number
   onStep?: (step: 'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming' | 'verified') => void
   signal?: AbortSignal
@@ -94,6 +101,83 @@ export type VoynichStream = AsyncIterable<VerifiedStreamPiece> & {
 }
 export class VoynichError extends Error {
   constructor(readonly code: string, message: string, readonly call?: Call, readonly refundState?: string) { super(message); this.name = 'VoynichError' }
+}
+
+/**
+ * Selects one granted enclave according to quote and latency routing strategy.
+ * Effective operator share is `grant.quotedOperatorShareBps ?? modelOperatorShareBps`.
+ */
+export function selectEnclave(
+  enclaves: readonly GrantedEnclave[],
+  options: SelectEnclaveOptions = {},
+): GrantedEnclave | null {
+  if (!enclaves.length) return null
+  const strategy: RoutingStrategy = options.strategy ?? 'balanced'
+  const fallbackShare = options.modelOperatorShareBps ?? 10_000
+  const effectiveShare = (item: GrantedEnclave) => {
+    const quoted = item.grant.quotedOperatorShareBps
+    if (quoted === null || quoted === undefined) return fallbackShare
+    return Math.min(quoted, fallbackShare)
+  }
+  const latencyOf = (item: GrantedEnclave): number | null =>
+    item.grant.medianAnswerMs === null || item.grant.medianAnswerMs === undefined
+      ? null
+      : item.grant.medianAnswerMs
+  const compareLatency = (a: number | null, b: number | null) => {
+    if (a === b) return 0
+    if (a === null) return 1
+    if (b === null) return -1
+    return a - b
+  }
+  const compareKey = (a: GrantedEnclave, b: GrantedEnclave) =>
+    a.enclave.signingKey < b.enclave.signingKey ? -1 : a.enclave.signingKey > b.enclave.signingKey ? 1 : 0
+
+  const sorted = [...enclaves]
+  if (strategy === 'cheapest') {
+    sorted.sort((a, b) =>
+      effectiveShare(a) - effectiveShare(b)
+      || compareLatency(latencyOf(a), latencyOf(b))
+      || compareKey(a, b),
+    )
+    return sorted[0] ?? null
+  }
+  if (strategy === 'fastest') {
+    sorted.sort((a, b) =>
+      compareLatency(latencyOf(a), latencyOf(b))
+      || effectiveShare(a) - effectiveShare(b)
+      || compareKey(a, b),
+    )
+    return sorted[0] ?? null
+  }
+  // 'balanced': equal weight normalized share and latency with deterministic fallback when latencies are null or equal.
+  const shares = sorted.map(effectiveShare)
+  const minShare = Math.min(...shares)
+  const maxShare = Math.max(...shares)
+  const shareSpan = maxShare - minShare
+  const knownLatencies = sorted.map(latencyOf).filter((v): v is number => v !== null)
+  const minLatency = knownLatencies.length ? Math.min(...knownLatencies) : 0
+  const maxLatency = knownLatencies.length ? Math.max(...knownLatencies) : 0
+  const latencySpan = maxLatency - minLatency
+  const score = (item: GrantedEnclave) => {
+    const s = shareSpan > 0 ? (effectiveShare(item) - minShare) / shareSpan : 0
+    const lat = latencyOf(item)
+    const l = knownLatencies.length === 0
+      ? 0
+      : lat === null
+        ? 1
+        : latencySpan > 0
+          ? (lat - minLatency) / latencySpan
+          : 0
+    return 0.5 * s + 0.5 * l
+  }
+  sorted.sort((a, b) => {
+    const diff = score(a) - score(b)
+    if (Math.abs(diff) > 1e-12) return diff
+    return effectiveShare(a) - effectiveShare(b)
+      || compareLatency(latencyOf(a), latencyOf(b))
+      || compareKey(a, b)
+  })
+  return sorted[0] ?? null
 }
 
 /**
@@ -564,7 +648,12 @@ export function createVoynich(options: VoynichOptions) {
     const answerMode: AnswerMode = opts.answerMode ?? 'sealed'
     const model = await api.model(modelId, { signal: opts.signal })
     const granted = await api.modelEnclaves(model.address, { signal: opts.signal })
-    const selected = granted.items.find(item => item.enclave.status === 'live' && item.enclave.reachable && item.grant.status === 'live' && (!opts.enclave || item.enclave.address === opts.enclave || item.enclave.signingKey === opts.enclave))
+    const liveGranted = granted.items.filter(item => item.enclave.status === 'live' && item.enclave.reachable && item.grant.status === 'live')
+    const selected = opts.enclave
+      ? liveGranted.find(item => item.enclave.address === opts.enclave || item.enclave.signingKey === opts.enclave)
+      : opts.strategy
+        ? selectEnclave(liveGranted, { strategy: opts.strategy, modelOperatorShareBps: model.operatorShareBps })
+        : liveGranted[0]
     if (!selected) throw new VoynichError('ENCLAVE_UNAVAILABLE', 'No live, reachable granted enclave is available.')
     const destination = await encryptionDestination(modelId, model, selected.enclave, true)
     if (opts.enclave && opts.enclave !== selected.enclave.address && opts.enclave !== destination.signingKey) throw new VoynichError('ENCLAVE_MISMATCH', 'The enclave does not match the requested call destination.')
@@ -725,7 +814,12 @@ export function createVoynich(options: VoynichOptions) {
     const model = await api.model(modelId, { signal: opts.signal })
     if (model.priceUnit !== 'token') throw new VoynichError('INVALID_MODEL', 'Streaming calls require a per-token model (priceUnit: token).')
     const granted = await api.modelEnclaves(model.address, { signal: opts.signal })
-    const selected = granted.items.find(item => item.enclave.status === 'live' && item.enclave.reachable && item.grant.status === 'live' && (!opts.enclave || item.enclave.address === opts.enclave || item.enclave.signingKey === opts.enclave))
+    const liveGranted = granted.items.filter(item => item.enclave.status === 'live' && item.enclave.reachable && item.grant.status === 'live')
+    const selected = opts.enclave
+      ? liveGranted.find(item => item.enclave.address === opts.enclave || item.enclave.signingKey === opts.enclave)
+      : opts.strategy
+        ? selectEnclave(liveGranted, { strategy: opts.strategy, modelOperatorShareBps: model.operatorShareBps })
+        : liveGranted[0]
     if (!selected) throw new VoynichError('ENCLAVE_UNAVAILABLE', 'No live, reachable granted enclave is available.')
     const destination = await encryptionDestination(modelId, model, selected.enclave, true)
     if (opts.enclave && opts.enclave !== selected.enclave.address && opts.enclave !== destination.signingKey) throw new VoynichError('ENCLAVE_MISMATCH', 'The enclave does not match the requested call destination.')
@@ -786,6 +880,7 @@ export function createVoynich(options: VoynichOptions) {
     const opened = await openStream(modelId, input, {
       ceiling,
       enclave: opts.enclave,
+      strategy: opts.strategy,
       maxTokens: opts.maxTokens,
       onStep: opts.onStep,
       signal: opts.signal,

@@ -4707,3 +4707,106 @@ test('Build 9 Step 1: decodeGrantAccount (223B legacy + 226B quoted), buildSetQu
   const clearedEnclaves = await opClient.api.modelEnclaves('sketch-32')
   assert.equal(clearedEnclaves.items[0]!.grant.quotedOperatorShareBps, null)
 })
+
+test('Build 9 Step 2: selectEnclave routing strategies and CLI enclave quote / call --strategy', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const execFileAsync = promisify(execFile)
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { Hono } = await import('hono')
+  const { fixtureEnclave, fixtureGrant, fixtureBuild } = await import('@voynich/contract/fixtures')
+  const { selectEnclave } = await import('../sdk/src/index.js')
+
+  const makeEntry = (
+    signingKey: string,
+    quotedOperatorShareBps: number | null,
+    medianAnswerMs: number | null,
+  ) => ({
+    enclave: { ...fixtureEnclave, address: Keypair.generate().publicKey.toBase58(), signingKey },
+    grant: { ...fixtureGrant, address: Keypair.generate().publicKey.toBase58(), quotedOperatorShareBps, medianAnswerMs },
+  })
+
+  // 1. selectEnclave strategies & tie-breaking
+  assert.equal(selectEnclave([]), null)
+  const cheapSlow = makeEntry('11111111111111111111111111111111', 800, 2400)
+  const midBalanced = makeEntry('22222222222222222222222222222222', 1200, 600)
+  const priceyFast = makeEntry('33333333333333333333333333333333', 2500, 400)
+  const unquotedNull = makeEntry('44444444444444444444444444444444', null, null)
+
+  const pool = [priceyFast, unquotedNull, cheapSlow, midBalanced]
+  assert.equal(selectEnclave(pool, { strategy: 'cheapest', modelOperatorShareBps: 2500 })?.enclave.signingKey, cheapSlow.enclave.signingKey)
+  assert.equal(selectEnclave(pool, { strategy: 'fastest', modelOperatorShareBps: 2500 })?.enclave.signingKey, priceyFast.enclave.signingKey)
+  assert.equal(selectEnclave(pool, { strategy: 'balanced', modelOperatorShareBps: 2500 })?.enclave.signingKey, midBalanced.enclave.signingKey)
+
+  // Tie-break on cheapest: equal share prefers known latency over null, then lower signingKey
+  const tieNull = makeEntry('11111111111111111111111111111111', 1000, null)
+  const tieKnownB = makeEntry('33333333333333333333333333333333', 1000, 500)
+  const tieKnownA = makeEntry('22222222222222222222222222222222', 1000, 500)
+  assert.equal(selectEnclave([tieNull, tieKnownB, tieKnownA], { strategy: 'cheapest', modelOperatorShareBps: 2500 })?.enclave.signingKey, tieKnownA.enclave.signingKey)
+
+  // Balanced fallback when all latencies are null picks lowest share, then lowest signingKey
+  const nullHigh = makeEntry('11111111111111111111111111111111', 2000, null)
+  const nullLow = makeEntry('22222222222222222222222222222222', 900, null)
+  assert.equal(selectEnclave([nullHigh, nullLow], { strategy: 'balanced', modelOperatorShareBps: 2500 })?.enclave.signingKey, nullLow.enclave.signingKey)
+
+  // 2. CLI voynich enclave quote & --strategy validation against an in-process mock API
+  const operator = Keypair.generate()
+  const recorded: Array<{ key: string; model: string; operatorShareBps: number | null }> = []
+  const mockApi = new Hono()
+  mockApi.post('/v1/enclaves/:key/quote/build', async c => {
+    const body = await c.req.json() as { model: string; operatorShareBps: number | null; payer?: string }
+    recorded.push({ key: c.req.param('key'), model: body.model, operatorShareBps: body.operatorShareBps })
+    return c.json(fixtureBuild('set_quote', body.payer ?? operator.publicKey.toBase58()))
+  })
+  mockApi.post('/v1/transactions/submit', c => c.json({ id: 'fixture-set_quote', status: 'confirmed', signature: '3fQ2F1MzDFtW4p4z6KWV1GwVfPrZFWwB3YthvfFF6EJQhHrEdgsbq5QZ4DHDRp4BZ8cvj9vnTowzSiDvp248zCLw' }))
+  const server = serve({ fetch: mockApi.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b9s2-cli-'))
+  const keyPath = join(scratch, 'operator.json')
+  writeFileSync(keyPath, JSON.stringify([...operator.secretKey]))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  const runCli = async (args: string[], expectFail = false) => {
+    try {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, '--keypair', keyPath, ...args], {
+        cwd: resolve('.'),
+        encoding: 'utf8',
+      })
+      if (expectFail) throw new Error(`Expected CLI failure for ${args.join(' ')}, got stdout: ${stdout}`)
+      return { status: 0, json: JSON.parse(stdout) as Record<string, unknown> }
+    } catch (err) {
+      if (!expectFail) throw err
+      const e = err as { code?: number; stderr?: string }
+      return { status: typeof e.code === 'number' ? e.code : 1, stderr: e.stderr ?? '' }
+    }
+  }
+
+  try {
+    const setRes = await runCli(['enclave', 'quote', 'sketch-32', '--share-bps', '1200', '--enclave', fixtureEnclave.address, '--json'])
+    assert.equal(setRes.json?.enclave, fixtureEnclave.address)
+    assert.equal(setRes.json?.model, 'sketch-32')
+    assert.equal(setRes.json?.operatorShareBps, 1200)
+    assert.equal(setRes.json?.status, 'confirmed')
+
+    const clearRes = await runCli(['enclave', 'quote', 'sketch-32', '--clear', '--enclave', fixtureEnclave.address])
+    assert.equal(clearRes.json?.operatorShareBps, null)
+    assert.deepEqual(recorded, [
+      { key: fixtureEnclave.address, model: 'sketch-32', operatorShareBps: 1200 },
+      { key: fixtureEnclave.address, model: 'sketch-32', operatorShareBps: null },
+    ])
+
+    // Flag validations
+    assert.notEqual((await runCli(['enclave', 'quote', 'sketch-32', '--share-bps', '10001', '--enclave', fixtureEnclave.address], true)).status, 0)
+    assert.notEqual((await runCli(['enclave', 'quote', 'sketch-32', '--share-bps', '500', '--clear', '--enclave', fixtureEnclave.address], true)).status, 0)
+    assert.notEqual((await runCli(['call', 'sketch-32', '--strategy', 'random'], true)).status, 0)
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

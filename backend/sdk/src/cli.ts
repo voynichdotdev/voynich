@@ -9,17 +9,19 @@ import { pathToFileURL } from 'node:url'
 import { Connection, Keypair, PublicKey } from '@solana/web3.js'
 import { ApiClientError, createClient, decodeManifest, type MeasurementStatus, type PriceUnit } from '@voynich/contract'
 import { fromBase64, fromHex, sha256, signSealDerivation, streamInitialHash, streamNextHash, toHex, verifyPiece } from './crypto.js'
-import { createVoynich } from './client.js'
+import { createVoynich, type RoutingStrategy } from './client.js'
 import { PROGRAM_ID, decodeMeasurementAccount, measurementPda } from './program.js'
 import { loadOwnerFile, saveOwnerFile } from './owner-file.js'
 import { resolveCliSealBase } from './seal-base.js'
 import voynich from './node.js'
 
 const { positionals, values } = parseArgs({ allowPositionals: true, options: {
-  'api-url': { type: 'string' }, keypair: { type: 'string' }, manifest: { type: 'string' }, model: { type: 'string' }, state: { type: 'string' },
+  'api-url': { type: 'string' }, api: { type: 'string' }, rpc: { type: 'string' }, json: { type: 'boolean' },
+  keypair: { type: 'string' }, manifest: { type: 'string' }, model: { type: 'string' }, state: { type: 'string' },
   price: { type: 'string' }, 'price-unit': { type: 'string' }, ceiling: { type: 'string' }, mint: { type: 'string' }, decimals: { type: 'string' }, symbol: { type: 'string' },
   'operator-share-bps': { type: 'string' }, measurement: { type: 'string', multiple: true }, 'upload-funding': { type: 'string' },
-  'upload-keys': { type: 'string' }, enclave: { type: 'string' }, open: { type: 'boolean' }, resume: { type: 'boolean' },
+  'upload-keys': { type: 'string' }, enclave: { type: 'string' }, strategy: { type: 'string' }, 'share-bps': { type: 'string' }, clear: { type: 'boolean' },
+  open: { type: 'boolean' }, resume: { type: 'boolean' },
   base: { type: 'string' }, 'base-file': { type: 'string' }, 'base-sha256': { type: 'string' }, 'base-size': { type: 'string' }, 'base-format': { type: 'string' },
   text: { type: 'string' }, 'max-tokens': { type: 'string' }, stream: { type: 'boolean' },
   count: { type: 'string' }, 'running-hash': { type: 'string' }, signature: { type: 'string' }, 'from-pieces': { type: 'boolean' },
@@ -29,7 +31,8 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   operator: { type: 'string', multiple: true }, region: { type: 'string', multiple: true },
   help: { type: 'boolean', short: 'h' },
 } })
-if (values['api-url']) process.env.VOYNICH_API_URL = values['api-url']
+if (values['api-url'] ?? values.api) process.env.VOYNICH_API_URL = values['api-url'] ?? values.api
+if (values.rpc) process.env.SOLANA_RPC_URL = values.rpc
 const [command, argument, third, fourth] = positionals
 const required = (value: string | undefined, name: string) => { if (!value) throw new Error(`Supply ${name}.`); return value }
 function parseMint(value: string | undefined, current: string | null = null): string | null {
@@ -42,6 +45,12 @@ function parsePriceUnit(value: string | undefined): PriceUnit | undefined {
   const unit = value.trim().toLowerCase()
   if (unit === 'call' || unit === 'token') return unit
   throw new Error('--price-unit must be call or token.')
+}
+function parseStrategy(value: string | undefined): RoutingStrategy | undefined {
+  if (value === undefined) return undefined
+  const strategy = value.trim().toLowerCase()
+  if (strategy === 'cheapest' || strategy === 'fastest' || strategy === 'balanced') return strategy
+  throw new Error('--strategy must be cheapest, fastest, or balanced.')
 }
 async function solanaCliKeypairPath(): Promise<string> {
   const fallback = join(homedir(), '.config', 'solana', 'id.json')
@@ -70,6 +79,8 @@ async function solanaCliKeypairPath(): Promise<string> {
 async function configureCliSigner(): Promise<void> {
   if (command === 'enclave' && ['run', 'register'].includes(argument ?? '')) {
     process.env.OPERATOR_KEYPAIR = values.keypair ?? process.env.OPERATOR_KEYPAIR ?? await solanaCliKeypairPath()
+  } else if (command === 'enclave' && argument === 'quote') {
+    process.env.VOYNICH_KEYPAIR = values.keypair ?? process.env.VOYNICH_KEYPAIR ?? process.env.OPERATOR_KEYPAIR ?? await solanaCliKeypairPath()
   } else if (
     ['call', 'seal', 'grant', 'refund', 'settle'].includes(command ?? '')
     || (command === 'model' && ['price', 'retire', 'revoke'].includes(argument ?? ''))
@@ -141,7 +152,7 @@ async function loadCliKeypair(): Promise<Keypair> {
   return Keypair.fromSecretKey(Uint8Array.from(decoded))
 }
 async function main(): Promise<unknown> {
-  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--enclave <key>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
+  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
   await configureCliSigner()
   if (command === 'models') return voynich.models()
   if (command === 'enclaves') return voynich.enclaves()
@@ -321,6 +332,7 @@ async function main(): Promise<unknown> {
     }
   }
   if (command === 'call') {
+    const strategy = parseStrategy(values.strategy)
     const maxTokens = values['max-tokens'] !== undefined ? Number(values['max-tokens']) : undefined
     if (maxTokens !== undefined && (!Number.isSafeInteger(maxTokens) || maxTokens < 1 || maxTokens > 4096)) {
       throw new Error('--max-tokens must be an integer between 1 and 4096.')
@@ -330,6 +342,7 @@ async function main(): Promise<unknown> {
       const active = await voynich.stream(required(argument, 'model'), prompt, {
         ...(values.ceiling ? { ceiling: values.ceiling } : {}),
         ...(values.enclave ? { enclave: values.enclave } : {}),
+        ...(strategy ? { strategy } : {}),
         ...(maxTokens !== undefined ? { maxTokens } : {}),
       })
       let stopSent = false
@@ -374,11 +387,55 @@ async function main(): Promise<unknown> {
     return voynich.call(required(argument, 'model'), callInput, {
       ...(values.open ? { answerMode: 'open' as const } : {}),
       ...(values.enclave ? { enclave: values.enclave } : {}),
+      ...(strategy ? { strategy } : {}),
       ...(maxTokens !== undefined ? { maxTokens } : {}),
       ...(values.ceiling !== undefined ? { ceiling: values.ceiling } : {}),
     })
   }
-  if (command === 'enclave') return enclaveCommand(argument)
+  if (command === 'enclave') {
+    if (argument === 'quote') {
+      const modelId = required(third, 'model')
+      const clearQuote = Boolean(values.clear)
+      const shareRaw = values['share-bps']
+      if (clearQuote && shareRaw !== undefined) {
+        throw new Error('Pass either --share-bps <n> or --clear, not both.')
+      }
+      if (!clearQuote && shareRaw === undefined) {
+        throw new Error('Supply --share-bps <0..10000> or --clear.')
+      }
+      let operatorShareBps: number | null = null
+      if (!clearQuote) {
+        const parsed = Number(shareRaw)
+        if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 10000) {
+          throw new Error('--share-bps must be an integer between 0 and 10000.')
+        }
+        operatorShareBps = parsed
+      }
+      const signer = await loadCliKeypair()
+      const client = createVoynich({ apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702', signer })
+      let enclaveKey = values.enclave
+      if (!enclaveKey) {
+        const page = await client.enclaves({ limit: 100 })
+        const owned = page.items.filter(item => item.operator === signer.publicKey.toBase58())
+        if (owned.length === 1) {
+          enclaveKey = owned[0]!.address
+        } else if (owned.length === 0) {
+          throw new Error('No enclave found for this operator keypair. Pass --enclave <key>.')
+        } else {
+          throw new Error('Multiple enclaves found for this operator keypair. Pass --enclave <key>.')
+        }
+      }
+      const tx = await client.setQuote(enclaveKey, modelId, operatorShareBps)
+      return {
+        enclave: enclaveKey,
+        model: modelId,
+        operatorShareBps,
+        transaction: tx.signature ?? null,
+        status: tx.status,
+      }
+    }
+    return enclaveCommand(argument)
+  }
   if (command === 'model') {
     if (argument === 'policy') {
       const action = required(third, 'policy subcommand (show, set, or clear)')
