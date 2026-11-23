@@ -109,6 +109,8 @@ a.row:focus-visible { outline-offset: -2px; }
 .policyGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
 .policyCol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .policyArea { min-height: 76px; font-size: 12px; line-height: 1.45; }
+.upgradeRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upgradeCode { flex: 1; min-width: 220px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-tile); font-size: 12px; color: var(--text); overflow-x: auto; white-space: nowrap; }
 @media (max-width: 899px) {
   .policyGrid { grid-template-columns: minmax(0, 1fr); }
 }

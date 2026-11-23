@@ -15,6 +15,7 @@ import { explorerUrl, siteUrl } from '@/lib/env'
 import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
 import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
+import { effectiveModelVersion, fallbackModelVersions, loadModelVersions, matchReceiptVersion, upgradeCliCommand } from '@/lib/versions'
 import {
   ATTACH_WEIGHTS_BATCH, CIPHER_CHUNK_BYTES, INITIAL_CREATE_WEIGHTS, MAX_WEIGHTS, SEAL_RANGE_CHUNKS, WEIGHTS_CAPACITY, WRITE_BYTES, WRITE_PARALLEL,
   addSealMetrics, attachWeights, checkLocalBaseFile, chunkCount, deriveSealSecrets, formatAdapterOps, inferBaseFormat, inspectAdapterBytes, modelPdaAddress, newUploadKeys, partitionChunks, reseal, resumeCliCommand, saveSeal, sealChunkCount, sealDerivationMessage, sealRangeCount, sealRanges, sealSummary, signSealDerivation, signWithUploadKey, stateFromModel, txFeeLamports, uploadFunding, verifySealDerivationSignature, weightsCount, writeChunks, type SealState,
@@ -2661,4 +2662,94 @@ test('Build 9 Step 2: quote & latency helpers, selectEnclave/pickEnclave strateg
 
   const enclaveDetailSrc = fs.readFileSync(path.join(ROOT, 'app/enclaves/[key]/page.tsx'), 'utf8')
   assert.ok(enclaveDetailSrc.includes('Quoted share') && enclaveDetailSrc.includes('Median latency'))
+})
+
+test('Build 10 Step 2: model version helpers, receipt revision matching, upgrade CLI hint, and ModelView/OwnerPanel/ReceiptView wiring', async () => {
+  assert.equal(effectiveModelVersion({ currentVersion: undefined }), 1)
+  assert.equal(effectiveModelVersion({ currentVersion: 0 }), 1)
+  assert.equal(effectiveModelVersion({ currentVersion: 2 }), 2)
+
+  const modelAddr = Keypair.generate().publicKey.toBase58()
+  const v1 = {
+    model: modelAddr,
+    version: 1,
+    address: null,
+    status: 'archived' as const,
+    sizeBytes: 100_000,
+    ciphertextSha256: '1'.repeat(64),
+    base: null,
+    manifest: null,
+    publishedSlot: '1000',
+  }
+  const v2 = {
+    model: modelAddr,
+    version: 2,
+    address: Keypair.generate().publicKey.toBase58(),
+    status: 'live' as const,
+    sizeBytes: 120_000,
+    ciphertextSha256: '2'.repeat(64),
+    base: null,
+    manifest: null,
+    publishedSlot: '2000',
+  }
+  const v3Uploading = {
+    model: modelAddr,
+    version: 3,
+    address: Keypair.generate().publicKey.toBase58(),
+    status: 'uploading' as const,
+    sizeBytes: 130_000,
+    ciphertextSha256: null,
+    base: null,
+    manifest: null,
+    publishedSlot: null,
+  }
+
+  assert.equal(matchReceiptVersion('1500', [v2, v1, v3Uploading])?.version, 1)
+  assert.equal(matchReceiptVersion('2000', [v2, v1, v3Uploading])?.version, 2)
+  assert.equal(matchReceiptVersion('2500', [v2, v1, v3Uploading])?.ciphertextSha256, '2'.repeat(64))
+  assert.equal(matchReceiptVersion('500', [v2, v1])?.version, 1)
+  assert.equal(matchReceiptVersion('1500', []), null)
+
+  assert.equal(upgradeCliCommand('sketch-32', false), 'voynich model upgrade sketch-32 <weights.onnx>')
+  assert.ok(upgradeCliCommand('text-1m', true).includes('voynich model upgrade text-1m') && upgradeCliCommand('text-1m', true).includes('--base-file'))
+
+  const okClient = {
+    modelVersions: async () => ({ items: [v2, v1], currentVersion: 2 }),
+  } as unknown as Parameters<typeof loadModelVersions>[0]
+  assert.equal((await loadModelVersions(okClient, modelAddr))?.currentVersion, 2)
+
+  const failClient = {
+    modelVersions: async () => { throw new Error('offline') },
+  } as unknown as Parameters<typeof loadModelVersions>[0]
+  assert.equal(await loadModelVersions(failClient, modelAddr), null)
+
+  const fb = fallbackModelVersions({
+    address: modelAddr,
+    status: 'live',
+    sizeBytes: 100_000,
+    ciphertextSha256: '1'.repeat(64),
+    base: null,
+    manifest: { name: 'sketch-32', inputKind: 'sketch', inputShape: [1, 1, 28, 28], labels: ['clock'] },
+    sealedSlot: '1000',
+    currentVersion: 1,
+  })
+  assert.equal(fb.length, 1)
+  assert.equal(fb[0]?.version, 1)
+
+  const modelPageSrc = fs.readFileSync(path.join(ROOT, 'app/models/[id]/page.tsx'), 'utf8')
+  assert.ok(modelPageSrc.includes('loadModelVersions(client, name)'))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['Version history', 'activeVersion', 'versionItems', 'Weights hash', 'Published slot']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+
+  const ownerPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/OwnerPanel.tsx'), 'utf8')
+  assert.ok(ownerPanelSrc.includes('Version upgrade') && ownerPanelSrc.includes('upgradeCliCommand'))
+
+  const receiptLoadSrc = fs.readFileSync(path.join(ROOT, 'components/receipt/load.ts'), 'utf8')
+  assert.ok(receiptLoadSrc.includes('loadModelVersions') && receiptLoadSrc.includes('matchReceiptVersion'))
+
+  const receiptViewSrc = fs.readFileSync(path.join(ROOT, 'components/receipt/ReceiptView.tsx'), 'utf8')
+  assert.ok(receiptViewSrc.includes('<dt>Model version</dt>') && receiptViewSrc.includes('v{version.version}'))
 })

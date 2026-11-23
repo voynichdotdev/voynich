@@ -9,6 +9,7 @@ import { api, read } from '@/lib/api'
 import { bps, hardware, short, units } from '@/lib/format'
 import { loadModelKey, openKeyFile, parseKeyFile, saveModelKey, setVaultPassword, unlockVault, useVault, type SealedKeyFile } from '@/lib/keys'
 import { policyEquals, policyToDraft, validatePolicyDraft, type PolicyDraft } from '@/lib/policy'
+import { effectiveModelVersion, upgradeCliCommand } from '@/lib/versions'
 import { play } from '@/lib/sound'
 import { errorMessage, send } from '@/lib/tx'
 import { PasswordForm } from '@/components/seal/Password'
@@ -57,11 +58,14 @@ function toBase(text: string, decimals: number): string | null {
   return (BigInt(m[1]!) * 10n ** BigInt(decimals) + BigInt(frac.padEnd(decimals, '0') || '0')).toString()
 }
 
-type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; onChanged: () => void }
+type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; currentVersion?: number; onChanged: () => void }
 
-export function OwnerPanel({ model, fixture, signer, grants, policy = null, onChanged }: Props) {
+export function OwnerPanel({ model, fixture, signer, grants, policy = null, currentVersion, onChanged }: Props) {
   const client = api(fixture)
   const protocol = model.protocolShareBps ?? 0
+  const activeVersion = currentVersion ?? effectiveModelVersion(model)
+  const upgradeCmd = upgradeCliCommand(model.name, !!model.base)
+  const [upgradeCopied, setUpgradeCopied] = useState(false)
 
   // ---- price
   const [priceUnit, setPriceUnit] = useState<PriceUnit>(model.priceUnit ?? 'call')
@@ -414,6 +418,28 @@ export function OwnerPanel({ model, fixture, signer, grants, policy = null, onCh
           <TxLine tx={policyTx.tx} done={policyAction === 'clear' ? 'Policy cleared' : 'Policy saved'} />
         </div>
       </form>
+
+      <div className={s.policySection}>
+        <div className={s.policyHead}>
+          <h3 className="t-h3">Version upgrade</h3>
+          <span className="t-small dim">Active: <span className="mono">v{activeVersion}</span>. Publish <span className="mono">v{activeVersion + 1}</span> at the same address without revoking grants.</span>
+        </div>
+        <div className={s.upgradeRow}>
+          <code className={`mono ${s.upgradeCode}`}>{upgradeCmd}</code>
+          <button
+            type="button"
+            className="btn"
+            data-size="s"
+            onClick={() => {
+              void navigator.clipboard?.writeText(upgradeCmd)
+              setUpgradeCopied(true)
+              setTimeout(() => setUpgradeCopied(false), 1800)
+            }}
+          >
+            {upgradeCopied ? 'Copied' : 'Copy command'}
+          </button>
+        </div>
+      </div>
     </section>
   )
 }

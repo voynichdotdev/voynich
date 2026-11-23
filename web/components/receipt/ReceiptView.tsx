@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fromBase64, type Config, type MeasurementRecord, type Model, type ReceiptView as View } from '@voynich/contract'
+import { fromBase64, type Config, type MeasurementRecord, type Model, type ModelVersion, type ReceiptView as View } from '@voynich/contract'
 import { api, type Read } from '@/lib/api'
 import { decodeOpenAnswer } from '@/lib/call'
 import { RECEIPT_CHECKS } from '@/lib/facts'
@@ -61,7 +61,7 @@ export function ReceiptPage({ id, fixture, initial }: { id: string; fixture: str
       </div>
     )
   }
-  return <Receipt fixture={fixture} view={r.data.view} model={r.data.model} config={r.data.config} measurement={r.data.measurement ?? null} />
+  return <Receipt fixture={fixture} view={r.data.view} model={r.data.model} config={r.data.config} measurement={r.data.measurement ?? null} version={r.data.version ?? null} />
 }
 
 export function ReceiptLoading() {
@@ -78,7 +78,7 @@ export function ReceiptLoading() {
 
 type Results = Partial<Record<CheckId, CheckResult>>
 
-function Receipt({ fixture, view, model, config, measurement }: { fixture: string | null; view: View; model: Model | null; config: Config | null; measurement: MeasurementRecord | null }) {
+function Receipt({ fixture, view, model, config, measurement, version }: { fixture: string | null; view: View; model: Model | null; config: Config | null; measurement: MeasurementRecord | null; version: ModelVersion | null }) {
   const { receipt } = view
   const [results, setResults] = useState<Results>({})
   const [done, setDone] = useState(false)
@@ -215,6 +215,15 @@ function Receipt({ fixture, view, model, config, measurement }: { fixture: strin
                   {receipt.callerIsProgram ? <span className={s.programBadge}>Program</span> : null}
                 </dd>
                 <dt>Model</dt><dd><Link className="link mono" href={`/models/${receipt.modelName}${q(fixture)}`}>{receipt.modelName}</Link></dd>
+                {version ? (
+                  <>
+                    <dt>Model version</dt>
+                    <dd className={s.callerVal}>
+                      <span className="mono">v{version.version}</span>
+                      {version.ciphertextSha256 ? <Hash value={version.ciphertextSha256} chars={6} label="weights hash" /> : null}
+                    </dd>
+                  </>
+                ) : null}
                 <dt>Enclave</dt><dd><Hash value={receipt.enclave} href={`/enclaves/${receipt.enclave}${q(fixture)}`} label="enclave address" /></dd>
                 <dt>Enclave key</dt><dd><Hash value={view.enclaveSigningKey} label="enclave key" /></dd>
                 {measurement ? (

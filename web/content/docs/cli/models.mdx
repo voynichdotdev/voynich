@@ -5,7 +5,7 @@ description: voynich models and voynich enclaves, the two list commands, with ev
 
 Two commands list what is on chain: `voynich models` lists sealed models and `voynich enclaves` lists registered enclaves. Both read public state through the API and need no wallet. The same from code is [Models and enclaves](/docs/sdk/models-and-enclaves).
 
-Three more commands change a model as its owner: [`voynich model price`](#voynich-model-price), [`voynich model policy`](#voynich-model-policy) and [`voynich model retire`](#voynich-model-retire).
+Three more commands change a model as its owner: [`voynich model price`](#voynich-model-price), [`voynich model policy`](#voynich-model-policy) and [`voynich model retire`](#voynich-model-retire), plus [`voynich model versions`](#voynich-model-versions) and [`voynich model upgrade`](#voynich-model-upgrade) for versioned releases.
 
 ## voynich models
 
@@ -355,6 +355,42 @@ Signs `clear_policy` as the model's owner, closing the `Policy` PDA and returnin
 | `VALIDATION_ERROR`, `INVALID_POLICY` | The API's message | Duplicate addresses/regions, out-of-range counts, or mismatched zero/positive rate limits. |
 | `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner. |
 
+## voynich model versions
+
+```bash
+voynich model versions <model>
+```
+
+Lists a model's versions newest-first through `GET /v1/models/{id}/versions` (no wallet required). Prints `{ "model", "currentVersion", "items", "asOf" }`, where each item holds `address`, `version`, `status` (`uploading`, `live` or `archived`), `sizeBytes`, `ciphertextSha256`, `base`, `manifest` and `publishedSlot`. The same from code is [listVersions](/docs/sdk/models-and-enclaves#listversions-and-publishversion).
+
+## voynich model upgrade
+
+```bash
+voynich model upgrade <model> <weights file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]
+```
+
+Publishes `currentVersion + 1` of a live model at the same name and address without downtime or re-granting enclaves, calling [`publishVersion`](/docs/sdk/models-and-enclaves#listversions-and-publishversion).
+
+<Fields>
+<Field name="model" type="name or address, first argument" required>
+The live model to upgrade.
+</Field>
+<Field name="weights file" type="file path, second argument" required>
+New plaintext ONNX weights or `voynich/adapter/v1` adapter bytes. Encrypted on this device under the model's existing key with a fresh `noncePrefix`.
+</Field>
+<Field name="--owner-key / --state" type="file path">
+Optional model key source: a 64-character hex file, a 32-byte JSON array, or an encrypted owner key file (prompts for password). When omitted, the CLI derives the deterministic model key from the owner keypair via `signSealDerivation`.
+</Field>
+<Field name="--manifest" type="file path">
+Optional replacement manifest JSON file. When omitted, the model keeps its current manifest.
+</Field>
+<Field name="--base, --base-file, --base-sha256, --base-size, --base-format" type="flags">
+Optional base-model overrides for sealed adapter upgrades (same flags as [`voynich seal`](/docs/cli/seal)). When omitted, the model keeps its current `base`.
+</Field>
+</Fields>
+
+Prints `{ "model", "name", "version", "ciphertextSha256", "noncePrefix", "transactionsSent" }` as JSON on stdout.
+
 ## voynich model retire
 
 ```bash
@@ -378,7 +414,7 @@ It prints the status of the transaction: `id`, `status` and `signature`.
 | `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner. |
 | `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `retire_model` was refused, or did not land before its blockhash expired. |
 
-`voynich model` followed by another word fails with `Use model price, model policy, model retire, or model revoke.` The fourth of them, `voynich model revoke`, is on [grant](/docs/cli/grant#voynich-model-revoke).
+`voynich model` followed by another word fails with `Use model price, model policy, model versions, model upgrade, model retire, or model revoke.` The last of them, `voynich model revoke`, is on [grant](/docs/cli/grant#voynich-model-revoke).
 
 ## Failures
 

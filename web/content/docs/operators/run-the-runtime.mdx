@@ -234,6 +234,7 @@ Returns:
 | `measurement` | The runtime's measurement, 96 hexadecimal characters. |
 | `region` | The configured `ENCLAVE_REGION` code, or `null` when unset. |
 | `models` | The addresses of the models loaded in memory. |
+| `versions` | Map of loaded model addresses to their active loaded `currentVersion` number (`Record<string, number>`). |
 
 The Voynich API requests this route at the registered endpoint every 15 seconds. While it answers with the enclave's address and the measurement of its attestation record, the enclave is reachable. The site, the SDK and the CLI send calls only to live, reachable enclaves. The rule is in [HTTP API: Reachability](/docs/api/enclaves#reachability).
 
@@ -260,6 +261,8 @@ The runtime reads the Call from chain and accepts the input when the call names 
 | The caller reached the model's `Policy` rate ceiling (`maxCallsPerCallerPerWindow` within `windowSlots`) | `RATE_LIMITED` (`429`) |
 
 When a model has `hasPolicy = true`, the runtime fetches its `Policy` PDA (`["policy", model]`, cached for 15 seconds and refreshed on every grant scan). Grants whose `Policy.allowedRegions` excludes `ENCLAVE_REGION` are skipped or unloaded (`model.skipped.policy_region`) and are not forwarded by `grant_by_enclave`; onward `grant_by_enclave` also checks `allowedOperators` and passes `policyPda` in remaining accounts. On `POST /v1/calls/:call/input`, region and per-caller sliding-window rate checks run before inference starts, leaving a refused call untouched on chain so the caller can refund after its deadline.
+
+When a granted model's on-chain `currentVersion` or `ciphertextSha256` advances via `publish_version`, the runtime re-fetches and decrypts the new `Weights` accounts using the existing `Grant` wrapped key and the model's new `noncePrefix`, swaps the loaded session atomically in memory (`model.reloaded`), and defers releasing the previous `InferenceSession` until all in-flight calls settle. Incoming `POST /v1/calls/:call/input` requests also trigger an on-demand reload if the on-chain revision moved ahead between grant scans.
 
 ### GET /v1/calls/:call/answer
 
@@ -295,6 +298,7 @@ The runtime writes one JSON line per event. Each line carries `event`:
 | `http` | An HTTP request is answered: the method, the route, the status and the milliseconds. | standard output |
 | `listening` | The HTTP server is bound: the host and the port. | standard output |
 | `model.loaded` | A granted model is loaded: its address and name. | standard output |
+| `model.reloaded` | A granted model hot-reloaded in memory after `publish_version` advanced its on-chain `currentVersion` or `ciphertextSha256`. | standard output |
 | `model.skipped.policy_region` | A grant is skipped or unloaded because `ENCLAVE_REGION` is not in the model's `Policy.allowedRegions`. | standard output |
 | `call.failed` | A call could not be answered or settled: the call's address. | standard error |
 | `enclave.sync.failed` | A pass of the loop failed: the error's name and its message. | standard error |

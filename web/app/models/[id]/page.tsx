@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
 import { loadMeasurements } from '@/lib/measurements'
 import { loadModelPolicy } from '@/lib/policy'
+import { loadModelVersions } from '@/lib/versions'
 import { Empty, Failed } from '@/components/ui/kit'
 import { ModelView } from '@/components/model/ModelView'
 import s from '@/components/model/model-view.module.css'
@@ -22,11 +23,12 @@ export default async function ModelPage({ params, searchParams }: Props) {
   const name = decodeURIComponent(id)
   const fixture = fixtureFrom(sp)
   const client = api(fixture)
-  const [model, enclaves, receipts, measurements] = await Promise.all([
+  const [model, enclaves, receipts, measurements, versions] = await Promise.all([
     read(client.model(name)),
     read(client.modelEnclaves(name)),
     read(client.modelReceipts(name, { limit: 8 })),
     loadMeasurements(client),
+    loadModelVersions(client, name),
   ])
   const q = fixture ? `?fixture=${fixture}` : ''
 
@@ -48,5 +50,5 @@ export default async function ModelPage({ params, searchParams }: Props) {
 
   const policy = await loadModelPolicy(client, model.data)
 
-  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements, policy }} />
+  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements, policy, versions }} />
 }

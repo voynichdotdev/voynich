@@ -134,6 +134,33 @@ const status = await voynich.revoke('sketch-32', enclave)
 
 `enclave` is the enclave's address or its signing key. The transaction is [`revoke_grant`](/docs/program/instructions#revokegrant), and the grant then reads "Revoked" on the enclave's page, `/enclaves/<key>`. Granting the same enclave again lifts the revocation.
 
+## Publish a new version
+
+A live model can be upgraded in place at the same name and address without downtime or re-granting enclaves. Existing grants remain valid and enclaves hot-reload the new weights in memory as soon as `publish_version` lands.
+
+<Ways>
+<Way label="CLI">
+
+```bash
+voynich model upgrade text-1m next-adapter.voya
+voynich model versions text-1m
+```
+
+Every flag (including `--owner-key`, `--manifest`, and `--base`) is in [CLI: models](/docs/cli/models#voynich-model-upgrade).
+
+</Way>
+<Way label="SDK">
+
+```ts
+const published = await voynich.publishVersion('text-1m', { weights })
+const history = await voynich.listVersions('text-1m')
+```
+
+</Way>
+</Ways>
+
+On the site, `/models/<name>` displays the active version badge and the **Version history** timeline (`v1..vN`, status, weights hash, size, and published slot), and `/receipts/<id>` shows the matched model revision.
+
 ## Retire the model
 
 Retiring closes the model to new calls and new grants. Calls that are open settle until their deadline and refund after it. The ciphertext and every receipt stay on chain.

@@ -144,7 +144,7 @@ The listener serves three routes:
 
 | Route | Returns |
 | --- | --- |
-| `GET /health` | `status` (`ready`), `enclave`, `measurement`, `region` (`ENCLAVE_REGION` or `null`), `models` (the addresses of the models loaded), `openWeightsSeconds` (seconds spent fetching, verifying and decrypting each model's ciphertext), `grantToFirstAnswerSeconds` (seconds from grant load to first settled answer per model, or `null` before the first settled call) and `bases` (per-model base metadata and `openBaseSeconds` for loaded adapter models). The Voynich API reads it to tell whether the enclave is [reachable](/docs/api/enclaves#reachability). |
+| `GET /health` | `status` (`ready`), `enclave`, `measurement`, `region` (`ENCLAVE_REGION` or `null`), `models` (the addresses of the models loaded), `versions` (`Record<string, number>` of loaded model versions), `openWeightsSeconds` (seconds spent fetching, verifying and decrypting each model's ciphertext), `grantToFirstAnswerSeconds` (seconds from grant load to first settled answer per model, or `null` before the first settled call) and `bases` (per-model base metadata and `openBaseSeconds` for loaded adapter models). The Voynich API reads it to tell whether the enclave is [reachable](/docs/api/enclaves#reachability). |
 | `POST /v1/calls/{call}/input` | Takes `{ "envelope": "<base64>" }`, the encrypted input, and returns `call` and `status` (`accepted`). |
 | `GET /v1/calls/{call}/answer` | `status` (`waiting`, `answered` or `failed`), `outputEnvelope`, `outputHash`, `signature`, `settleTransaction`, `receiptAddress` and `failure`. |
 
@@ -155,6 +155,7 @@ It writes one line of JSON per event, all on stderr:
 | `event` `listening`, with `host` and `port` | The listener is up. |
 | `event` `http`, with `method`, `route`, `status` and `ms` | A request to the listener is answered. |
 | `event` `model.loaded`, with `model` and `name` | A granted model is decrypted and loaded. |
+| `event` `model.reloaded`, with `model`, `name` and `version` | A granted model hot-reloaded in memory after `publish_version` advanced its on-chain revision. |
 | `event` `model.skipped.policy_region`, with `model` and `region` | A grant is skipped or unloaded because `ENCLAVE_REGION` is outside `Policy.allowedRegions`. |
 | `event` `call.failed`, with `call` and `error` | A call could not be completed. |
 | `event` `enclave.sync.failed`, with `error` and `message` | A pass of the loop failed. |

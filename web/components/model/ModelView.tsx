@@ -5,13 +5,14 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import type { Config, GrantedEnclaves, Model, ModelPolicy, ReceiptsPage } from '@voynich/contract'
+import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelVersions, ReceiptsPage } from '@voynich/contract'
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
 import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
+import { effectiveModelVersion, fallbackModelVersions, loadModelVersions } from '@/lib/versions'
 import { wallet } from '@/lib/wallet'
 import { useWallet } from '@/src/engines/wallet/react'
 import { State, TileStrip } from '@/components/tile/Tile'
@@ -25,7 +26,7 @@ import s from './model-view.module.css'
 type Props = {
   fixture: string | null
   asOwner: boolean
-  initial: { model: Model; enclaves: Read<GrantedEnclaves>; receipts: Read<ReceiptsPage>; measurements?: MeasurementMap; policy?: ModelPolicy | null }
+  initial: { model: Model; enclaves: Read<GrantedEnclaves>; receipts: Read<ReceiptsPage>; measurements?: MeasurementMap; policy?: ModelPolicy | null; versions?: ModelVersions | null }
 }
 
 export function ModelView({ fixture, asOwner, initial }: Props) {
@@ -35,23 +36,26 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
   const [receipts, setReceipts] = useState(initial.receipts)
   const [measurements, setMeasurements] = useState<MeasurementMap>(initial.measurements ?? {})
   const [policy, setPolicy] = useState<ModelPolicy | null>(initial.policy ?? null)
+  const [versions, setVersions] = useState<ModelVersions | null>(initial.versions ?? null)
   const [config, setConfig] = useState<Config | null>(null)
   const id = initial.model.address
   const q = fixture ? `?fixture=${fixture}` : ''
 
   const refresh = useCallback(async () => {
     const client = api(fixture)
-    const [m, e, r, ms] = await Promise.all([
+    const [m, e, r, ms, vs] = await Promise.all([
       read(client.model(id)),
       read(client.modelEnclaves(id)),
       read(client.modelReceipts(id, { limit: 8 })),
       loadMeasurements(client),
+      loadModelVersions(client, id),
     ])
     const nextModel = m.ok ? m.data : model
     if (m.ok) setModel(m.data)
     setEnclaves(e)
     setReceipts(r)
     setMeasurements(ms)
+    if (vs) setVersions(vs)
     setPolicy(await loadModelPolicy(client, nextModel))
   }, [fixture, id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -67,6 +71,8 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
   const isOwner = (w.status === 'connected' && w.address === model.owner) || (asOwner && !!config?.fixture)
   const live = model.status === 'live'
   const perToken = model.priceUnit === 'token'
+  const activeVersion = versions?.currentVersion ?? effectiveModelVersion(model)
+  const versionItems = versions?.items?.length ? versions.items : fallbackModelVersions(model)
   const protocol = model.protocolShareBps ?? config?.protocolShareBps ?? null
   const ownerBps = 10000 - model.operatorShareBps - (protocol ?? 0)
   const split = [
@@ -173,6 +179,7 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
           <nav className="crumb" aria-label="Breadcrumb"><Link href={`/models${q}`}>Models</Link><span aria-hidden="true">/</span><span>{model.name}</span></nav>
           <div className={s.nameRow}>
             <h1 className={s.name}>{model.name}</h1>
+            <span className={s.kindBadge}>v{activeVersion}</span>
             <State state={model.status} />
           </div>
           <div className={s.address}>
@@ -196,7 +203,7 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
 
         {isOwner ? (
           <div className={s.full}>
-            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} onChanged={refreshSoon} />
+            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} currentVersion={activeVersion} onChanged={refreshSoon} />
           </div>
         ) : null}
 
@@ -211,6 +218,32 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
         </section>
 
         {live ? null : facts}
+
+        <section className={`panel ${s.full}`} aria-labelledby="versions">
+          <div className="panel-head">
+            <h2 id="versions">Version history</h2>
+            <span className="t-small dim">Active: <span className="mono">v{activeVersion}</span></span>
+          </div>
+          <ul className={s.list} style={{ '--cols': 'minmax(0, 0.7fr) minmax(0, 0.8fr) minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1fr)' } as React.CSSProperties}>
+            <li className={s.listHead} aria-hidden="true"><span>Version</span><span>Status</span><span>Weights hash</span><span className={s.num}>Size</span><span className={s.num}>Published slot</span></li>
+            {versionItems.map((v) => (
+              <li key={v.version} className={s.row}>
+                <span data-label="Version" className="mono">v{v.version}</span>
+                <span data-label="Status">
+                  <State
+                    state={v.status === 'live' ? 'live' : v.status === 'uploading' ? 'uploading' : 'sealed'}
+                    label={v.status === 'live' ? 'Live' : v.status === 'uploading' ? 'Uploading' : 'Archived'}
+                  />
+                </span>
+                <span data-label="Weights hash">
+                  {v.ciphertextSha256 ? <Hash value={v.ciphertextSha256} chars={10} label={`v${v.version} weights hash`} /> : <span className="sub">Uploading</span>}
+                </span>
+                <span data-label="Size" className={s.num}><Size n={v.sizeBytes} /></span>
+                <span data-label="Published slot" className={`mono ${s.num}`}>{v.publishedSlot ? group(v.publishedSlot) : 'Pending'}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
 
         <section className={`panel ${s.half}`} aria-labelledby="enclaves">
           <div className="panel-head"><h2 id="enclaves">Enclaves holding a grant</h2></div>
