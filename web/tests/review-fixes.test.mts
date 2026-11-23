@@ -10,7 +10,7 @@ import { ADAPTER_MAGIC, ADAPTER_VERSION, applyOnnxAdapter, decodeAdapter, encode
 import { ciphertextMerkleRoot, decryptCallOutput, encryptCallOutput, fromHex, generateEncryptionKeyPair, merkleRootFromLeaves, openWeightsChunk, pieceMessage, sealWeights, sha256, signPiece, signReceipt, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece } from 'voynich/crypto'
 import { decodeModelBaseBytes as sdkDecodeModelBaseBytes, decodeReceiptAccount as sdkDecodeReceiptAccount } from 'voynich/program'
 import { fetchBountyAfterSettle, parseSolToLamports, refreshBounties } from '@/lib/bounties'
-import { STREAM_PIECES_MAX_ENTRIES, STREAM_PIECES_STORAGE_KEY, STREAM_PIECES_TTL_MS, decodeOpenAnswer, decodeOutput, eligibleEnclaves, follow, followStream, getSavedStreamPiece, loadLastPieceFromApi, loadSavedStreamPieces, parseCeiling, parseTensor, removeSavedStreamPiece, saveStreamPiece, settleMeteredStream, verifyBrowserStreamPiece, type CallState } from '@/lib/call'
+import { STREAM_PIECES_MAX_ENTRIES, STREAM_PIECES_STORAGE_KEY, STREAM_PIECES_TTL_MS, decodeOpenAnswer, decodeOutput, effectiveShareBps, eligibleEnclaves, follow, followStream, formatLatency, getSavedStreamPiece, loadLastPieceFromApi, loadSavedStreamPieces, parseCeiling, parseTensor, pickEnclave, removeSavedStreamPiece, saveStreamPiece, selectEnclave, settleMeteredStream, verifyBrowserStreamPiece, type CallState } from '@/lib/call'
 import { explorerUrl, siteUrl } from '@/lib/env'
 import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
@@ -2582,4 +2582,83 @@ test('Build 7 Step 3: owner policy validation, allow-list refusal, error mapping
   for (const sym of ['isCallerAllowedByPolicy', 'Caller not on allow list', 'This wallet is not on the model allow list']) {
     assert.ok(callPanelSrc.includes(sym), `CallPanel must include ${sym}`)
   }
+})
+
+test('Build 9 Step 2: quote & latency helpers, selectEnclave/pickEnclave strategies, and UI wiring across ModelView, CallPanel, and /enclaves', () => {
+  const m = 'a'.repeat(96)
+  const model = { allowedMeasurements: [m], operatorShareBps: 2500 }
+
+  assert.equal(effectiveShareBps({ quotedOperatorShareBps: null }, 2500), 2500)
+  assert.equal(effectiveShareBps({ quotedOperatorShareBps: 1000 }, 2500), 1000)
+  assert.equal(effectiveShareBps({ quotedOperatorShareBps: 3000 }, 2500), 2500)
+
+  assert.equal(formatLatency(null), 'No data')
+  assert.equal(formatLatency(420), '420 ms')
+  assert.equal(formatLatency(1460), '1.5 s')
+
+  const makeItem = (key: string, share: number | null, latency: number | null) => ({
+    enclave: {
+      address: `${key}-addr`,
+      signingKey: key,
+      encryptionKey: toBase64(new Uint8Array(32)),
+      operator: Keypair.generate().publicKey.toBase58(),
+      hardwareType: 'dev' as const,
+      measurement: m,
+      status: 'live' as const,
+      reachable: true,
+      expiresAtSlot: '999999',
+      modelsHeld: 1,
+      callsSettled: '5',
+      attestation: {
+        address: Keypair.generate().publicKey.toBase58(),
+        signingKey: key,
+        encryptionKey: toBase64(new Uint8Array(32)),
+        hardwareType: 'dev' as const,
+        measurement: m,
+        recordedSlot: '100',
+        expiresAtSlot: '999999',
+        layoutVersion: 1,
+      },
+    },
+    grant: {
+      address: `${key}-grant`,
+      model: Keypair.generate().publicKey.toBase58(),
+      modelName: 'text-1m',
+      enclave: `${key}-addr`,
+      grantedBy: Keypair.generate().publicKey.toBase58(),
+      grantedSlot: '100',
+      status: 'live' as const,
+      quotedOperatorShareBps: share,
+      medianAnswerMs: latency,
+    },
+  })
+
+  const items = [
+    makeItem('EnclaveCheap', 1000, 640),
+    makeItem('EnclaveBal', 1400, 380),
+    makeItem('EnclaveFast', 2000, 260),
+  ]
+
+  assert.equal(selectEnclave(items, { strategy: 'cheapest', modelOperatorShareBps: 2500 })?.enclave.signingKey, 'EnclaveCheap')
+  assert.equal(selectEnclave(items, { strategy: 'fastest', modelOperatorShareBps: 2500 })?.enclave.signingKey, 'EnclaveFast')
+  assert.equal(pickEnclave(model, items, { strategy: 'cheapest' })?.enclave.signingKey, 'EnclaveCheap')
+  assert.equal(pickEnclave(model, items, { strategy: 'fastest' })?.enclave.signingKey, 'EnclaveFast')
+  assert.equal(pickEnclave(model, items, { strategy: 'balanced' })?.enclave.signingKey, 'EnclaveBal')
+  assert.equal(pickEnclave(model, items, { strategy: 'cheapest', enclaveAddress: 'EnclaveFast-addr' })?.enclave.signingKey, 'EnclaveFast')
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['Quoted share', 'Median latency', 'effectiveShareBps', 'formatLatency']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+
+  const callPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/CallPanel.tsx'), 'utf8')
+  for (const sym of ['Routing', 'Balanced', 'Cheapest', 'Fastest', 'pickEnclave', 'pinnedEnclave']) {
+    assert.ok(callPanelSrc.includes(sym), `CallPanel must include ${sym}`)
+  }
+
+  const enclavesPageSrc = fs.readFileSync(path.join(ROOT, 'app/enclaves/page.tsx'), 'utf8')
+  assert.ok(enclavesPageSrc.includes('Quoted share') && enclavesPageSrc.includes('Median latency'))
+
+  const enclaveDetailSrc = fs.readFileSync(path.join(ROOT, 'app/enclaves/[key]/page.tsx'), 'utf8')
+  assert.ok(enclaveDetailSrc.includes('Quoted share') && enclaveDetailSrc.includes('Median latency'))
 })

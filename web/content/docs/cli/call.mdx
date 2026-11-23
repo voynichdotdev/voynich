@@ -33,7 +33,10 @@ Maximum escrow in base units of the model's price mint. Required for per-token (
 Opens a metered stream via [`voynich.stream`](/docs/sdk/stream) (`--text` required; `--ceiling` optional). Verifies every signed `voynich/piece/v1` or `v2` piece as it arrives, writes verified text live to stderr, hooks `SIGINT` (`Ctrl+C`) to call `stream.stop()` and settle immediately at the current count, waits for `stream.final()` to verify all five checks on the 423-byte metered Receipt, and prints `{ call, receipt, transactionSignature, model, enclave, text, count, finishReason, spentAmount, returnedAmount, verified, checks }` as JSON on stdout.
 </Field>
 <Field name="--enclave" type="enclave address or signing key">
-Pin a specific live granted enclave instead of letting the CLI pick the first reachable one.
+Pin a specific live granted enclave instead of letting the CLI choose one.
+</Field>
+<Field name="--strategy" type="'cheapest' | 'fastest' | 'balanced'">
+Routing strategy used when `--enclave` is omitted (works for both unary calls and `--stream`): `cheapest` prefers the lowest quoted operator share, `fastest` prefers the lowest rolling `medianAnswerMs`, and `balanced` combines both.
 </Field>
 <Field name="--open" type="flag">
 Opens the call in `open` answer mode so the enclave writes the verified plaintext answer bytes into the Receipt on chain instead of encrypting the output envelope.

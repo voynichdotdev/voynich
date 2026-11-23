@@ -1,9 +1,9 @@
 ---
 title: enclave
-description: voynich enclave register, run and status, the voynich-enclave package they load, every environment variable they read and what each prints.
+description: voynich enclave register, run, status and quote, the voynich-enclave package they load, every environment variable they read and what each prints.
 ---
 
-The three `enclave` commands are the operator's: `register` attests an enclave and registers it, `run` runs the enclave runtime, `status` prints where an enclave stands. This page is the command reference. The operator's path from a machine to earnings is told in [Run the enclave runtime](/docs/operators/run-the-runtime) and [Register and get granted](/docs/operators/register-and-get-granted), and what an enclave is in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+The four `enclave` commands are the operator's: `register` attests an enclave and registers it, `run` runs the enclave runtime, `status` prints where an enclave stands, and `quote` sets or clears an enclave's quoted operator share on a granted model. This page is the command reference. The operator's path from a machine to earnings is told in [Run the enclave runtime](/docs/operators/run-the-runtime) and [Register and get granted](/docs/operators/register-and-get-granted), and what an enclave is in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
 
 ## The runtime package
 
@@ -199,6 +199,32 @@ Per-model seconds elapsed between the enclave loading a model's grant and settli
 Per-model open base metadata (`sha256`, `sizeBytes`, `format`, `source`) and `openBaseSeconds` (seconds spent fetching and verifying the base model) for loaded models carrying a `ModelBase`. `{}` when no adapter models have loaded.
 </Field>
 </Fields>
+
+## voynich enclave quote
+
+```bash
+voynich enclave quote <model> --share-bps <0..10000> [--enclave <key>]
+voynich enclave quote <model> --clear [--enclave <key>]
+```
+
+Sets or clears the enclave operator's quoted operator share on an active `Grant` via [`set_quote`](/docs/program/instructions#setquote), signed by `enclave.operator`. The same from code is [setQuote](/docs/sdk/grant-and-refund#setquote).
+
+<Fields>
+<Field name="model" type="name or address, argument" required>
+The granted model whose quote is being updated.
+</Field>
+<Field name="--share-bps" type="integer, 0 to 10000">
+Lower operator share in basis points (`<= model.operatorShareBps`). Mutually exclusive with `--clear`.
+</Field>
+<Field name="--clear" type="flag">
+Clears the quote (`operatorShareBps: null`) so future calls revert to the model's `operatorShareBps`. Mutually exclusive with `--share-bps`.
+</Field>
+<Field name="--enclave" type="enclave address or signing key">
+Optional enclave identifier. When omitted, the CLI looks up enclaves operated by the signing keypair and selects the match automatically when there is exactly one.
+</Field>
+</Fields>
+
+Prints `{ "enclave", "model", "operatorShareBps", "transaction", "status" }` as JSON on stdout.
 
 ## Failures
 

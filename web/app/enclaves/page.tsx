@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
+import { formatLatency } from '@/lib/call'
 import { HARDWARE, LINKS } from '@/lib/facts'
-import { group, hardware, short } from '@/lib/format'
+import { bps, group, hardware, short } from '@/lib/format'
 import { findMeasurement, loadMeasurements } from '@/lib/measurements'
 import { Empty, Failed } from '@/components/ui/kit'
 import { MeasurementSource } from '@/components/ui/MeasurementSource'
@@ -28,6 +29,19 @@ export default async function Enclaves({ searchParams }: { searchParams: Promise
   const q = fixture ? `?fixture=${fixture}` : ''
   const items = r.ok ? r.data.items : []
   const whole = r.ok && !r.data.page.hasMore && !cursor
+  const details = await Promise.all(items.map((e) => read(client.enclave(e.address))))
+  const grantStats = new Map<string, { minQuote: number | null; minLatency: number | null }>()
+  items.forEach((e, i) => {
+    const d = details[i]
+    if (!d?.ok) return
+    const liveGrants = d.data.grants.filter((g) => g.status === 'live')
+    const quotes = liveGrants.map((g) => g.quotedOperatorShareBps).filter((v): v is number => v !== null && v !== undefined)
+    const latencies = liveGrants.map((g) => g.medianAnswerMs).filter((v): v is number => v !== null && v !== undefined)
+    grantStats.set(e.address, {
+      minQuote: quotes.length ? Math.min(...quotes) : null,
+      minLatency: latencies.length ? Math.min(...latencies) : null,
+    })
+  })
 
   return (
     <div className="container page">
@@ -61,18 +75,21 @@ export default async function Enclaves({ searchParams }: { searchParams: Promise
               <span>Hardware</span>
               <span>Measurement</span>
               <span>Attestation record</span>
-              <span className={s.right}>Models held</span>
+              <span className={s.right}>Quoted share</span>
+              <span className={s.right}>Median latency</span>
               <span className={s.right}>Calls settled</span>
               <span className={s.right}>Status</span>
             </div>
             <ul>
-              {items.map((e) => (
+              {items.map((e) => {
+                const gs = grantStats.get(e.address)
+                return (
                 <li key={e.address} className={s.entry}>
                   <div className={s.who}>
                     <ByteTiles bytes={caps(e.signingKey)} size={28} />
                     <div className={s.whoText}>
                       <Link href={`/enclaves/${e.address}${q}`} className={s.keyLink} title={e.signingKey}>{short(e.signingKey, 6)}</Link>
-                      <span className={s.whoSub}>Operator <span className="mono" title={e.operator}>{short(e.operator, 4)}</span></span>
+                      <span className={s.whoSub}>Operator <span className="mono" title={e.operator}>{short(e.operator, 4)}</span> · {group(e.modelsHeld)} {e.modelsHeld === 1 ? 'model' : 'models'}</span>
                     </div>
                   </div>
                   <div className={s.cell}><span className={s.cellLabel}>Hardware</span>{hardware(e.hardwareType)}</div>
@@ -89,11 +106,13 @@ export default async function Enclaves({ searchParams }: { searchParams: Promise
                       <span className={e.status === 'expired' ? 'bad' : s.quiet}>Expires at slot <span className="mono">{group(e.expiresAtSlot)}</span></span>
                     )}
                   </div>
-                  <div className={`${s.cell} ${s.right}`}><span className={s.cellLabel}>Models held</span><span className={s.figure}>{group(e.modelsHeld)}</span></div>
+                  <div className={`${s.cell} ${s.right}`}><span className={s.cellLabel}>Quoted share</span><span className={gs?.minQuote !== null && gs?.minQuote !== undefined ? s.figure : s.quiet}>{gs?.minQuote !== null && gs?.minQuote !== undefined ? bps(gs.minQuote) : 'Default'}</span></div>
+                  <div className={`${s.cell} ${s.right}`}><span className={s.cellLabel}>Median latency</span><span className={gs?.minLatency !== null && gs?.minLatency !== undefined ? s.figure : s.quiet}>{formatLatency(gs?.minLatency)}</span></div>
                   <div className={`${s.cell} ${s.right}`}><span className={s.cellLabel}>Calls settled</span><span className={s.figure}>{group(e.callsSettled)}</span></div>
                   <div className={`${s.cell} ${s.right} ${s.status}`}><span className={s.cellLabel}>Status</span><State state={e.status} label={e.status === 'live' ? 'Live' : 'Expired'} /></div>
                 </li>
-              ))}
+                )
+              })}
             </ul>
             {whole ? (
               <div className={s.next}>

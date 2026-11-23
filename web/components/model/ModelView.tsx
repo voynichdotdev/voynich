@@ -9,6 +9,7 @@ import type { Config, GrantedEnclaves, Model, ModelPolicy, ReceiptsPage } from '
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
+import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
 import { wallet } from '@/lib/wallet'
@@ -216,20 +217,27 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
           {!enclaves.ok ? <div className={`panel-body ${s.fail}`}><Failed title="The enclaves did not load" message={enclaves.message} retry={<button type="button" className="btn" data-size="s" onClick={() => void refresh()}>Try again</button>} /></div>
             : enclaves.data.items.length === 0 ? <div className="panel-body"><Empty title="No enclave holds this model yet">An enclave answers calls once the owner grants it the model key.</Empty></div>
             : (
-              <ul className={s.list} style={{ '--cols': 'minmax(0, 1.3fr) minmax(0, 0.8fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.8fr)' } as React.CSSProperties}>
-                <li className={s.listHead} aria-hidden="true"><span>Enclave</span><span>Hardware</span><span>Measurement</span><span className={s.num}>Expires at slot</span><span>Grant</span></li>
-                {enclaves.data.items.map(({ enclave, grant }) => (
-                  <li key={grant.address} className={s.row}>
-                    <span data-label="Enclave"><Hash value={enclave.signingKey} chars={4} href={`/enclaves/${enclave.address}${q}`} label="enclave address" /></span>
-                    <span data-label="Hardware">{hardware(enclave.hardwareType)}</span>
-                    <span data-label="Measurement">
-                      <Hash value={enclave.measurement} chars={4} label="measurement" />
-                      <MeasurementSource record={findMeasurement(measurements, enclave.measurement)} compact />
-                    </span>
-                    <span data-label="Expires at slot" className={`mono ${s.num}`}>{group(enclave.expiresAtSlot)}</span>
-                    <span data-label="Grant"><State state={grant.status} /></span>
-                  </li>
-                ))}
+              <ul className={s.list} style={{ '--cols': 'minmax(0, 1.15fr) minmax(0, 0.7fr) minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(0, 0.8fr) minmax(0, 0.7fr)' } as React.CSSProperties}>
+                <li className={s.listHead} aria-hidden="true"><span>Enclave</span><span>Hardware</span><span>Measurement</span><span className={s.num}>Quoted share</span><span className={s.num}>Median latency</span><span>Grant</span></li>
+                {enclaves.data.items.map(({ enclave, grant }) => {
+                  const share = effectiveShareBps(grant, model.operatorShareBps)
+                  const discounted = grant.quotedOperatorShareBps !== null && grant.quotedOperatorShareBps !== undefined && grant.quotedOperatorShareBps < model.operatorShareBps
+                  return (
+                    <li key={grant.address} className={s.row}>
+                      <span data-label="Enclave"><Hash value={enclave.signingKey} chars={4} href={`/enclaves/${enclave.address}${q}`} label="enclave address" /></span>
+                      <span data-label="Hardware">{hardware(enclave.hardwareType)}</span>
+                      <span data-label="Measurement">
+                        <Hash value={enclave.measurement} chars={4} label="measurement" />
+                        <MeasurementSource record={findMeasurement(measurements, enclave.measurement)} compact />
+                      </span>
+                      <span data-label="Quoted share" className={`mono ${s.num}`} title={discounted ? `Quoted below model ceiling (${bps(model.operatorShareBps)})` : `Model ceiling (${bps(model.operatorShareBps)})`}>
+                        {bps(share)}{discounted ? <span className={s.programBadge} style={{ marginLeft: 6 }}>Quoted</span> : null}
+                      </span>
+                      <span data-label="Median latency" className={`mono ${s.num}`}>{formatLatency(grant.medianAnswerMs)}</span>
+                      <span data-label="Grant"><State state={grant.status} /></span>
+                    </li>
+                  )
+                })}
               </ul>
             )}
         </section>

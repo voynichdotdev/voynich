@@ -29,7 +29,10 @@ The input, in the form the model's manifest asks for: a drawing (`sketch`), a fl
 Called as the call moves through its [steps](#steps).
 </Field>
 <Field name="options.enclave" type="string">
-The enclave that answers, by its address or its signing key. Without it the client takes the first enclave in [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves) that is live and reachable and holds a live grant for the model. That list puts live and reachable enclaves first.
+The enclave that answers, by its address or its signing key. Without it the client picks from live, reachable enclaves holding a live grant in [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves) using `options.strategy`.
+</Field>
+<Field name="options.strategy" type="'cheapest' | 'fastest' | 'balanced'">
+Routing strategy used by `selectEnclave` when `options.enclave` is omitted: `'cheapest'` prefers the lowest effective operator share (`quotedOperatorShareBps ?? model.operatorShareBps`), `'fastest'` prefers the lowest rolling `medianAnswerMs`, and `'balanced'` combines normalized share and latency.
 </Field>
 <Field name="options.answerMode" type="'sealed' | 'open'">
 `'sealed'` by default. Pass `'open'` to have the enclave write the plaintext answer bytes into the Receipt on chain (verified against `outputHash`).
@@ -173,7 +176,9 @@ openStream(model: string, input: string, options: OpenStreamOptions): Promise<{
 }>
 ```
 
-`OpenStreamOptions` takes `ceiling` (required decimal base-unit string), optional `enclave`, `maxTokens`, `onStep` (`'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming'`), and `signal`.
+`OpenStreamOptions` takes `ceiling` (required decimal base-unit string), optional `enclave`, `strategy` (`'cheapest' | 'fastest' | 'balanced'`), `maxTokens`, `onStep` (`'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming'`), and `signal`.
+
+For custom enclave selection outside `call` or `stream`, import `selectEnclave(enclaves, { strategy?, modelOperatorShareBps? })` from `voynich`: it ranks live, reachable granted enclaves deterministically by effective share, `medianAnswerMs` (known before `null`), and `signingKey`.
 
 `voynich.streamPieces(callAddress, options)` subscribes to `GET /v1/calls/{id}/stream` (with automatic `?after=<index>` reconnect catch-up against `GET /v1/calls/{id}/pieces`) and verifies every piece through `verifyStreamPiece` before yielding `VerifiedStreamPiece` (`{ piece, payload, text, tokens, count, runningHash, finishReason, spentAmount?, remainingAmount? }`). `verifyStreamPiece` checks sequential `index`, monotonic `count`, non-zero `deltaTokens` on intermediate pieces (`deltaTokens === 0` is allowed only on terminal pieces with a non-null `finishReason`, such as `'stopped'` or `'eos'`), `SHA-256(envelope) === pieceHash`, the `streamNextHash` running hash chain, and the Ed25519 signature over `voynich/piece/v1` (120 bytes) or `voynich/piece/v2` (152 bytes with `baseSha256`) before decrypting the piece envelope.
 

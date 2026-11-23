@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
+import { formatLatency } from '@/lib/call'
 import { HARDWARE } from '@/lib/facts'
-import { group, hardware, short } from '@/lib/format'
+import { bps, group, hardware, short } from '@/lib/format'
 import { findMeasurement, loadMeasurements } from '@/lib/measurements'
 import { Amount, Empty, Explorer, Failed, Hash } from '@/components/ui/kit'
 import { MeasurementSource } from '@/components/ui/MeasurementSource'
@@ -143,6 +144,8 @@ export default async function EnclavePage({ params, searchParams }: Props) {
                     <Link className={`link ${s.itemName}`} href={`/models/${g.modelName}${q}`} title={g.model}>{g.modelName}</Link>
                     <State state={g.status} label={g.status === 'live' ? 'Live' : g.status === 'expired' ? 'Expired' : 'Revoked'} />
                     <div className={s.itemSub}>
+                      <span>Quoted share <span className="mono">{g.quotedOperatorShareBps !== null && g.quotedOperatorShareBps !== undefined ? bps(g.quotedOperatorShareBps) : 'Default'}</span></span>
+                      <span>Median latency <span className="mono">{formatLatency(g.medianAnswerMs)}</span></span>
                       <span>Granted by <span className="mono" title={g.grantedBy}>{short(g.grantedBy, 4)}</span></span>
                       <span>Slot <span className="mono">{group(g.grantedSlot)}</span></span>
                     </div>

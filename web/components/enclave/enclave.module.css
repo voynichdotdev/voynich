@@ -20,7 +20,7 @@
 
 /* ---------- /enclaves: the registry ---------- */
 .registry { min-width: 0; }
-.cols, .entry { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 1.7fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr); column-gap: var(--gutter); align-items: center; }
+.cols, .entry { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 0.8fr) minmax(0, 1.05fr) minmax(0, 1.55fr) minmax(0, 0.85fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.75fr); column-gap: var(--gutter); align-items: center; }
 .cols { height: 36px; border-bottom: 1px solid var(--line); font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: 0.01em; color: var(--text-3); }
 .cols > span, .cell { min-width: 0; }
 .right { text-align: right; justify-self: end; }

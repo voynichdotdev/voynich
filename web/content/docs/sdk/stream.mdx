@@ -40,7 +40,10 @@ Maximum escrow in base units of the model's price mint (decimal string). When om
 Maximum output tokens to request. The enclave caps generation at `min(maxTokens, manifest.tokenizer.maxOutputTokens, floor(ceiling / price))`.
 </Field>
 <Field name="options.enclave" type="string">
-The enclave that answers, by its address or signing key. Without it the client picks the first live, reachable enclave holding a live grant in [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves).
+The enclave that answers, by its address or signing key. Without it the client selects a live, reachable granted enclave from [`GET /v1/models/{id}/enclaves`](/docs/api/models#get-v1modelsidenclaves) using `options.strategy`.
+</Field>
+<Field name="options.strategy" type="'cheapest' | 'fastest' | 'balanced'">
+Routing strategy used by `selectEnclave` when `options.enclave` is omitted (`'cheapest'`, `'fastest'`, or `'balanced'`).
 </Field>
 <Field name="options.onStep" type="(step: 'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming' | 'verified') => void">
 Called as the stream moves through its [steps](#steps).

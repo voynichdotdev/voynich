@@ -7,9 +7,9 @@ import Link from 'next/link'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { AnswerMode, GrantedEnclaves, Model, ModelPolicy } from '@voynich/contract'
 import { api } from '@/lib/api'
-import { IDLE, eligibleEnclaves, hasOpenCall, heldStage, parseCeiling, parseTensor, refundCall, resumeCall, runCall, settleMeteredStream, type CallState, type FlightStage, type Stage } from '@/lib/call'
+import { IDLE, effectiveShareBps, eligibleEnclaves, formatLatency, hasOpenCall, heldStage, parseCeiling, parseTensor, pickEnclave, refundCall, resumeCall, runCall, settleMeteredStream, type CallState, type FlightStage, type RoutingStrategy, type Stage } from '@/lib/call'
 import { CALL_STAGES, RECEIPT_CHECKS } from '@/lib/facts'
-import { group, money, short, units } from '@/lib/format'
+import { bps, group, money, short, units } from '@/lib/format'
 import { formatRateCeiling, isCallerAllowedByPolicy } from '@/lib/policy'
 import { play, stop } from '@/lib/sound'
 import { errorMessage } from '@/lib/tx'
@@ -118,6 +118,8 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   })
   const [ceilingErr, setCeilingErr] = useState('')
   const [answerMode, setAnswerMode] = useState<AnswerMode>('sealed')
+  const [strategy, setStrategy] = useState<RoutingStrategy>('balanced')
+  const [pinnedEnclave, setPinnedEnclave] = useState<string | null>(null)
   const [st, setSt] = useState<CallState>(IDLE)
   const [stopping, setStopping] = useState(false)
   const [stopErr, setStopErr] = useState('')
@@ -126,6 +128,8 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   const [refunding, setRefunding] = useState(false)
   const [refundErr, setRefundErr] = useState('')
   const modeId = useId()
+  const routingId = useId()
+  const pinId = useId()
   const promptId = useId()
   const maxTokensId = useId()
   const ceilingId = useId()
@@ -179,6 +183,8 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   const ceilingCheck = useMemo(() => (metered ? parseCeiling(ceiling, model) : null), [metered, ceiling, model])
   const coveredTokens = metered && ceilingCheck?.ok && BigInt(model.price.amount) > 0n ? BigInt(ceilingCheck.amount) / BigInt(model.price.amount) : null
   const ceilingLabel = ceilingCheck?.ok ? `${money({ ...model.price, amount: ceilingCheck.amount })} ${model.price.symbol}` : `${ceiling.trim() || '0'} ${model.price.symbol}`
+  const eligible = useMemo(() => (Array.isArray(enclaves) ? eligibleEnclaves(model, enclaves) : []), [model, enclaves])
+  const routed = useMemo(() => pickEnclave(model, eligible, { strategy, enclaveAddress: pinnedEnclave }), [model, eligible, strategy, pinnedEnclave])
   const empty = sketch ? !hasInk(strokes) : isText ? !prompt.trim() : !tensor.trim()
 
   const start = () => {
@@ -230,6 +236,8 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
       maxTokens: maxOut,
       ceiling: callCeiling,
       answerMode,
+      strategy,
+      enclave: pinnedEnclave ?? undefined,
       onStopReady: (fn) => { stopStreamRef.current = fn },
       update,
       signal: ac.signal,
@@ -650,6 +658,56 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
               </div>
             ) : null}
           </div>
+
+          {routed ? (
+            <div className={s.routingBox}>
+              <div className={s.modeRow}>
+                <div className={s.modeLabel}>
+                  <span className="t-label" id={routingId}>Routing</span>
+                  <span className="t-small dim">
+                    <span className="mono">{short(routed.enclave.signingKey, 4)}</span>
+                    {' · '}
+                    <span className="mono">{bps(effectiveShareBps(routed.grant, model.operatorShareBps))}</span>
+                    {routed.grant.quotedOperatorShareBps !== null && routed.grant.quotedOperatorShareBps !== undefined && routed.grant.quotedOperatorShareBps < model.operatorShareBps ? ' quoted' : ' share'}
+                    {' · '}
+                    <span className="mono">{formatLatency(routed.grant.medianAnswerMs)}</span>
+                  </span>
+                </div>
+                <div className="seg" role="group" aria-labelledby={routingId}>
+                  {(['balanced', 'cheapest', 'fastest'] as const).map((stName) => (
+                    <button
+                      key={stName}
+                      type="button"
+                      aria-pressed={!pinnedEnclave && strategy === stName}
+                      disabled={inFlight}
+                      onClick={() => { play('toggle'); setStrategy(stName); setPinnedEnclave(null) }}
+                    >
+                      {stName === 'balanced' ? 'Balanced' : stName === 'cheapest' ? 'Cheapest' : 'Fastest'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {eligible.length > 1 ? (
+                <div className={s.pinRow}>
+                  <label htmlFor={pinId} className="t-small dim">Enclave</label>
+                  <select
+                    id={pinId}
+                    className={`input mono ${s.pinSelect}`}
+                    disabled={inFlight}
+                    value={pinnedEnclave ?? ''}
+                    onChange={(e) => { play('toggle'); setPinnedEnclave(e.target.value || null) }}
+                  >
+                    <option value="">Auto ({strategy})</option>
+                    {eligible.map(({ enclave, grant }) => (
+                      <option key={enclave.address} value={enclave.address}>
+                        {short(enclave.signingKey, 4)} · {bps(effectiveShareBps(grant, model.operatorShareBps))} · {formatLatency(grant.medianAnswerMs)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {metered ? (
             <div className={s.ceilingBox}>

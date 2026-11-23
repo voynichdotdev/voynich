@@ -94,6 +94,9 @@
 @media (hover: hover) and (pointer: fine) { .wallets button:hover { background: var(--slate-2); } }
 
 .panel[data-compact] .body { gap: var(--s4); }
+.routingBox { display: flex; flex-direction: column; gap: 8px; }
+.pinRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pinSelect { flex: 1; min-width: 0; max-width: 280px; height: 32px; padding: 0 8px; font-size: 12px; }
 
 @container (max-width: 760px) {
   .closed { grid-template-columns: minmax(0, 1fr); padding: var(--s4) var(--s4) var(--s4) calc(var(--s4) + 12px); }

@@ -6,11 +6,14 @@
 
 import { ProgramEvent, StreamPiece as StreamPieceSchema, fromBase58, type AnswerMode, type Call, type Config, type GrantedEnclaves, type Model, type RefundState, type StreamFinishReason, type StreamPiece, type VoynichClient } from '@voynich/contract'
 import { FIXTURE } from '@voynich/contract/fixtures'
+import { selectEnclave, type RoutingStrategy } from 'voynich'
 import { decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, sha256, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece } from 'voynich/crypto'
 import { indexed } from './api'
 import { money } from './format'
 import { errorMessage, send } from './tx'
 import { verifyAll, type CheckResult } from './verify'
+
+export { selectEnclave, type RoutingStrategy }
 
 export type FlightStage = 'encrypting' | 'signing' | 'escrowed' | 'answering' | 'streaming'
 export type Stage = 'idle' | FlightStage | 'verified' | 'failed' | 'refunded'
@@ -794,6 +797,38 @@ export function eligibleEnclaves(
   })
 }
 
+export function effectiveShareBps(
+  grant: { quotedOperatorShareBps?: number | null },
+  modelOperatorShareBps: number,
+): number {
+  const q = grant.quotedOperatorShareBps
+  if (q === null || q === undefined) return modelOperatorShareBps
+  return Math.min(q, modelOperatorShareBps)
+}
+
+export function formatLatency(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return 'No data'
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  return `${(ms / 1000).toFixed(ms >= 10_000 ? 0 : 1)} s`
+}
+
+export function pickEnclave(
+  model: Pick<Model, 'allowedMeasurements' | 'operatorShareBps'>,
+  items: GrantedEnclaves['items'],
+  options?: { strategy?: RoutingStrategy; enclaveAddress?: string | null; currentSlot?: string | bigint | null },
+): GrantedEnclaves['items'][number] | null {
+  const eligible = eligibleEnclaves(model, items, options?.currentSlot)
+  if (eligible.length === 0) return null
+  if (options?.enclaveAddress) {
+    const pinned = eligible.find((x) => x.enclave.address === options.enclaveAddress || x.enclave.signingKey === options.enclaveAddress)
+    if (pinned) return pinned
+  }
+  return selectEnclave(eligible, {
+    strategy: options?.strategy ?? 'balanced',
+    modelOperatorShareBps: model.operatorShareBps,
+  })
+}
+
 export async function runCall(o: {
   client: VoynichClient
   model: Model
@@ -802,6 +837,8 @@ export async function runCall(o: {
   maxTokens?: number
   ceiling?: string
   answerMode?: AnswerMode
+  strategy?: RoutingStrategy
+  enclave?: string
   onStopReady?: (stop: (() => Promise<void>) | null) => void
   update: Update
   signal?: AbortSignal
@@ -813,7 +850,7 @@ export async function runCall(o: {
   let stopRequested = false
   try {
     const { items } = await client.modelEnclaves(model.address)
-    const pick = eligibleEnclaves(model, items)[0]
+    const pick = pickEnclave(model, items, { strategy: o.strategy, enclaveAddress: o.enclave })
     if (!pick) throw new Error('No live enclave holds a grant with a measurement this model allows.')
     const reply = generateEncryptionKeyPair()
     let stopToken: string | undefined
