@@ -25,6 +25,8 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   count: { type: 'string' }, 'running-hash': { type: 'string' }, signature: { type: 'string' }, 'from-pieces': { type: 'boolean' },
   status: { type: 'string' }, recipe: { type: 'string' }, digest: { type: 'string' }, 'recipe-hash': { type: 'string' },
   repo: { type: 'string' }, commit: { type: 'string' }, version: { type: 'string' }, source: { type: 'string' }, rebuild: { type: 'boolean' },
+  'allow-list': { type: 'boolean' }, caller: { type: 'string', multiple: true }, 'max-calls': { type: 'string' }, 'window-slots': { type: 'string' },
+  operator: { type: 'string', multiple: true }, region: { type: 'string', multiple: true },
   help: { type: 'boolean', short: 'h' },
 } })
 if (values['api-url']) process.env.VOYNICH_API_URL = values['api-url']
@@ -71,6 +73,7 @@ async function configureCliSigner(): Promise<void> {
   } else if (
     ['call', 'seal', 'grant', 'refund', 'settle'].includes(command ?? '')
     || (command === 'model' && ['price', 'retire', 'revoke'].includes(argument ?? ''))
+    || (command === 'model' && argument === 'policy' && ['set', 'clear'].includes(third ?? ''))
     || (command === 'measurement' && ['publish', 'deprecate'].includes(argument ?? ''))
   ) {
     process.env.VOYNICH_KEYPAIR = values.keypair ?? process.env.VOYNICH_KEYPAIR ?? await solanaCliKeypairPath()
@@ -138,7 +141,7 @@ async function loadCliKeypair(): Promise<Keypair> {
   return Keypair.fromSecretKey(Uint8Array.from(decoded))
 }
 async function main(): Promise<unknown> {
-  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--enclave <key>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
+  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--enclave <key>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
   await configureCliSigner()
   if (command === 'models') return voynich.models()
   if (command === 'enclaves') return voynich.enclaves()
@@ -377,6 +380,55 @@ async function main(): Promise<unknown> {
   }
   if (command === 'enclave') return enclaveCommand(argument)
   if (command === 'model') {
+    if (argument === 'policy') {
+      const action = required(third, 'policy subcommand (show, set, or clear)')
+      const modelId = required(fourth, 'model')
+      if (action === 'show') {
+        const policy = await voynich.policy(modelId)
+        return policy ?? { model: modelId, policy: null }
+      }
+      if (action === 'set') {
+        const maxCalls = values['max-calls'] !== undefined ? Number(values['max-calls']) : 0
+        if (!Number.isSafeInteger(maxCalls) || maxCalls < 0 || maxCalls > 0xffffffff) {
+          throw new Error('--max-calls must be an integer between 0 and 4294967295.')
+        }
+        const windowSlots = values['window-slots'] !== undefined ? values['window-slots'].trim() : '0'
+        if (!/^\d+$/.test(windowSlots)) {
+          throw new Error('--window-slots must be a non-negative integer.')
+        }
+        const signer = await loadCliKeypair()
+        const client = createVoynich({ apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702', signer })
+        const build = await client.api.setPolicy(modelId, {
+          wallet: signer.publicKey.toBase58(),
+          allowListEnabled: Boolean(values['allow-list']),
+          allowedCallers: values.caller ?? [],
+          maxCallsPerCallerPerWindow: maxCalls,
+          windowSlots,
+          allowedOperators: values.operator ?? [],
+          allowedRegions: (values.region ?? []).map(r => r.trim().toLowerCase()),
+        })
+        const tx = await client.send(build)
+        let policy = await client.policy(modelId)
+        for (let attempt = 0; !policy && attempt < 20; attempt++) {
+          await new Promise(r => setTimeout(r, 250))
+          policy = await client.policy(modelId)
+        }
+        return {
+          model: policy?.model ?? modelId,
+          policy,
+          transaction: tx.signature ?? null,
+        }
+      }
+      if (action === 'clear') {
+        const tx = await voynich.clearPolicy(modelId)
+        return {
+          model: modelId,
+          cleared: true,
+          transaction: tx.signature ?? null,
+        }
+      }
+      throw new Error('Use model policy show <model>, model policy set <model>, or model policy clear <model>.')
+    }
     const modelId = required(third, 'model')
     if (argument === 'retire') return voynich.retire(modelId)
     if (argument === 'revoke') return voynich.revoke(modelId, required(fourth, 'enclave'))
@@ -391,7 +443,7 @@ async function main(): Promise<unknown> {
         symbol: values.symbol ?? (sameMint ? model.price.symbol : mint ?? 'SOL'),
       }, values['operator-share-bps'] === undefined ? model.operatorShareBps : Number(values['operator-share-bps']), priceUnit !== undefined ? { priceUnit } : {})
     }
-    throw new Error('Use model price, model retire, or model revoke.')
+    throw new Error('Use model price, model policy, model retire, or model revoke.')
   }
   if (command === 'grant') {
     const model = await voynich.model(required(argument, 'model'))

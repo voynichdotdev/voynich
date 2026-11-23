@@ -4499,3 +4499,116 @@ test('Build 7 Step 2: enclave ENCLAVE_REGION parsing, region allow/deny, sliding
   fakeSlot = 520n
   assert.equal((await postInput()).status, 200)
 })
+
+test('Build 7 Step 3: voynich model policy CLI show, set, show, clear, and flag validation', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const execFileAsync = promisify(execFile)
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { fixtureModel, fixtureEnclave } = await import('@voynich/contract/fixtures')
+  const { buildApp } = await import('../src/app.js')
+  const { createVoynich } = await import('../sdk/src/index.js')
+
+  const app = buildApp()
+  const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const addr = server.address() as { port: number }
+  const apiUrl = `http://127.0.0.1:${addr.port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b7s3-cli-'))
+  const owner = Keypair.generate()
+  const ownerKeyPath = join(scratch, 'owner.json')
+  writeFileSync(ownerKeyPath, JSON.stringify([...owner.secretKey]))
+  const caller1 = Keypair.generate().publicKey.toBase58()
+  const caller2 = Keypair.generate().publicKey.toBase58()
+  const operator1 = Keypair.generate().publicKey.toBase58()
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  const runCli = async (args: string[], expectFail = false) => {
+    try {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api-url', apiUrl, '--keypair', ownerKeyPath, ...args], {
+        cwd: resolve('.'),
+        encoding: 'utf8',
+      })
+      if (expectFail) throw new Error(`Expected CLI failure for ${args.join(' ')}, got stdout: ${stdout}`)
+      return { status: 0, json: JSON.parse(stdout) as Record<string, unknown> }
+    } catch (err) {
+      if (!expectFail) throw err
+      const e = err as { code?: number; stdout?: string; stderr?: string }
+      return {
+        status: typeof e.code === 'number' ? e.code : 1,
+        json: e.stdout?.trim() ? (JSON.parse(e.stdout) as Record<string, unknown>) : null,
+        stderr: e.stderr ?? '',
+      }
+    }
+  }
+
+  try {
+    const sdk = createVoynich({ apiUrl, signer: owner, pollMs: 5 })
+    const sealed = await sdk.seal({
+      weights: new Uint8Array(64).fill(5),
+      manifest: { ...fixtureModel.manifest, name: 'policy-cli-test' },
+      price: { mint: null, amount: '100000', decimals: 9, symbol: 'SOL' },
+      operatorShareBps: 2500,
+      allowedMeasurements: [fixtureEnclave.measurement],
+      uploadFundingLamports: '1000000',
+    })
+    const modelAddress = sealed.model.address
+
+    // 1. Initial show returns { model, policy: null }
+    const initial = await runCli(['model', 'policy', 'show', modelAddress])
+    assert.deepEqual(initial.json, { model: modelAddress, policy: null })
+
+    // 2. Set policy via CLI flags
+    const setRes = await runCli([
+      'model', 'policy', 'set', modelAddress,
+      '--allow-list',
+      '--caller', caller1,
+      '--caller', caller2,
+      '--max-calls', '15',
+      '--window-slots', '400',
+      '--operator', operator1,
+      '--region', 'us-east',
+      '--region', 'EU-WEST',
+    ])
+    assert.equal(setRes.json.model, modelAddress)
+    assert.ok(typeof setRes.json.transaction === 'string' && (setRes.json.transaction as string).length > 0)
+    const setPolicy = setRes.json.policy as Record<string, unknown>
+    assert.equal(setPolicy.allowListEnabled, true)
+    assert.deepEqual(setPolicy.allowedCallers, [caller1, caller2])
+    assert.equal(setPolicy.maxCallsPerCallerPerWindow, 15)
+    assert.equal(setPolicy.windowSlots, '400')
+    assert.deepEqual(setPolicy.allowedOperators, [operator1])
+    assert.deepEqual(setPolicy.allowedRegions, ['us-east', 'eu-west'])
+
+    // 3. Show returns active policy JSON
+    const shown = await runCli(['model', 'policy', 'show', modelAddress])
+    assert.equal(shown.json.model, modelAddress)
+    assert.equal(shown.json.allowListEnabled, true)
+    assert.deepEqual(shown.json.allowedCallers, [caller1, caller2])
+    assert.equal(shown.json.maxCallsPerCallerPerWindow, 15)
+    assert.equal(shown.json.windowSlots, '400')
+    assert.deepEqual(shown.json.allowedRegions, ['us-east', 'eu-west'])
+
+    // 4. Clear policy returns { model, cleared: true, transaction }
+    const cleared = await runCli(['model', 'policy', 'clear', modelAddress])
+    assert.equal(cleared.json.model, modelAddress)
+    assert.equal(cleared.json.cleared, true)
+    assert.ok(typeof cleared.json.transaction === 'string' && (cleared.json.transaction as string).length > 0)
+
+    // 5. Show after clear returns { model, policy: null }
+    const afterClear = await runCli(['model', 'policy', 'show', modelAddress])
+    assert.deepEqual(afterClear.json, { model: modelAddress, policy: null })
+
+    // 6. Invalid --max-calls rejected with non-zero exit
+    const bad = await runCli(['model', 'policy', 'set', modelAddress, '--max-calls', '-1'], true)
+    assert.notEqual(bad.status, 0)
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})
