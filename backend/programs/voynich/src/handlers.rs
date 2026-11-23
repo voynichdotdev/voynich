@@ -104,6 +104,7 @@ pub fn create_model<'info>(ctx: Context<'_, '_, 'info, 'info, CreateModel<'info>
     model.base = args.base.clone();
     model.price_unit = args.price_unit;
     model.has_policy = false;
+    model.current_version = 1;
     let key_count = upload_keys.len() as u64;
     let base_funding = args.upload_funding_lamports / key_count;
     let primary_funding = base_funding + (args.upload_funding_lamports % key_count);
@@ -196,8 +197,8 @@ fn zero_model_tail(model: &Account<Model>) -> Result<()> {
 }
 
 fn repair_model_tail_bytes(data: &mut [u8], prefix_end: usize) -> Result<()> {
-    require!(prefix_end + 1 < data.len(), VoynichError::InvalidModel);
-    if data[prefix_end] > 1 || data[prefix_end + 1] > 1 || data[prefix_end + 2..].iter().any(|&b| b != 0) {
+    require!(prefix_end + 5 < data.len(), VoynichError::InvalidModel);
+    if data[prefix_end] > 1 || data[prefix_end + 1] > 1 || data[prefix_end + 6..].iter().any(|&b| b != 0) {
         data[prefix_end] = 0;
         data[prefix_end + 1] = 0;
         data[prefix_end + 2..].fill(0);
@@ -255,6 +256,149 @@ pub fn seal_model<'info>(ctx: Context<'_, '_, '_, 'info, SealModel<'info>>, ciph
     model.ciphertext_sha256 = ciphertext_sha256; model.status = ModelStatus::Sealed;
     model.sealed_slot = Clock::get()?.slot; model.upload_key = Pubkey::default(); model.upload_keys.clear();
     emit_cpi!(ModelSealed { model: model.key(), ciphertext_sha256, slot: model.sealed_slot, base_sha256: model.base.as_ref().map(|b| b.sha256) });
+    zero_model_tail(&ctx.accounts.model)?;
+    Ok(())
+}
+
+pub fn begin_version<'info>(ctx: Context<'_, '_, '_, 'info, BeginVersion<'info>>, version: u32, args: BeginVersionArgs) -> Result<()> {
+    let model = &ctx.accounts.model;
+    require!(model.status == ModelStatus::Sealed || model.status == ModelStatus::Live, VoynichError::ModelNotSealed);
+    let expected_version = model.effective_version().checked_add(1).ok_or(VoynichError::ArithmeticOverflow)?;
+    require!(version == expected_version, VoynichError::InvalidVersion);
+    require!(!args.manifest.is_empty() && args.manifest.len() <= MAX_MANIFEST && args.size_bytes > 16, VoynichError::InvalidModel);
+    require!(args.nonce_prefix != model.nonce_prefix, VoynichError::InvalidVersion);
+    if let Some(ref base) = args.base {
+        require!(base.is_valid(), VoynichError::InvalidModel);
+    }
+    for acc in ctx.remaining_accounts {
+        require!(!model.weights.contains(acc.key), VoynichError::InvalidWeights);
+    }
+    let keys = weights::initialize_batch(model.key(), &[], ctx.remaining_accounts, 0, args.size_bytes)?;
+    let mv = &mut ctx.accounts.model_version;
+    mv.model = model.key();
+    mv.version = version;
+    mv.status = VersionStatus::Uploading;
+    mv.weights = keys.clone();
+    mv.size_bytes = args.size_bytes;
+    mv.nonce_prefix = args.nonce_prefix;
+    mv.ciphertext_sha256 = [0u8; 32];
+    mv.manifest = args.manifest.clone();
+    mv.base = args.base.clone();
+    mv.hash_version = 1;
+    mv.sealed_chunks = 0;
+    mv.merkle_frontier = Vec::new();
+    mv.merkle_frontier_mask = 0;
+    mv.published_slot = 0;
+    mv.bump = ctx.bumps.model_version;
+    emit_cpi!(ModelVersionStarted {
+        model: model.key(),
+        model_version: mv.key(),
+        version,
+        weights: keys,
+        size_bytes: mv.size_bytes,
+        nonce_prefix: mv.nonce_prefix,
+        manifest: mv.manifest.clone(),
+        base: mv.base.clone(),
+        slot: Clock::get()?.slot,
+    });
+    Ok(())
+}
+
+pub fn write_version_weights(ctx: Context<WriteVersionWeights>, offset: u32, bytes: Vec<u8>) -> Result<()> {
+    let mv = &ctx.accounts.model_version;
+    require!(mv.status == VersionStatus::Uploading, VoynichError::InvalidVersion);
+    let written_bytes = weights::write_into(ctx.accounts.model.key(), &mv.weights, &ctx.accounts.weights.to_account_info(), offset, &bytes)?;
+    emit_cpi!(WeightsWritten { model: ctx.accounts.model.key(), weights: ctx.accounts.weights.key(), offset, length: bytes.len() as u32, written_bytes });
+    Ok(())
+}
+
+pub fn seal_version_range<'info>(ctx: Context<'_, '_, '_, 'info, SealVersionRange<'info>>, chunk_count: u32) -> Result<()> {
+    let mv: &mut ModelVersion = &mut ctx.accounts.model_version;
+    require!(mv.status == VersionStatus::Uploading, VoynichError::InvalidVersion);
+    let (start_chunk, sealed_chunks) = weights::hash_chunks_into(
+        ctx.accounts.model.key(),
+        &mv.weights,
+        mv.size_bytes,
+        &mut mv.sealed_chunks,
+        &mut mv.merkle_frontier,
+        &mut mv.merkle_frontier_mask,
+        ctx.remaining_accounts,
+        chunk_count,
+    )?;
+    emit_cpi!(RangeSealed { model: ctx.accounts.model.key(), start_chunk, chunk_count, sealed_chunks });
+    Ok(())
+}
+
+pub fn publish_version<'info>(ctx: Context<'_, '_, '_, 'info, PublishVersion<'info>>, ciphertext_sha256: [u8; 32]) -> Result<()> {
+    let model_key = ctx.accounts.model.key();
+    let mv_key = ctx.accounts.model_version.key();
+    let model: &mut Model = &mut ctx.accounts.model;
+    let mv: &mut ModelVersion = &mut ctx.accounts.model_version;
+    require!(model.status == ModelStatus::Sealed || model.status == ModelStatus::Live, VoynichError::ModelNotSealed);
+    require!(mv.status == VersionStatus::Uploading, VoynichError::InvalidVersion);
+    let expected_version = model.effective_version().checked_add(1).ok_or(VoynichError::ArithmeticOverflow)?;
+    require!(mv.version == expected_version, VoynichError::InvalidVersion);
+    let total = weights::total_chunks(mv.size_bytes)?;
+    if mv.sealed_chunks < total {
+        let remaining = total - mv.sealed_chunks;
+        require!(remaining <= MAX_SEAL_RANGE_CHUNKS, VoynichError::UploadIncomplete);
+        weights::hash_chunks_into(
+            model_key,
+            &mv.weights,
+            mv.size_bytes,
+            &mut mv.sealed_chunks,
+            &mut mv.merkle_frontier,
+            &mut mv.merkle_frontier_mask,
+            ctx.remaining_accounts,
+            remaining,
+        )?;
+    }
+    let root = weights::finalize_merkle(&mv.merkle_frontier, mv.merkle_frontier_mask)?;
+    require!(root == ciphertext_sha256, VoynichError::CiphertextHashMismatch);
+    mv.merkle_frontier.clear();
+    mv.merkle_frontier_mask = 0;
+
+    let slot = Clock::get()?.slot;
+    let previous_version = model.effective_version();
+    let previous_ciphertext_sha256 = model.ciphertext_sha256;
+    let previous_size_bytes = model.size_bytes;
+    let previous_sealed_slot = model.sealed_slot;
+    let previous_base = model.base.clone();
+
+    model.weights = mv.weights.clone();
+    model.size_bytes = mv.size_bytes;
+    model.nonce_prefix = mv.nonce_prefix;
+    model.ciphertext_sha256 = ciphertext_sha256;
+    model.manifest = mv.manifest.clone();
+    model.base = mv.base.clone();
+    model.hash_version = 1;
+    model.sealed_chunks = total;
+    model.merkle_frontier.clear();
+    model.merkle_frontier_mask = 0;
+    model.sealed_slot = slot;
+    model.current_version = mv.version;
+
+    mv.ciphertext_sha256 = ciphertext_sha256;
+    mv.status = VersionStatus::Live;
+    mv.published_slot = slot;
+
+    emit_cpi!(ModelVersionPublished {
+        model: model_key,
+        model_version: mv_key,
+        version: mv.version,
+        previous_version,
+        previous_ciphertext_sha256,
+        previous_size_bytes,
+        previous_sealed_slot,
+        previous_base,
+        weights: mv.weights.clone(),
+        size_bytes: mv.size_bytes,
+        nonce_prefix: mv.nonce_prefix,
+        ciphertext_sha256,
+        manifest: mv.manifest.clone(),
+        base: mv.base.clone(),
+        published_slot: slot,
+    });
     zero_model_tail(&ctx.accounts.model)?;
     Ok(())
 }
@@ -1106,6 +1250,7 @@ mod tests {
                 },
                 price_unit: PriceUnit::Token,
                 has_policy: false,
+                current_version: 1,
             };
 
             let mut encoded = Vec::new();
@@ -1117,7 +1262,7 @@ mod tests {
             assert_eq!(parsed_owner, owner);
             assert_eq!(parsed_name, "text-1m");
             assert_eq!(parsed_bump, 251);
-            assert_eq!(prefix_end, encoded.len() - 2);
+            assert_eq!(prefix_end, encoded.len() - 6);
 
             // Clean PriceUnit::Token with zero tail stays untouched.
             repair_model_tail_bytes(&mut buf, prefix_end).unwrap();

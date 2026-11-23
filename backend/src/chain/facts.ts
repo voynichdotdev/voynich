@@ -30,8 +30,14 @@ export function createFacts(connection: Connection) {
         for (const address of event.data.weights as string[]) weights.add(address)
       } else if (event.name === 'weightsattached') {
         for (const address of event.data.weights as string[]) weights.add(address)
+      } else if (event.name === 'modelversionstarted' || event.name === 'modelversionpublished') {
+        event.data.manifestBytes = event.data.manifest!
+        const manifest = new TextDecoder().decode(bytes(event.data, 'manifest'))
+        try { event.data.manifest = decodeManifest(manifest) as unknown as Json }
+        catch { event.data.manifest = manifest }
+        for (const address of event.data.weights as string[]) weights.add(address)
       }
-      for (const key of ['model', 'enclave', 'call', 'receipt', 'record', 'grant', 'weights', 'uploadKey', 'bounty', 'attempt', 'measurement', 'policy']) {
+      for (const key of ['model', 'enclave', 'call', 'receipt', 'record', 'grant', 'weights', 'uploadKey', 'bounty', 'attempt', 'measurement', 'policy', 'modelVersion']) {
         const value = event.data[key]
         if (typeof value === 'string' && value !== PublicKey.default.toBase58()) facts.addresses.push(value)
       }

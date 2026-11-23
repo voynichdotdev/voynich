@@ -42,6 +42,14 @@ export function policyPda(model: Key, programId: Key = PROGRAM_ID): PublicKey {
 export function grantPda(model: Key, enclave: Key, programId: Key = PROGRAM_ID): PublicKey {
   return pda(key(programId), utf8('grant'), key(model).toBytes(), key(enclave).toBytes())
 }
+export function modelVersionPda(model: Key, version: number, programId: Key = PROGRAM_ID): PublicKey {
+  if (!Number.isSafeInteger(version) || version < 1 || version > 0xffffffff) {
+    throw new Error('Model version must be a u32 >= 1')
+  }
+  const bytes = new Uint8Array(4)
+  new DataView(bytes.buffer).setUint32(0, version, true)
+  return pda(key(programId), utf8('version'), key(model).toBytes(), bytes)
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -53,6 +61,7 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     receipt: (call: Key) => pda(programId, utf8('receipt'), key(call).toBytes()),
     measurement: (digest: Uint8Array | string) => measurementPda(digest, programId),
     policy: (model: Key) => policyPda(model, programId),
+    modelVersion: (model: Key, version: number) => modelVersionPda(model, version, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -96,6 +105,7 @@ export const MEASUREMENT_SPACE = 366
 export const POLICY_SPACE = 1770
 export const GRANT_BASE_SPACE = 223
 export const GRANT_SPACE = 226
+export const MODEL_VERSION_SPACE = 8192
 export const DEFAULT_MAX_OPEN_ANSWER_BYTES = 1024
 
 const matchesDisc = (data: Uint8Array, label: string) => {
@@ -724,4 +734,176 @@ export async function buildSetQuoteTx(params: {
     instructions: [instruction],
   }).compileToV0Message()
   return new VersionedTransaction(message)
+}
+
+export type DecodedModelVersionAccount = {
+  model: PublicKey
+  version: number
+  status: 'uploading' | 'live' | 'archived'
+  weights: PublicKey[]
+  sizeBytes: BN
+  noncePrefix: Uint8Array
+  ciphertextSha256: string
+  manifest: Uint8Array
+  base: ModelBase | null
+  hashVersion: number
+  sealedChunks: number
+  merkleFrontier: Uint8Array[]
+  merkleFrontierMask: number
+  publishedSlot: BN
+  bump: number
+}
+
+export function decodeModelVersionAccount(data: Uint8Array): DecodedModelVersionAccount {
+  if (!matchesDisc(data, 'account:ModelVersion') || data.length < 8 + 32 + 4 + 1) {
+    throw new Error('Invalid ModelVersion account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const need = (n: number) => {
+    if (offset + n > data.length) throw new Error('Truncated ModelVersion account data')
+  }
+  const readU32 = () => { need(4); const v = view.getUint32(offset, true); offset += 4; return v }
+  const readU64 = () => { need(8); const v = view.getBigUint64(offset, true); offset += 8; return v }
+  const readString = () => {
+    const len = readU32()
+    need(len)
+    const text = utf8Decoder.decode(data.subarray(offset, offset + len))
+    offset += len
+    return text
+  }
+
+  need(32)
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const version = readU32()
+  need(1)
+  const statusTag = data[offset++]!
+  if (statusTag > 2) throw new Error(`Invalid VersionStatus tag: ${statusTag}`)
+  const status = (['uploading', 'live', 'archived'] as const)[statusTag]!
+  const weightsLen = readU32()
+  const weights: PublicKey[] = []
+  for (let i = 0; i < weightsLen; i++) {
+    need(32)
+    weights.push(new PublicKey(data.subarray(offset, offset + 32)))
+    offset += 32
+  }
+  const sizeBytes = new BN(readU64().toString())
+  need(16)
+  const noncePrefix = new Uint8Array(data.subarray(offset, offset + 16)); offset += 16
+  need(32)
+  const ciphertextSha256 = toHex(data.subarray(offset, offset + 32)); offset += 32
+  const manifestLen = readU32()
+  need(manifestLen)
+  const manifest = new Uint8Array(data.subarray(offset, offset + manifestLen)); offset += manifestLen
+  need(1)
+  const baseTag = data[offset++]!
+  let base: ModelBase | null = null
+  if (baseTag === 1) {
+    need(32)
+    const sha256Hex = toHex(data.subarray(offset, offset + 32)); offset += 32
+    const baseSize = Number(readU64())
+    const format = readString()
+    const source = readString()
+    base = ModelBaseSchema.parse({ sha256: sha256Hex, sizeBytes: baseSize, format, source })
+  } else if (baseTag !== 0) {
+    throw new Error(`Invalid ModelVersion base tag: ${baseTag}`)
+  }
+  need(1)
+  const hashVersion = data[offset++]!
+  const sealedChunks = readU32()
+  const frontierLen = readU32()
+  const merkleFrontier: Uint8Array[] = []
+  for (let i = 0; i < frontierLen; i++) {
+    need(32)
+    merkleFrontier.push(new Uint8Array(data.subarray(offset, offset + 32)))
+    offset += 32
+  }
+  const merkleFrontierMask = readU32()
+  const publishedSlot = new BN(readU64().toString())
+  need(1)
+  const bump = data[offset++]!
+  return {
+    model, version, status, weights, sizeBytes, noncePrefix, ciphertextSha256, manifest,
+    base, hashVersion, sealedChunks, merkleFrontier, merkleFrontierMask, publishedSlot, bump,
+  }
+}
+
+export async function buildBeginVersionTx(params: {
+  connection: Connection
+  owner: Key
+  model: Key
+  version: number
+  weights: Key[]
+  manifest: Uint8Array
+  sizeBytes: number | bigint
+  noncePrefix: Uint8Array
+  base?: ModelBase | null
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const owner = key(params.owner)
+  const model = key(params.model)
+  const mv = modelVersionPda(model, params.version, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const baseArg = params.base
+    ? {
+        sha256: [...fromHex(params.base.sha256)],
+        sizeBytes: new BN(params.base.sizeBytes),
+        format: params.base.format,
+        source: params.base.source,
+      }
+    : null
+  const instruction = await voynich.methods
+    .beginVersion(params.version, {
+      manifest: Buffer.from(params.manifest),
+      sizeBytes: new BN(params.sizeBytes.toString()),
+      noncePrefix: [...params.noncePrefix],
+      base: baseArg,
+    })
+    .accountsStrict({
+      owner,
+      model,
+      modelVersion: mv,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .remainingAccounts(params.weights.map(w => ({ pubkey: key(w), isWritable: true, isSigner: false })))
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: owner, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildPublishVersionTx(params: {
+  connection: Connection
+  owner: Key
+  model: Key
+  version: number
+  weights: Key[]
+  ciphertextSha256: Uint8Array | string
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const owner = key(params.owner)
+  const model = key(params.model)
+  const mv = modelVersionPda(model, params.version, programId)
+  const hashBytes = typeof params.ciphertextSha256 === 'string' ? fromHex(params.ciphertextSha256) : params.ciphertextSha256
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .publishVersion([...hashBytes])
+    .accountsStrict({
+      owner,
+      model,
+      modelVersion: mv,
+      ...eventAccounts(programId),
+    })
+    .remainingAccounts(params.weights.map(w => ({ pubkey: key(w), isWritable: false, isSigner: false })))
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: owner, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
 }

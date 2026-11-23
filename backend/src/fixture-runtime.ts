@@ -36,6 +36,8 @@ export class FixtureState {
   bountyAttempts: BountyAttempt[] = []
   measurements: MeasurementRecord[] = []
   readonly policies = new Map<string, ModelPolicy>()
+  readonly versions = new Map<string, import('@voynich/contract').ModelVersion[]>()
+  readonly stagedVersions = new Map<string, { version: number; address: string; weights: string[]; sizeBytes: number; noncePrefix: string; manifest: import('@voynich/contract').Manifest; base: import('@voynich/contract').ModelBase | null; bytes: Uint8Array; sealedChunks: number }>()
   slot = 1000n
 
   constructor(readonly scenario: string | null) {

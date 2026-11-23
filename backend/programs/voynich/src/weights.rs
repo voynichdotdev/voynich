@@ -117,11 +117,15 @@ pub fn attached_end_offset(model: Pubkey, model_data: &Model, last_info: &Accoun
 }
 
 pub fn write(model: Pubkey, model_data: &Model, info: &AccountInfo, offset: u32, bytes: &[u8]) -> Result<u32> {
+    write_into(model, &model_data.weights, info, offset, bytes)
+}
+
+pub fn write_into(model: Pubkey, weights_keys: &[Pubkey], info: &AccountInfo, offset: u32, bytes: &[u8]) -> Result<u32> {
     require_keys_eq!(*info.owner, crate::ID, VoynichError::InvalidWeights);
     let mut data = info.try_borrow_mut_data()?;
     let mut record = header(&data)?;
     require_keys_eq!(record.model, model, VoynichError::InvalidWeights);
-    require!(model_data.weights.get(record.index as usize) == Some(info.key), VoynichError::InvalidWeights);
+    require!(weights_keys.get(record.index as usize) == Some(info.key), VoynichError::InvalidWeights);
     require!(data.len() == WEIGHTS_HEADER + record.size_bytes as usize, VoynichError::InvalidWeights);
     let end = offset
         .checked_add(u32::try_from(bytes.len()).map_err(|_| error!(VoynichError::InvalidWrite))?)
@@ -143,16 +147,38 @@ pub fn hash_chunks(
     accounts: &[AccountInfo],
     chunk_count: u32,
 ) -> Result<(u32, u32)> {
+    hash_chunks_into(
+        model,
+        &model_data.weights,
+        model_data.size_bytes,
+        &mut model_data.sealed_chunks,
+        &mut model_data.merkle_frontier,
+        &mut model_data.merkle_frontier_mask,
+        accounts,
+        chunk_count,
+    )
+}
+
+pub fn hash_chunks_into(
+    model: Pubkey,
+    weights_keys: &[Pubkey],
+    size_bytes: u64,
+    sealed_chunks: &mut u32,
+    merkle_frontier: &mut Vec<[u8; 32]>,
+    merkle_frontier_mask: &mut u32,
+    accounts: &[AccountInfo],
+    chunk_count: u32,
+) -> Result<(u32, u32)> {
     require!(chunk_count > 0 && chunk_count <= MAX_SEAL_RANGE_CHUNKS, VoynichError::InvalidWrite);
     require!(!accounts.is_empty(), VoynichError::InvalidWeights);
-    let total = total_chunks(model_data.size_bytes)?;
-    let start_chunk = model_data.sealed_chunks;
+    let total = total_chunks(size_bytes)?;
+    let start_chunk = *sealed_chunks;
     let end_chunk = start_chunk.checked_add(chunk_count).ok_or(VoynichError::ArithmeticOverflow)?;
     require!(end_chunk <= total, VoynichError::InvalidWrite);
 
     let chunk_size = CIPHER_CHUNK_BYTES as u64;
     let range_start = u64::from(start_chunk) * chunk_size;
-    let range_end = (u64::from(end_chunk) * chunk_size).min(model_data.size_bytes);
+    let range_end = (u64::from(end_chunk) * chunk_size).min(size_bytes);
 
     let mut borrowed = Vec::with_capacity(accounts.len());
     let mut prev_index: Option<u32> = None;
@@ -162,7 +188,7 @@ pub fn hash_chunks(
         let data = info.try_borrow_data()?;
         let record = header(&data)?;
         require_keys_eq!(record.model, model, VoynichError::InvalidWeights);
-        require!(model_data.weights.get(record.index as usize) == Some(info.key), VoynichError::InvalidWeights);
+        require!(weights_keys.get(record.index as usize) == Some(info.key), VoynichError::InvalidWeights);
         require!(data.len() == WEIGHTS_HEADER + record.size_bytes as usize, VoynichError::InvalidWeights);
         require!(record.written_bytes == record.size_bytes, VoynichError::UploadIncomplete);
         let acc_start = u64::from(record.reserved);
@@ -183,16 +209,16 @@ pub fn hash_chunks(
     }
     if end_chunk == total {
         require!(
-            *last_index as usize + 1 == model_data.weights.len() && *last_end == model_data.size_bytes,
+            *last_index as usize + 1 == weights_keys.len() && *last_end == size_bytes,
             VoynichError::InvalidWeights
         );
     }
 
-    let mut frontier = core::mem::take(&mut model_data.merkle_frontier);
-    let mut mask = model_data.merkle_frontier_mask;
+    let mut frontier = core::mem::take(merkle_frontier);
+    let mut mask = *merkle_frontier_mask;
     for chunk_index in start_chunk..end_chunk {
         let c_start = u64::from(chunk_index) * chunk_size;
-        let c_end = (c_start + chunk_size).min(model_data.size_bytes);
+        let c_end = (c_start + chunk_size).min(size_bytes);
         let index_bytes = chunk_index.to_le_bytes();
         let mut slices: Vec<&[u8]> = Vec::with_capacity(borrowed.len() + 2);
         slices.push(CHUNK_DOMAIN);
@@ -208,9 +234,9 @@ pub fn hash_chunks(
         let leaf = hashv(&slices).to_bytes();
         push_merkle_leaf(&mut frontier, &mut mask, leaf)?;
     }
-    model_data.merkle_frontier = frontier;
-    model_data.merkle_frontier_mask = mask;
-    model_data.sealed_chunks = end_chunk;
+    *merkle_frontier = frontier;
+    *merkle_frontier_mask = mask;
+    *sealed_chunks = end_chunk;
     Ok((start_chunk, end_chunk))
 }
 

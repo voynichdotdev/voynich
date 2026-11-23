@@ -1996,4 +1996,107 @@ test('Voynich program flows on the supplied local validator', { timeout: 180_000
       /GrantRequired/,
     )
   })
+
+  await t.test('Build 10 Step 1: ModelVersion PDA zero-downtime v1 -> v2 upgrade at same model address with v1 and v2 receipts', async () => {
+    const { decodeModelVersionAccount, modelVersionPda } = await import('../sdk/src/program.js')
+    const versioned = await createModel('versioned-model')
+    await uploadAndSeal(versioned)
+    await refresh(first)
+    await execute([await ownerGrant(versioned, first)], [owner])
+
+    // 1. Settle a v1 call and confirm currentVersion === 1
+    const modelV1 = await voynich.account.model.fetch(versioned.address)
+    assert.equal(modelV1.currentVersion, 1)
+    const call1 = await open(versioned)
+    await execute((await settleInstructions(call1)).instructions)
+    assert.deepEqual((await voynich.account.call.fetch(call1.address)).status, { settled: {} })
+
+    // 2. Seal v2 weights under the SAME model key with a fresh nonce_prefix
+    const v2Plain = Uint8Array.from({ length: 192 }, (_, idx) => (idx * 7 + 3) & 0xff)
+    const v2Sealed = sealWeights(v2Plain, versioned.sealed.key)
+    const v2Weights = Keypair.generate()
+    const v2Space = 56 + v2Sealed.ciphertext.length
+    await execute([SystemProgram.createAccount({
+      fromPubkey: admin.publicKey,
+      newAccountPubkey: v2Weights.publicKey,
+      lamports: await connection.getMinimumBalanceForRentExemption(v2Space),
+      space: v2Space,
+      programId: voynich.programId,
+    })], [v2Weights])
+
+    const v2Manifest = Buffer.from(JSON.stringify({ name: 'versioned-model', inputKind: 'tensor', inputShape: [1, 4], labels: ['sample-v2'] }))
+    const mv2Pda = modelVersionPda(versioned.address, 2, voynich.programId)
+
+    // Non-owner rejected with Unauthorized
+    await assert.rejects(
+      execute([await voynich.methods.beginVersion(2, {
+        manifest: v2Manifest, sizeBytes: bn(v2Sealed.ciphertext.length), noncePrefix: [...v2Sealed.header.noncePrefix], base: null,
+      }).accountsStrict({
+        owner: caller.publicKey, model: versioned.address, modelVersion: mv2Pda, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).remainingAccounts([{ pubkey: v2Weights.publicKey, isWritable: true, isSigner: false }]).instruction()], [caller]),
+      /Unauthorized/,
+    )
+
+    // Wrong version number (3 instead of 2) rejected with InvalidVersion
+    const mv3Pda = modelVersionPda(versioned.address, 3, voynich.programId)
+    await assert.rejects(
+      execute([await voynich.methods.beginVersion(3, {
+        manifest: v2Manifest, sizeBytes: bn(v2Sealed.ciphertext.length), noncePrefix: [...v2Sealed.header.noncePrefix], base: null,
+      }).accountsStrict({
+        owner: owner.publicKey, model: versioned.address, modelVersion: mv3Pda, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).remainingAccounts([{ pubkey: v2Weights.publicKey, isWritable: true, isSigner: false }]).instruction()], [owner]),
+      /InvalidVersion/,
+    )
+
+    // Reused nonce_prefix rejected with InvalidVersion
+    await assert.rejects(
+      execute([await voynich.methods.beginVersion(2, {
+        manifest: v2Manifest, sizeBytes: bn(v2Sealed.ciphertext.length), noncePrefix: [...versioned.sealed.header.noncePrefix], base: null,
+      }).accountsStrict({
+        owner: owner.publicKey, model: versioned.address, modelVersion: mv2Pda, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).remainingAccounts([{ pubkey: v2Weights.publicKey, isWritable: true, isSigner: false }]).instruction()], [owner]),
+      /InvalidVersion/,
+    )
+
+    // 3. Owner begins v2, writes weights, and publishes v2 while Model stays Live
+    await execute([await voynich.methods.beginVersion(2, {
+      manifest: v2Manifest, sizeBytes: bn(v2Sealed.ciphertext.length), noncePrefix: [...v2Sealed.header.noncePrefix], base: null,
+    }).accountsStrict({
+      owner: owner.publicKey, model: versioned.address, modelVersion: mv2Pda, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).remainingAccounts([{ pubkey: v2Weights.publicKey, isWritable: true, isSigner: false }]).instruction()], [owner])
+
+    // Model is still Live on v1 while v2 is Uploading
+    assert.equal((await voynich.account.model.fetch(versioned.address)).currentVersion, 1)
+
+    await execute([await voynich.methods.writeVersionWeights(0, Buffer.from(v2Sealed.ciphertext)).accountsStrict({
+      owner: owner.publicKey, model: versioned.address, modelVersion: mv2Pda, weights: v2Weights.publicKey, ...events(voynich.programId),
+    }).instruction()], [owner])
+
+    await execute([await voynich.methods.publishVersion([...v2Sealed.merkleRoot]).accountsStrict({
+      owner: owner.publicKey, model: versioned.address, modelVersion: mv2Pda, ...events(voynich.programId),
+    }).remainingAccounts([{ pubkey: v2Weights.publicKey, isWritable: false, isSigner: false }]).instruction()], [owner])
+
+    // 4. Verify Model flipped atomically to v2 at same address and ModelVersion PDA decodes cleanly
+    const modelV2 = await voynich.account.model.fetch(versioned.address)
+    const expectedRootHex = Buffer.from(v2Sealed.merkleRoot).toString('hex')
+    const expectedNonceHex = Buffer.from(v2Sealed.header.noncePrefix).toString('hex')
+    assert.equal(modelV2.currentVersion, 2)
+    assert.equal(modelV2.weights.length, 1)
+    assert(modelV2.weights[0]!.equals(v2Weights.publicKey))
+    assert.equal(Buffer.from(modelV2.ciphertextSha256).toString('hex'), expectedRootHex)
+    assert.equal(Buffer.from(modelV2.noncePrefix).toString('hex'), expectedNonceHex)
+
+    const mvInfo = await connection.getAccountInfo(mv2Pda, 'confirmed')
+    assert.ok(mvInfo)
+    const decodedMv = decodeModelVersionAccount(mvInfo.data)
+    assert.equal(decodedMv.version, 2)
+    assert.equal(decodedMv.status, 'live')
+    assert.equal(decodedMv.ciphertextSha256, expectedRootHex)
+    assert(decodedMv.publishedSlot.gtn(0))
+
+    // 5. Existing Grant stays valid: open & settle a v2 call at the same model address
+    const call2 = await open(versioned)
+    await execute((await settleInstructions(call2)).instructions)
+    assert.deepEqual((await voynich.account.call.fetch(call2.address)).status, { settled: {} })
+  })
 })

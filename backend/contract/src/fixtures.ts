@@ -87,7 +87,7 @@ export const fixtureModel: Model = {
   status: 'live', manifest: fixtureManifest,
   weights: [{ address: FIXTURE.weights, model: FIXTURE.model, index: 0, offset: 0, sizeBytes: 65552, writtenRanges: [{ offset: 0, length: 65552 }] }],
   upload: { uploadKey: FIXTURE.uploadKey, uploadKeys: [FIXTURE.uploadKey], bytesWritten: 65552, transactionsWritten: 129, writtenRanges: [{ offset: 0, length: 65552 }], closed: true },
-  enclavesHolding: 1, callsSettled: '42',
+  enclavesHolding: 1, callsSettled: '42', currentVersion: 1,
 }
 export const fixtureGrant: Grant = { address: FIXTURE.grant, model: FIXTURE.model, modelName: 'sketch-32', enclave: FIXTURE.enclave, wrappedKey: 'AeBmWdoBW+79P4Fgb4BoKxpeZtymttHoPLHvgJYNw7cWGVI8qZVIDM6DKEHe4UOGkDsdAREZwz6kErx1O/10v3t/aBFEXuTWCwbRsEZxulCro36kS8u9vvBFzy5xbs0rQvjKaaWY6pOv', grantedBy: FIXTURE.owner, grantedSlot: '825', status: 'live', quotedOperatorShareBps: null, medianAnswerMs: 400 }
 export const fixtureCall: Call = { address: FIXTURE.call, caller: FIXTURE.caller, callerIsProgram: false, model: FIXTURE.model, modelName: 'sketch-32', enclave: FIXTURE.enclave, inputHash: '11'.repeat(32), answerMode: 'sealed', price: fixturePrice, priceUnit: 'call', unitPrice: fixturePrice, ceiling: null, openedSlot: '900', deadlineSlot: '1050', status: 'settled', receipt: FIXTURE.receipt, failure: null }

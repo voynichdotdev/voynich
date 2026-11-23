@@ -3599,11 +3599,13 @@ test('Review Blocking #1: prefix-tolerant Model decode on pre-Build-4 0x2e slack
       source: 'https://example.com/text-1m-base.onnx',
     },
     priceUnit: { call: {} },
+    hasPolicy: false,
+    currentVersion: 1,
   })
   // Simulate pre-Build-4 8,192-byte account with stale Vec slack byte 0x2e right where priceUnit sits.
   const padded = Buffer.alloc(8192)
   encoded.copy(padded, 0)
-  padded[encoded.length - 1] = 0x2e
+  padded[encoded.length - 6] = 0x2e
 
   // Raw Anchor decode throws on 0x2e; prefix-tolerant builder helper must succeed as priceUnit=call.
   assert.throws(() => voynich.coder.accounts.decode('model', padded))
@@ -4809,4 +4811,85 @@ test('Build 9 Step 2: selectEnclave routing strategies and CLI enclave quote / c
     await new Promise<void>(r => server.close(() => r()))
     rmSync(scratch, { recursive: true, force: true })
   }
+})
+
+test('Build 10 Step 1: modelVersionPda, buildBeginVersionTx/buildPublishVersionTx, fixture GET /v1/models/:id/versions, and SDK listVersions/publishVersion', async () => {
+  const { Connection } = await import('@solana/web3.js')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { buildBeginVersionTx, buildPublishVersionTx, modelVersionPda } = await import('../sdk/src/program.js')
+  const { createVoynich } = await import('../sdk/src/index.js')
+  const { buildApp } = await import('../src/app.js')
+
+  // 1. Version tx builders produce valid v0 VersionedTransactions targeting modelVersionPda
+  const conn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const ownerKey = Keypair.generate().publicKey
+  const modelKey = Keypair.generate().publicKey
+  const weightsKey = Keypair.generate().publicKey
+  const mv2 = modelVersionPda(modelKey, 2)
+  const blockhash = Keypair.generate().publicKey.toBase58()
+
+  const beginTx = await buildBeginVersionTx({
+    connection: conn,
+    owner: ownerKey,
+    model: modelKey,
+    version: 2,
+    weights: [weightsKey],
+    manifest: new TextEncoder().encode('{"name":"demo"}'),
+    sizeBytes: 128,
+    noncePrefix: new Uint8Array(16).fill(7),
+    recentBlockhash: blockhash,
+  })
+  assert.ok(beginTx.message.staticAccountKeys.map(k => k.toBase58()).includes(mv2.toBase58()))
+
+  const pubTx = await buildPublishVersionTx({
+    connection: conn,
+    owner: ownerKey,
+    model: modelKey,
+    version: 2,
+    weights: [weightsKey],
+    ciphertextSha256: 'ab'.repeat(32),
+    recentBlockhash: blockhash,
+  })
+  assert.ok(pubTx.message.staticAccountKeys.map(k => k.toBase58()).includes(mv2.toBase58()))
+
+  // 2. Fixture API + SDK listVersions() & publishVersion()
+  const app = buildApp()
+  const sessionId = 'b10s1-version-test'
+  const localFetch: typeof fetch = async (input, init) => {
+    const req = input instanceof Request ? input : new Request(String(input), init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', sessionId)
+    return app.fetch(new Request(req, { headers }))
+  }
+  const ownerWallet = {
+    publicKey: { toBase58: () => FIXTURE.owner } as import('@solana/web3.js').PublicKey,
+    async signTransaction(t: import('@solana/web3.js').VersionedTransaction) { return t },
+  }
+  const ownerClient = createVoynich({ apiUrl: 'http://127.0.0.1:9702', signer: ownerWallet, fetch: localFetch, pollMs: 5 })
+
+  // Before upgrade: synthesized v1 entry
+  const initial = await ownerClient.listVersions('sketch-32')
+  assert.equal(initial.currentVersion, 1)
+  assert.equal(initial.items.length, 1)
+  assert.equal(initial.items[0]!.version, 1)
+  assert.equal(initial.items[0]!.status, 'live')
+
+  // Publish v2 using explicit modelKey
+  const published = await ownerClient.publishVersion('sketch-32', {
+    weights: new Uint8Array(256).fill(9),
+    modelKey: new Uint8Array(32).fill(4),
+  })
+  assert.equal(published.version, 2)
+  assert.equal(published.model.currentVersion, 2)
+  assert.equal(published.model.ciphertextSha256, published.ciphertextSha256)
+
+  // After upgrade: newest-first [v2 live, v1 archived]
+  const after = await ownerClient.listVersions('sketch-32')
+  assert.equal(after.currentVersion, 2)
+  assert.equal(after.items.length, 2)
+  assert.equal(after.items[0]!.version, 2)
+  assert.equal(after.items[0]!.status, 'live')
+  assert.equal(after.items[0]!.ciphertextSha256, published.ciphertextSha256)
+  assert.equal(after.items[1]!.version, 1)
+  assert.equal(after.items[1]!.status, 'archived')
 })

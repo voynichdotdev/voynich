@@ -66,8 +66,42 @@ export class ReadModel {
       cipher: { id: 'xchacha20poly1305-64k-v1', chunkSizeBytes: 65536, noncePrefix: toBase64(row.noncePrefix) }, allowedMeasurements: row.allowedMeasurements,
       price: await this.money(row.price.toFixed(0), row.priceMint), priceUnit: row.priceUnit, operatorShareBps: row.operatorShareBps, protocolShareBps: config?.protocolShareBps ?? null,
       status: row.status, manifest: decodeManifest(row.manifest), weights, enclavesHolding, callsSettled: String(row.callsSettled),
+      currentVersion: row.currentVersion ?? 1,
       upload: row.uploadKey ? { uploadKey: row.uploadKey, uploadKeys: row.uploadKeys.length ? row.uploadKeys : [row.uploadKey], bytesWritten: row.weights.reduce((total, weight) => total + Number(weight.bytesWritten), 0), transactionsWritten: await this.uploadTransactions(row.address), writtenRanges: weights.flatMap(weight => weight.writtenRanges.map(range => ({ offset: range.offset + weight.offset, length: range.length }))), closed: row.status !== 'uploading' } : null,
     }
+  }
+  async modelVersions(id: string) {
+    const model = await this.model(id)
+    const rows = await this.db.modelVersion.findMany({
+      where: { modelAddress: model.address },
+      orderBy: { version: 'desc' },
+    })
+    const items = rows.length > 0
+      ? rows.map(row => ({
+          model: row.modelAddress,
+          version: row.version,
+          address: row.address,
+          status: row.status,
+          sizeBytes: Number(row.sizeBytes),
+          ciphertextSha256: row.ciphertextSha256,
+          base: row.baseSha256 && row.baseSizeBytes !== null && row.baseFormat && row.baseSource
+            ? { sha256: row.baseSha256, sizeBytes: Number(row.baseSizeBytes), format: row.baseFormat as NonNullable<Model['base']>['format'], source: row.baseSource }
+            : null,
+          manifest: row.manifest ? decodeManifest(row.manifest) : null,
+          publishedSlot: row.publishedSlot === null ? null : String(row.publishedSlot),
+        }))
+      : [{
+          model: model.address,
+          version: 1,
+          address: null,
+          status: model.status === 'uploading' ? 'uploading' as const : 'live' as const,
+          sizeBytes: model.sizeBytes,
+          ciphertextSha256: model.ciphertextSha256,
+          base: model.base,
+          manifest: model.manifest,
+          publishedSlot: model.sealedSlot,
+        }]
+    return { items, currentVersion: model.currentVersion ?? 1 }
   }
   async model(id: string) {
     const row = await this.db.model.findFirst({ where: { OR: [{ address: id }, { name: id }] }, include: { weights: true } })

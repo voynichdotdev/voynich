@@ -1475,6 +1475,10 @@
           {
             "name": "has_policy",
             "type": "bool"
+          },
+          {
+            "name": "current_version",
+            "type": "u32"
           }
         ]
       }

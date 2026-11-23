@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BN, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodePolicyAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BN, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -597,6 +597,70 @@ export function builders(runtime: ChainRuntime) {
         .accountsStrict({ owner, model: row.key, policy, ...events })
         .instruction()
       return ledger.build('clear_policy', owner, [instruction], { model: row.key.toBase58(), policy: policy.toBase58() })
+    },
+    async beginVersion(id: string, body: c.BeginVersionRequest) {
+      const row = await model(id), owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can publish a new version.', { stage: 'build' })
+      const currentVersion = Math.max(1, Number((row.value as { currentVersion?: number }).currentVersion ?? 0))
+      const version = body.version ?? (currentVersion + 1)
+      if (version !== currentVersion + 1) fail('INVALID_VERSION', `Expected next version ${currentVersion + 1}.`, { stage: 'build' })
+      const modelVersion = a.modelVersion(row.key, version)
+      const rent = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(MODEL_VERSION_SPACE))
+      const baseArg = body.base
+        ? { sha256: [...fromHex(body.base.sha256)], sizeBytes: bn(body.base.sizeBytes), format: body.base.format, source: body.base.source }
+        : null
+      const instruction = await voynich.methods
+        .beginVersion(version, {
+          manifest: Buffer.from(JSON.stringify(body.manifest)),
+          sizeBytes: bn(body.sizeBytes),
+          noncePrefix: [...fromBase64(body.noncePrefix)],
+          base: baseArg,
+        })
+        .accountsStrict({ owner, model: row.key, modelVersion, systemProgram: SystemProgram.programId, ...events })
+        .remainingAccounts(body.weights.map(w => ({ pubkey: publicKey(w), isWritable: true, isSigner: false })))
+        .instruction()
+      return ledger.build('begin_version', owner, [instruction], { model: row.key.toBase58(), modelVersion: modelVersion.toBase58(), weights: body.weights }, rent)
+    },
+    async writeVersionWeights(id: string, body: c.WriteVersionWeightsRequest) {
+      const row = await model(id), owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can write version weights.', { stage: 'build' })
+      const modelVersion = a.modelVersion(row.key, body.version)
+      const instruction = await voynich.methods
+        .writeVersionWeights(body.offset, Buffer.from(fromBase64(body.bytesBase64)))
+        .accountsStrict({ owner, model: row.key, modelVersion, weights: publicKey(body.weights), ...events })
+        .instruction()
+      return ledger.build('write_version_weights', owner, [instruction], { model: row.key.toBase58(), modelVersion: modelVersion.toBase58(), weights: [body.weights] })
+    },
+    async sealVersionRange(id: string, body: c.SealVersionRangeRequest) {
+      const row = await model(id), owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can seal version ranges.', { stage: 'build' })
+      const modelVersion = a.modelVersion(row.key, body.version)
+      const mvInfo = await runtime.rpc.connection.getAccountInfo(modelVersion, 'confirmed')
+      if (!mvInfo) fail('INVALID_VERSION', 'This staged model version was not found.', { stage: 'build' })
+      const mv = decodeModelVersionAccount(mvInfo.data)
+      const total = Math.ceil(Number(mv.sizeBytes.toString()) / CIPHER_CHUNK_BYTES)
+      const count = Math.min(body.chunkCount ?? SEAL_RANGE_CHUNKS, Math.max(0, total - mv.sealedChunks))
+      if (count <= 0) fail('INVALID_VERSION', 'All version chunks are already sealed.', { stage: 'build' })
+      const instruction = await voynich.methods
+        .sealVersionRange(count)
+        .accountsStrict({ owner, model: row.key, modelVersion, ...events })
+        .remainingAccounts(mv.weights.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
+        .instruction()
+      return ledger.build('seal_version_range', owner, [instruction], { model: row.key.toBase58(), modelVersion: modelVersion.toBase58() })
+    },
+    async publishVersion(id: string, body: c.PublishVersionRequest) {
+      const row = await model(id), owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can publish this version.', { stage: 'build' })
+      const modelVersion = a.modelVersion(row.key, body.version)
+      const mvInfo = await runtime.rpc.connection.getAccountInfo(modelVersion, 'confirmed')
+      if (!mvInfo) fail('INVALID_VERSION', 'This staged model version was not found.', { stage: 'build' })
+      const mv = decodeModelVersionAccount(mvInfo.data)
+      const instruction = await voynich.methods
+        .publishVersion([...fromHex(body.ciphertextSha256)])
+        .accountsStrict({ owner, model: row.key, modelVersion, ...events })
+        .remainingAccounts(mv.weights.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
+        .instruction()
+      return ledger.build('publish_version', owner, [instruction], { model: row.key.toBase58(), modelVersion: modelVersion.toBase58() })
     },
   }
 }

@@ -115,12 +115,49 @@ pub struct Model {
     pub base: Option<ModelBase>,
     pub price_unit: PriceUnit,
     pub has_policy: bool,
+    pub current_version: u32,
 }
 impl Model {
     pub const SPACE: usize = 8192;
     pub fn is_upload_key(&self, key: &Pubkey) -> bool {
         (self.upload_key != Pubkey::default() && self.upload_key == *key) || self.upload_keys.contains(key)
     }
+    pub fn effective_version(&self) -> u32 {
+        self.current_version.max(1)
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum VersionStatus { Uploading, Live, Archived }
+
+#[account]
+pub struct ModelVersion {
+    pub model: Pubkey,
+    pub version: u32,
+    pub status: VersionStatus,
+    pub weights: Vec<Pubkey>,
+    pub size_bytes: u64,
+    pub nonce_prefix: [u8; 16],
+    pub ciphertext_sha256: [u8; 32],
+    pub manifest: Vec<u8>,
+    pub base: Option<ModelBase>,
+    pub hash_version: u8,
+    pub sealed_chunks: u32,
+    pub merkle_frontier: Vec<[u8; 32]>,
+    pub merkle_frontier_mask: u32,
+    pub published_slot: u64,
+    pub bump: u8,
+}
+impl ModelVersion {
+    pub const SPACE: usize = 8192;
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct BeginVersionArgs {
+    pub manifest: Vec<u8>,
+    pub size_bytes: u64,
+    pub nonce_prefix: [u8; 16],
+    pub base: Option<ModelBase>,
 }
 
 /// A fixed 56-byte header followed by exactly size_bytes bytes of ciphertext.
@@ -353,10 +390,11 @@ mod tests {
             }),
             price_unit: PriceUnit::Token,
             has_policy: true,
+            current_version: u32::MAX,
         };
         let mut buf = Vec::new();
         model.try_serialize(&mut buf).unwrap();
-        assert_eq!(buf.len(), 8052);
+        assert_eq!(buf.len(), 8056);
         assert!(buf.len() <= Model::SPACE, "worst-case Model {} > SPACE {}", buf.len(), Model::SPACE);
     }
 
@@ -556,5 +594,34 @@ mod tests {
         let mut none_buf = Vec::new();
         g.try_serialize(&mut none_buf).unwrap();
         assert_eq!(none_buf.len(), Grant::BASE_SPACE + 1);
+    }
+
+    #[test]
+    fn worst_case_model_version_fits_within_space() {
+        let mv = ModelVersion {
+            model: Pubkey::new_unique(),
+            version: u32::MAX,
+            status: VersionStatus::Live,
+            weights: vec![Pubkey::new_unique(); MAX_WEIGHTS],
+            size_bytes: u64::MAX,
+            nonce_prefix: [7u8; 16],
+            ciphertext_sha256: [9u8; 32],
+            manifest: vec![b'x'; MAX_MANIFEST],
+            base: Some(ModelBase {
+                sha256: [1u8; 32],
+                size_bytes: u64::MAX,
+                format: "a".repeat(MAX_BASE_FORMAT),
+                source: format!("https://{}", "b".repeat(MAX_BASE_SOURCE - 8)),
+            }),
+            hash_version: 1,
+            sealed_chunks: u32::MAX,
+            merkle_frontier: vec![[3u8; 32]; MAX_MERKLE_LEVELS],
+            merkle_frontier_mask: u32::MAX,
+            published_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut buf = Vec::new();
+        mv.try_serialize(&mut buf).unwrap();
+        assert!(buf.len() <= ModelVersion::SPACE, "ModelVersion serialized {} > {}", buf.len(), ModelVersion::SPACE);
     }
 }

@@ -1,6 +1,6 @@
 import { Connection, Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { IdlAccounts } from '@coral-xyz/anchor'
-import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type Money, type PriceUnit, type Receipt, type ReceiptView, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
+import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelVersion, type ModelVersions, type Money, type PriceUnit, type Receipt, type ReceiptView, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
 import { decodeAdapter } from './adapter.js'
 import { CIPHER_CHUNK_BYTES, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER, ciphertextHash, decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, openWeightsChunk, sealWeights, sha256, signSealDerivation, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, verifyReceipt, wrapKey, type SealDerivationSigner, type WeightsCipherHeader } from './crypto.js'
 import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeModelBaseBytes, decodeReceiptAccount, decodeWeightsHeader, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
@@ -98,6 +98,20 @@ export type VoynichStream = AsyncIterable<VerifiedStreamPiece> & {
   settle(): Promise<StreamResult>
   lastPiece(): VerifiedStreamPiece | null
   final(): Promise<StreamResult>
+}
+export type PublishVersionOptions = {
+  weights: Uint8Array
+  manifest?: Manifest
+  base?: ModelBase | null
+  modelKey?: Uint8Array
+  signal?: AbortSignal
+}
+export type PublishVersionResult = {
+  model: Model
+  version: number
+  ciphertextSha256: string
+  noncePrefix: string
+  transactionsSent: number
 }
 export class VoynichError extends Error {
   constructor(readonly code: string, message: string, readonly call?: Call, readonly refundState?: string) { super(message); this.name = 'VoynichError' }
@@ -1515,6 +1529,118 @@ export function createVoynich(options: VoynichOptions) {
       payer: wallet.publicKey.toBase58(),
     }, { signal: opts.signal }), [], undefined, opts.signal)
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  async function listVersions(modelId: string, opts: { signal?: AbortSignal } = {}): Promise<ModelVersions> {
+    return api.modelVersions(modelId, { signal: opts.signal })
+  }
+  async function publishVersion(modelId: string, opts: PublishVersionOptions): Promise<PublishVersionResult> {
+    const wallet = signer()
+    const [config, current] = await Promise.all([
+      api.config({ signal: opts.signal }),
+      api.model(modelId, { signal: opts.signal }),
+    ])
+    const version = (current.currentVersion ?? 1) + 1
+    let modelKey = opts.modelKey
+    if (!modelKey) {
+      const programId = config.programId ? new PublicKey(config.programId) : PROGRAM_ID
+      const derived = await signSealDerivation(wallet as SealDerivationSigner, programId, current.address)
+      modelKey = derived.modelKey
+    }
+    const sealed = sealWeights(opts.weights, modelKey)
+    const ciphertext = sealed.ciphertext
+    const noncePrefix = toBase64(sealed.header.noncePrefix)
+    const ciphertextSha256 = toHex(sealed.merkleRoot)
+    const manifest = opts.manifest ?? current.manifest
+    const base = opts.base === undefined ? (current.base ?? undefined) : (opts.base ?? undefined)
+    const capacity = 10 * 1024 * 1024 - 56
+    const partCount = Math.ceil(ciphertext.length / capacity)
+    if (partCount > INITIAL_CREATE_WEIGHTS) {
+      throw new VoynichError('INVALID_WEIGHTS', `Model version ciphertext exceeds ${INITIAL_CREATE_WEIGHTS} weights accounts.`)
+    }
+    const weightKeys = Array.from({ length: partCount }, () => Keypair.generate())
+    let transactionsSent = 0
+    if (!config.fixture) {
+      const conn = await rpc()
+      const programId = config.programId ? new PublicKey(config.programId) : PROGRAM_ID
+      const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed')
+      for (let i = 0; i < weightKeys.length; i++) {
+        const partBytes = Math.min(capacity, ciphertext.length - i * capacity)
+        const space = 56 + partBytes
+        const rent = await conn.getMinimumBalanceForRentExemption(space)
+        const createIx = SystemProgram.createAccount({
+          fromPubkey: wallet.publicKey,
+          newAccountPubkey: weightKeys[i]!.publicKey,
+          lamports: rent,
+          space,
+          programId,
+        })
+        let tx = new VersionedTransaction(new TransactionMessage({
+          payerKey: wallet.publicKey,
+          recentBlockhash: blockhash,
+          instructions: [createIx],
+        }).compileToV0Message())
+        if ('secretKey' in wallet) tx.sign([wallet])
+        else tx = await wallet.signTransaction(tx)
+        tx.sign([weightKeys[i]!])
+        const sig = await conn.sendRawTransaction(tx.serialize(), { preflightCommitment: 'confirmed' })
+        await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
+        transactionsSent++
+      }
+    }
+    await send(await api.beginVersion(current.address, {
+      wallet: wallet.publicKey.toBase58(),
+      version,
+      weights: weightKeys.map(k => k.publicKey.toBase58()),
+      manifest,
+      sizeBytes: ciphertext.length,
+      noncePrefix,
+      ...(base ? { base } : {}),
+    }, { signal: opts.signal }), [], undefined, opts.signal)
+    transactionsSent++
+
+    for (let i = 0; i < weightKeys.length; i++) {
+      const partStart = i * capacity
+      const partLen = Math.min(capacity, ciphertext.length - partStart)
+      for (let offset = 0; offset < partLen; offset += WRITE_CHUNK_BYTES) {
+        const slice = ciphertext.subarray(partStart + offset, partStart + Math.min(partLen, offset + WRITE_CHUNK_BYTES))
+        await send(await api.writeVersionWeights(current.address, {
+          wallet: wallet.publicKey.toBase58(),
+          version,
+          weights: weightKeys[i]!.publicKey.toBase58(),
+          offset,
+          bytesBase64: toBase64(slice),
+        }, { signal: opts.signal }), [], undefined, opts.signal)
+        transactionsSent++
+      }
+    }
+
+    const totalChunks = Math.ceil(ciphertext.length / CIPHER_CHUNK_BYTES)
+    let sealedChunks = 0
+    while (totalChunks - sealedChunks > SEAL_RANGE_CHUNKS) {
+      const count = Math.min(SEAL_RANGE_CHUNKS, totalChunks - sealedChunks)
+      await send(await api.sealVersionRange(current.address, {
+        wallet: wallet.publicKey.toBase58(),
+        version,
+        chunkCount: count,
+      }, { signal: opts.signal }), [], undefined, opts.signal)
+      sealedChunks += count
+      transactionsSent++
+    }
+
+    await send(await api.publishVersion(current.address, {
+      wallet: wallet.publicKey.toBase58(),
+      version,
+      ciphertextSha256,
+    }, { signal: opts.signal }), [], undefined, opts.signal)
+    transactionsSent++
+
+    const updated = await indexed(
+      () => api.model(current.address, { signal: opts.signal }),
+      'MODEL_NOT_FOUND',
+      value => (value.currentVersion ?? 1) >= version,
+      opts.signal,
+    )
+    return { model: updated, version, ciphertextSha256, noncePrefix, transactionsSent }
+  }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>

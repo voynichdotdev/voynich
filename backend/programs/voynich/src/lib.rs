@@ -43,4 +43,8 @@ pub mod voynich {
     pub fn deprecate_measurement(ctx: Context<DeprecateMeasurement>) -> Result<()> { handlers::deprecate_measurement(ctx) }
     pub fn set_policy(ctx: Context<SetPolicy>, args: PolicyArgs) -> Result<()> { handlers::set_policy(ctx, args) }
     pub fn clear_policy(ctx: Context<ClearPolicy>) -> Result<()> { handlers::clear_policy(ctx) }
+    pub fn begin_version<'info>(ctx: Context<'_, '_, '_, 'info, BeginVersion<'info>>, version: u32, args: BeginVersionArgs) -> Result<()> { handlers::begin_version(ctx, version, args) }
+    pub fn write_version_weights(ctx: Context<WriteVersionWeights>, offset: u32, bytes: Vec<u8>) -> Result<()> { handlers::write_version_weights(ctx, offset, bytes) }
+    pub fn seal_version_range<'info>(ctx: Context<'_, '_, '_, 'info, SealVersionRange<'info>>, chunk_count: u32) -> Result<()> { handlers::seal_version_range(ctx, chunk_count) }
+    pub fn publish_version<'info>(ctx: Context<'_, '_, '_, 'info, PublishVersion<'info>>, ciphertext_sha256: [u8; 32]) -> Result<()> { handlers::publish_version(ctx, ciphertext_sha256) }
 }

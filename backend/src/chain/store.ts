@@ -92,7 +92,8 @@ export function createApply(attestationProgramId: string) {
         }
         case 'weightswritten': {
           const address = text(data, 'weights')
-          const weight = await tx.weights.findUniqueOrThrow({ where: { address } })
+          const weight = await tx.weights.findUnique({ where: { address } })
+          if (!weight) break
           const pieces = [...weight.writtenRanges as { offset: number; length: number }[], { offset: number(data, 'offset'), length: number(data, 'length') }].sort((a, b) => a.offset - b.offset)
           const ranges: { offset: number; length: number }[] = []
           for (const piece of pieces) {
@@ -332,6 +333,128 @@ export function createApply(attestationProgramId: string) {
           await tx.model.update({ where: { address: modelAddress }, data: { hasPolicy: false, updatedSlot: currentSlot } })
           await notify(tx, 'policy.cleared', `${modelAddress}:${address}`)
           await notify(tx, 'model.updated', modelAddress)
+          break
+        }
+        case 'modelversionstarted': {
+          const modelAddress = text(data, 'model')
+          const version = number(data, 'version')
+          const base = data.base as { sha256?: number[]; sizeBytes?: string; format?: string; source?: string } | null | undefined
+          const value = {
+            modelAddress,
+            version,
+            address: text(data, 'modelVersion'),
+            status: 'uploading' as const,
+            sizeBytes: BigInt(text(data, 'sizeBytes')),
+            noncePrefix: bytes(data, 'noncePrefix'),
+            manifest: (data.manifest ?? null) as Prisma.InputJsonValue,
+            baseSha256: base?.sha256 ? Buffer.from(base.sha256).toString('hex') : null,
+            baseSizeBytes: base?.sizeBytes !== undefined ? BigInt(base.sizeBytes) : null,
+            baseFormat: base?.format ?? null,
+            baseSource: base?.source ?? null,
+            updatedSlot: currentSlot,
+          }
+          await tx.modelVersion.upsert({
+            where: { modelAddress_version: { modelAddress, version } },
+            create: value,
+            update: value,
+          })
+          break
+        }
+        case 'modelversionpublished': {
+          const modelAddress = text(data, 'model')
+          const version = number(data, 'version')
+          const previousVersion = number(data, 'previousVersion')
+          const publishedSlot = slot(data, 'publishedSlot')
+          const prevBase = data.previousBase as { sha256?: number[]; sizeBytes?: string; format?: string; source?: string } | null | undefined
+          const nextBase = data.base as { sha256?: number[]; sizeBytes?: string; format?: string; source?: string } | null | undefined
+          const existingModel = await tx.model.findUnique({ where: { address: modelAddress } })
+          await tx.modelVersion.updateMany({ where: { modelAddress, status: 'live' }, data: { status: 'archived', updatedSlot: currentSlot } })
+          const prevRow = {
+            modelAddress,
+            version: previousVersion,
+            address: null,
+            status: 'archived' as const,
+            sizeBytes: BigInt(text(data, 'previousSizeBytes')),
+            ciphertextSha256: hex(data, 'previousCiphertextSha256'),
+            noncePrefix: existingModel?.noncePrefix ?? null,
+            manifest: (existingModel?.manifest ?? null) as Prisma.InputJsonValue,
+            baseSha256: prevBase?.sha256 ? Buffer.from(prevBase.sha256).toString('hex') : null,
+            baseSizeBytes: prevBase?.sizeBytes !== undefined ? BigInt(prevBase.sizeBytes) : null,
+            baseFormat: prevBase?.format ?? null,
+            baseSource: prevBase?.source ?? null,
+            publishedSlot: slot(data, 'previousSealedSlot'),
+            updatedSlot: currentSlot,
+          }
+          await tx.modelVersion.upsert({
+            where: { modelAddress_version: { modelAddress, version: previousVersion } },
+            create: prevRow,
+            update: { status: 'archived', updatedSlot: currentSlot },
+          })
+          const sizeBytes = BigInt(text(data, 'sizeBytes'))
+          const ciphertextSha256 = hex(data, 'ciphertextSha256')
+          const noncePrefix = bytes(data, 'noncePrefix')
+          const liveRow = {
+            modelAddress,
+            version,
+            address: text(data, 'modelVersion'),
+            status: 'live' as const,
+            sizeBytes,
+            ciphertextSha256,
+            noncePrefix,
+            manifest: (data.manifest ?? null) as Prisma.InputJsonValue,
+            baseSha256: nextBase?.sha256 ? Buffer.from(nextBase.sha256).toString('hex') : null,
+            baseSizeBytes: nextBase?.sizeBytes !== undefined ? BigInt(nextBase.sizeBytes) : null,
+            baseFormat: nextBase?.format ?? null,
+            baseSource: nextBase?.source ?? null,
+            publishedSlot,
+            updatedSlot: currentSlot,
+          }
+          await tx.modelVersion.upsert({
+            where: { modelAddress_version: { modelAddress, version } },
+            create: liveRow,
+            update: liveRow,
+          })
+          const chunks = Math.ceil(Number(sizeBytes) / 65552)
+          const plaintextSize = BigInt(Math.max(0, Number(sizeBytes) - chunks * 16))
+          await tx.model.update({
+            where: { address: modelAddress },
+            data: {
+              currentVersion: version,
+              ciphertextSize: sizeBytes,
+              plaintextSize,
+              ciphertextSha256,
+              noncePrefix,
+              manifest: (data.manifest ?? existingModel?.manifest ?? {}) as Prisma.InputJsonValue,
+              manifestBytes: data.manifestBytes ? bytes(data, 'manifestBytes') : (existingModel?.manifestBytes ?? new Uint8Array(0)),
+              baseSha256: liveRow.baseSha256,
+              baseSizeBytes: liveRow.baseSizeBytes,
+              baseFormat: liveRow.baseFormat,
+              baseSource: liveRow.baseSource,
+              hashVersion: 1,
+              sealedChunks: chunks,
+              sealedSlot: publishedSlot,
+              updatedSlot: currentSlot,
+            },
+          })
+          const weightKeys = (data.weights as string[]) ?? []
+          if (weightKeys.length > 0) {
+            await tx.weights.deleteMany({ where: { modelAddress, address: { notIn: weightKeys } } })
+            let offset = 0n
+            for (let index = 0; index < weightKeys.length; index++) {
+              const weightAddress = weightKeys[index]!
+              const meta = row.facts.weights.find(item => item.address === weightAddress)
+              const size = meta ? BigInt(meta.size) : sizeBytes
+              const written = meta ? BigInt(meta.written) : size
+              await tx.weights.upsert({
+                where: { address: weightAddress },
+                create: { address: weightAddress, modelAddress, index, offset, size, writtenRanges: written > 0n ? [{ offset: 0, length: Number(written) }] : [], bytesWritten: written, updatedSlot: currentSlot },
+                update: { index, offset, size, writtenRanges: written > 0n ? [{ offset: 0, length: Number(written) }] : [], bytesWritten: written, updatedSlot: currentSlot },
+              })
+              offset += size
+            }
+          }
+          await notify(tx, 'model.updated', modelAddress)
+          await notify(tx, 'version.published', `${modelAddress}:${version}`)
           break
         }
       }

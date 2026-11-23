@@ -44,3 +44,11 @@ pub struct PolicyUpdated { pub policy: Pubkey, pub model: Pubkey, pub allow_list
 pub struct PolicyCleared { pub policy: Pubkey, pub model: Pubkey, pub slot: u64 }
 #[event]
 pub struct GrantQuoteUpdated { pub model: Pubkey, pub enclave: Pubkey, pub operator: Pubkey, pub quoted_operator_share_bps: Option<u16>, pub slot: u64 }
+#[event]
+pub struct ModelVersionStarted { pub model: Pubkey, pub model_version: Pubkey, pub version: u32, pub weights: Vec<Pubkey>, pub size_bytes: u64, pub nonce_prefix: [u8; 16], pub manifest: Vec<u8>, pub base: Option<ModelBase>, pub slot: u64 }
+#[event]
+pub struct ModelVersionPublished {
+    pub model: Pubkey, pub model_version: Pubkey, pub version: u32,
+    pub previous_version: u32, pub previous_ciphertext_sha256: [u8; 32], pub previous_size_bytes: u64, pub previous_sealed_slot: u64, pub previous_base: Option<ModelBase>,
+    pub weights: Vec<Pubkey>, pub size_bytes: u64, pub nonce_prefix: [u8; 16], pub ciphertext_sha256: [u8; 32], pub manifest: Vec<u8>, pub base: Option<ModelBase>, pub published_slot: u64,
+}

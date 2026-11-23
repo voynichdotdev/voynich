@@ -85,9 +85,11 @@ model Model {
   baseSource          String?    @db.VarChar(256)
   callsSettled        BigInt     @default(0)
   hasPolicy           Boolean    @default(false)
+  currentVersion      Int        @default(1)
   updatedSlot         BigInt
   indexingIssue       String?
   policy              ModelPolicy?
+  versions            ModelVersion[]
   weights             Weights[]
   grants              Grant[]
   calls               Call[]
@@ -99,6 +101,34 @@ model Model {
   @@index([status, createdSlot])
   @@index([priceMint, price])
   @@map("models")
+}
+
+enum VersionStatus {
+  uploading
+  live
+  archived
+}
+
+model ModelVersion {
+  modelAddress     String        @db.VarChar(44)
+  model            Model         @relation(fields: [modelAddress], references: [address])
+  version          Int
+  address          String?       @db.VarChar(44)
+  status           VersionStatus @default(uploading)
+  sizeBytes        BigInt
+  ciphertextSha256 String?       @db.Char(64)
+  noncePrefix      Bytes?        @db.ByteA
+  manifest         Json?
+  baseSha256       String?       @db.Char(64)
+  baseSizeBytes    BigInt?
+  baseFormat       String?       @db.VarChar(32)
+  baseSource       String?       @db.VarChar(256)
+  publishedSlot    BigInt?
+  updatedSlot      BigInt
+
+  @@id([modelAddress, version])
+  @@index([modelAddress, version(sort: Desc)])
+  @@map("model_versions")
 }
 
 model Weights {

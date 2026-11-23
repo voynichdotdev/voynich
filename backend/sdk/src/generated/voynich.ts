@@ -88,6 +88,129 @@ export type Voynich = {
       "args": []
     },
     {
+      "name": "beginVersion",
+      "discriminator": [
+        89,
+        118,
+        83,
+        105,
+        17,
+        209,
+        98,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "modelVersion",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "arg",
+                "path": "version"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "version",
+          "type": "u32"
+        },
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "beginVersionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "clearPolicy",
       "discriminator": [
         127,
@@ -1521,6 +1644,126 @@ export type Voynich = {
       ]
     },
     {
+      "name": "publishVersion",
+      "discriminator": [
+        6,
+        123,
+        155,
+        174,
+        43,
+        89,
+        146,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          },
+          "relations": [
+            "modelVersion"
+          ]
+        },
+        {
+          "name": "modelVersion",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "modelVersion"
+              }
+            ]
+          }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "ciphertextSha256",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "refreshEnclave",
       "discriminator": [
         186,
@@ -2144,6 +2387,120 @@ export type Voynich = {
                 "kind": "account",
                 "path": "model.name",
                 "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "chunkCount",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "sealVersionRange",
+      "discriminator": [
+        59,
+        150,
+        208,
+        207,
+        173,
+        66,
+        216,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          },
+          "relations": [
+            "modelVersion"
+          ]
+        },
+        {
+          "name": "modelVersion",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "modelVersion"
               }
             ]
           }
@@ -3271,6 +3628,127 @@ export type Voynich = {
       ]
     },
     {
+      "name": "writeVersionWeights",
+      "discriminator": [
+        214,
+        49,
+        206,
+        175,
+        70,
+        25,
+        202,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          },
+          "relations": [
+            "modelVersion"
+          ]
+        },
+        {
+          "name": "modelVersion",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "modelVersion"
+              }
+            ]
+          }
+        },
+        {
+          "name": "weights",
+          "writable": true
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "bytes",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
       "name": "writeWeights",
       "discriminator": [
         17,
@@ -3435,6 +3913,19 @@ export type Voynich = {
         125,
         223,
         151
+      ]
+    },
+    {
+      "name": "modelVersion",
+      "discriminator": [
+        22,
+        236,
+        9,
+        80,
+        24,
+        101,
+        127,
+        43
       ]
     },
     {
@@ -3645,6 +4136,32 @@ export type Voynich = {
         240,
         19,
         53
+      ]
+    },
+    {
+      "name": "modelVersionPublished",
+      "discriminator": [
+        193,
+        96,
+        36,
+        8,
+        41,
+        6,
+        208,
+        196
+      ]
+    },
+    {
+      "name": "modelVersionStarted",
+      "discriminator": [
+        79,
+        78,
+        143,
+        45,
+        232,
+        156,
+        200,
+        196
       ]
     },
     {
@@ -3873,6 +4390,11 @@ export type Voynich = {
       "code": 6031,
       "name": "invalidQuote",
       "msg": "The quoted operator share exceeds the model's maximum operator share."
+    },
+    {
+      "code": 6032,
+      "name": "invalidVersion",
+      "msg": "The model version is invalid or not in the required state."
     }
   ],
   "types": [
@@ -3886,6 +4408,41 @@ export type Voynich = {
           },
           {
             "name": "open"
+          }
+        ]
+      }
+    },
+    {
+      "name": "beginVersionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "sizeBytes",
+            "type": "u64"
+          },
+          {
+            "name": "noncePrefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "modelBase"
+                }
+              }
+            }
           }
         ]
       }
@@ -5048,6 +5605,10 @@ export type Voynich = {
           {
             "name": "hasPolicy",
             "type": "bool"
+          },
+          {
+            "name": "currentVersion",
+            "type": "u32"
           }
         ]
       }
@@ -5314,6 +5875,257 @@ export type Voynich = {
                 "name": "modelStatus"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelVersion",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "versionStatus"
+              }
+            }
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "sizeBytes",
+            "type": "u64"
+          },
+          {
+            "name": "noncePrefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "ciphertextSha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "modelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "hashVersion",
+            "type": "u8"
+          },
+          {
+            "name": "sealedChunks",
+            "type": "u32"
+          },
+          {
+            "name": "merkleFrontier",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "merkleFrontierMask",
+            "type": "u32"
+          },
+          {
+            "name": "publishedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelVersionPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "modelVersion",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "previousVersion",
+            "type": "u32"
+          },
+          {
+            "name": "previousCiphertextSha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "previousSizeBytes",
+            "type": "u64"
+          },
+          {
+            "name": "previousSealedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "previousBase",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "modelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "sizeBytes",
+            "type": "u64"
+          },
+          {
+            "name": "noncePrefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "ciphertextSha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "modelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "publishedSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelVersionStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "modelVersion",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "sizeBytes",
+            "type": "u64"
+          },
+          {
+            "name": "noncePrefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "modelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
           }
         ]
       }
@@ -5618,6 +6430,23 @@ export type Voynich = {
       }
     },
     {
+      "name": "versionStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "uploading"
+          },
+          {
+            "name": "live"
+          },
+          {
+            "name": "archived"
+          }
+        ]
+      }
+    },
+    {
       "name": "weightsAttached",
       "type": {
         "kind": "struct",
@@ -5749,6 +6578,129 @@ export const IDL: Voynich = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "begin_version",
+      "discriminator": [
+        89,
+        118,
+        83,
+        105,
+        17,
+        209,
+        98,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "model_version",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "arg",
+                "path": "version"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "version",
+          "type": "u32"
+        },
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "BeginVersionArgs"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "clear_policy",
@@ -7184,6 +8136,126 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "publish_version",
+      "discriminator": [
+        6,
+        123,
+        155,
+        174,
+        43,
+        89,
+        146,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          },
+          "relations": [
+            "model_version"
+          ]
+        },
+        {
+          "name": "model_version",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "ModelVersion"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "ciphertext_sha256",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "refresh_enclave",
       "discriminator": [
         186,
@@ -7807,6 +8879,120 @@ export const IDL: Voynich = {
                 "kind": "account",
                 "path": "model.name",
                 "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "chunk_count",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "seal_version_range",
+      "discriminator": [
+        59,
+        150,
+        208,
+        207,
+        173,
+        66,
+        216,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          },
+          "relations": [
+            "model_version"
+          ]
+        },
+        {
+          "name": "model_version",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "ModelVersion"
               }
             ]
           }
@@ -8934,6 +10120,127 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "write_version_weights",
+      "discriminator": [
+        214,
+        49,
+        206,
+        175,
+        70,
+        25,
+        202,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          },
+          "relations": [
+            "model_version"
+          ]
+        },
+        {
+          "name": "model_version",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "ModelVersion"
+              }
+            ]
+          }
+        },
+        {
+          "name": "weights",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "bytes",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
       "name": "write_weights",
       "discriminator": [
         17,
@@ -9098,6 +10405,19 @@ export const IDL: Voynich = {
         125,
         223,
         151
+      ]
+    },
+    {
+      "name": "ModelVersion",
+      "discriminator": [
+        22,
+        236,
+        9,
+        80,
+        24,
+        101,
+        127,
+        43
       ]
     },
     {
@@ -9308,6 +10628,32 @@ export const IDL: Voynich = {
         240,
         19,
         53
+      ]
+    },
+    {
+      "name": "ModelVersionPublished",
+      "discriminator": [
+        193,
+        96,
+        36,
+        8,
+        41,
+        6,
+        208,
+        196
+      ]
+    },
+    {
+      "name": "ModelVersionStarted",
+      "discriminator": [
+        79,
+        78,
+        143,
+        45,
+        232,
+        156,
+        200,
+        196
       ]
     },
     {
@@ -9536,6 +10882,11 @@ export const IDL: Voynich = {
       "code": 6031,
       "name": "InvalidQuote",
       "msg": "The quoted operator share exceeds the model's maximum operator share."
+    },
+    {
+      "code": 6032,
+      "name": "InvalidVersion",
+      "msg": "The model version is invalid or not in the required state."
     }
   ],
   "types": [
@@ -9549,6 +10900,41 @@ export const IDL: Voynich = {
           },
           {
             "name": "Open"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BeginVersionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
           }
         ]
       }
@@ -10711,6 +12097,10 @@ export const IDL: Voynich = {
           {
             "name": "has_policy",
             "type": "bool"
+          },
+          {
+            "name": "current_version",
+            "type": "u32"
           }
         ]
       }
@@ -10977,6 +12367,257 @@ export const IDL: Voynich = {
                 "name": "ModelStatus"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModelVersion",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "VersionStatus"
+              }
+            }
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "ciphertext_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "hash_version",
+            "type": "u8"
+          },
+          {
+            "name": "sealed_chunks",
+            "type": "u32"
+          },
+          {
+            "name": "merkle_frontier",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "merkle_frontier_mask",
+            "type": "u32"
+          },
+          {
+            "name": "published_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModelVersionPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "model_version",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "previous_version",
+            "type": "u32"
+          },
+          {
+            "name": "previous_ciphertext_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "previous_size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "previous_sealed_slot",
+            "type": "u64"
+          },
+          {
+            "name": "previous_base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "ciphertext_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "published_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModelVersionStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "model_version",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
           }
         ]
       }
@@ -11276,6 +12917,23 @@ export const IDL: Voynich = {
           {
             "name": "caller_is_program",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VersionStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Uploading"
+          },
+          {
+            "name": "Live"
+          },
+          {
+            "name": "Archived"
           }
         ]
       }

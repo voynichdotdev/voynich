@@ -292,3 +292,39 @@ pub struct ClearPolicy<'info> {
     #[account(mut, seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
     #[account(mut, close = owner, seeds = [b"policy", model.key().as_ref()], bump = policy.bump, has_one = model)] pub policy: Box<Account<'info, Policy>>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(version: u32, args: BeginVersionArgs)]
+pub struct BeginVersion<'info> {
+    #[account(mut)] pub owner: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(init, payer = owner, space = ModelVersion::SPACE, seeds = [b"version", model.key().as_ref(), &version.to_le_bytes()], bump)] pub model_version: Box<Account<'info, ModelVersion>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct WriteVersionWeights<'info> {
+    pub owner: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(seeds = [b"version", model.key().as_ref(), &model_version.version.to_le_bytes()], bump = model_version.bump, has_one = model)] pub model_version: Box<Account<'info, ModelVersion>>,
+    /// CHECK: fixed header, owner, model and writable payload are checked in weights.rs.
+    #[account(mut)] pub weights: UncheckedAccount<'info>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SealVersionRange<'info> {
+    pub owner: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(mut, seeds = [b"version", model.key().as_ref(), &model_version.version.to_le_bytes()], bump = model_version.bump, has_one = model)] pub model_version: Box<Account<'info, ModelVersion>>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct PublishVersion<'info> {
+    pub owner: Signer<'info>,
+    #[account(mut, seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(mut, seeds = [b"version", model.key().as_ref(), &model_version.version.to_le_bytes()], bump = model_version.bump, has_one = model)] pub model_version: Box<Account<'info, ModelVersion>>,
+}

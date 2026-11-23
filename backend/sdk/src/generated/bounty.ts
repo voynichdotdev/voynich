@@ -1481,6 +1481,10 @@ export type Bounty = {
           {
             "name": "hasPolicy",
             "type": "bool"
+          },
+          {
+            "name": "currentVersion",
+            "type": "u32"
           }
         ]
       }
@@ -3029,6 +3033,10 @@ export const IDL: Bounty = {
           {
             "name": "has_policy",
             "type": "bool"
+          },
+          {
+            "name": "current_version",
+            "type": "u32"
           }
         ]
       }

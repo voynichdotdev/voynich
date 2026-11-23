@@ -82,6 +82,129 @@
       "args": []
     },
     {
+      "name": "begin_version",
+      "discriminator": [
+        89,
+        118,
+        83,
+        105,
+        17,
+        209,
+        98,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "model_version",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "arg",
+                "path": "version"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "version",
+          "type": "u32"
+        },
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "BeginVersionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "clear_policy",
       "discriminator": [
         127,
@@ -1515,6 +1638,126 @@
       ]
     },
     {
+      "name": "publish_version",
+      "discriminator": [
+        6,
+        123,
+        155,
+        174,
+        43,
+        89,
+        146,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          },
+          "relations": [
+            "model_version"
+          ]
+        },
+        {
+          "name": "model_version",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "ModelVersion"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "ciphertext_sha256",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "refresh_enclave",
       "discriminator": [
         186,
@@ -2138,6 +2381,120 @@
                 "kind": "account",
                 "path": "model.name",
                 "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "chunk_count",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "seal_version_range",
+      "discriminator": [
+        59,
+        150,
+        208,
+        207,
+        173,
+        66,
+        216,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          },
+          "relations": [
+            "model_version"
+          ]
+        },
+        {
+          "name": "model_version",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "ModelVersion"
               }
             ]
           }
@@ -3265,6 +3622,127 @@
       ]
     },
     {
+      "name": "write_version_weights",
+      "discriminator": [
+        214,
+        49,
+        206,
+        175,
+        70,
+        25,
+        202,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          },
+          "relations": [
+            "model_version"
+          ]
+        },
+        {
+          "name": "model_version",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  114,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "model_version.version",
+                "account": "ModelVersion"
+              }
+            ]
+          }
+        },
+        {
+          "name": "weights",
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "bytes",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
       "name": "write_weights",
       "discriminator": [
         17,
@@ -3429,6 +3907,19 @@
         125,
         223,
         151
+      ]
+    },
+    {
+      "name": "ModelVersion",
+      "discriminator": [
+        22,
+        236,
+        9,
+        80,
+        24,
+        101,
+        127,
+        43
       ]
     },
     {
@@ -3639,6 +4130,32 @@
         240,
         19,
         53
+      ]
+    },
+    {
+      "name": "ModelVersionPublished",
+      "discriminator": [
+        193,
+        96,
+        36,
+        8,
+        41,
+        6,
+        208,
+        196
+      ]
+    },
+    {
+      "name": "ModelVersionStarted",
+      "discriminator": [
+        79,
+        78,
+        143,
+        45,
+        232,
+        156,
+        200,
+        196
       ]
     },
     {
@@ -3867,6 +4384,11 @@
       "code": 6031,
       "name": "InvalidQuote",
       "msg": "The quoted operator share exceeds the model's maximum operator share."
+    },
+    {
+      "code": 6032,
+      "name": "InvalidVersion",
+      "msg": "The model version is invalid or not in the required state."
     }
   ],
   "types": [
@@ -3880,6 +4402,41 @@
           },
           {
             "name": "Open"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BeginVersionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
           }
         ]
       }
@@ -5042,6 +5599,10 @@
           {
             "name": "has_policy",
             "type": "bool"
+          },
+          {
+            "name": "current_version",
+            "type": "u32"
           }
         ]
       }
@@ -5308,6 +5869,257 @@
                 "name": "ModelStatus"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModelVersion",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "VersionStatus"
+              }
+            }
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "ciphertext_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "hash_version",
+            "type": "u8"
+          },
+          {
+            "name": "sealed_chunks",
+            "type": "u32"
+          },
+          {
+            "name": "merkle_frontier",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "merkle_frontier_mask",
+            "type": "u32"
+          },
+          {
+            "name": "published_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModelVersionPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "model_version",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "previous_version",
+            "type": "u32"
+          },
+          {
+            "name": "previous_ciphertext_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "previous_size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "previous_sealed_slot",
+            "type": "u64"
+          },
+          {
+            "name": "previous_base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "ciphertext_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "published_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModelVersionStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "model_version",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "u32"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "size_bytes",
+            "type": "u64"
+          },
+          {
+            "name": "nonce_prefix",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "manifest",
+            "type": "bytes"
+          },
+          {
+            "name": "base",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ModelBase"
+                }
+              }
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
           }
         ]
       }
@@ -5607,6 +6419,23 @@
           {
             "name": "caller_is_program",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VersionStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Uploading"
+          },
+          {
+            "name": "Live"
+          },
+          {
+            "name": "Archived"
           }
         ]
       }

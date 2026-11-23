@@ -81,6 +81,24 @@ export function buildApp() {
     if (!policy) fail('POLICY_NOT_FOUND', 'No policy is configured for this model.')
     return c.json(policy)
   })
+  app.get('/v1/models/:id/versions', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const existing = state.versions.get(model.address)
+    const items = existing && existing.length > 0
+      ? [...existing].sort((a, b) => b.version - a.version)
+      : [{
+          model: model.address,
+          version: 1,
+          address: null,
+          status: model.status === 'uploading' ? 'uploading' as const : 'live' as const,
+          sizeBytes: model.sizeBytes,
+          ciphertextSha256: model.ciphertextSha256,
+          base: model.base,
+          manifest: model.manifest,
+          publishedSlot: model.sealedSlot,
+        }]
+    return c.json({ items, currentVersion: model.currentVersion ?? 1 })
+  })
   app.get('/v1/enclaves', c => c.json(s.paginate(c.get('fixture').enclaves, readQuery(c, s.PageQuery, queryKeys))))
   app.get('/v1/enclaves/:key', c => {
     const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address))
@@ -267,6 +285,90 @@ export function buildApp() {
     const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.SetPriceRequest); state.owner(model, body.wallet)
     if (body.operatorShareBps + model.protocolShareBps! > 10000) fail('VALIDATION_ERROR', 'The operator and protocol shares exceed the price.', { stage: 'validation' })
     return c.json(state.build('set_price', [body.wallet], { model: model.address }, () => { model.price = body.price; model.priceUnit = body.priceUnit ?? model.priceUnit; model.operatorShareBps = body.operatorShareBps; state.emit('model.updated', model) }))
+  })
+  app.post('/v1/models/:id/versions/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.BeginVersionRequest); state.owner(model, body.wallet)
+    if (model.status !== 'sealed' && model.status !== 'live') fail('MODEL_NOT_LIVE', 'Seal the model before publishing a new version.', { stage: 'build' })
+    const currentVersion = model.currentVersion ?? 1
+    const version = body.version ?? (currentVersion + 1)
+    if (version !== currentVersion + 1) fail('INVALID_VERSION', `Expected next version ${currentVersion + 1}.`, { stage: 'build' })
+    if (body.noncePrefix === model.cipher.noncePrefix) fail('INVALID_VERSION', 'A new version must use a fresh nonce prefix.', { stage: 'build' })
+    const mvAddress = fixtureAddress(`version:${model.address}:${version}`)
+    return c.json(state.build('begin_version', [body.wallet], { model: model.address, modelVersion: mvAddress, weights: body.weights }, () => {
+      state.stagedVersions.set(`${model.address}:${version}`, {
+        version, address: mvAddress, weights: body.weights, sizeBytes: body.sizeBytes,
+        noncePrefix: body.noncePrefix, manifest: body.manifest, base: body.base ?? null,
+        bytes: new Uint8Array(body.sizeBytes), sealedChunks: 0,
+      })
+      const list = state.versions.get(model.address) ?? [{
+        model: model.address, version: 1, address: null, status: 'live' as const,
+        sizeBytes: model.sizeBytes, ciphertextSha256: model.ciphertextSha256, base: model.base,
+        manifest: model.manifest, publishedSlot: model.sealedSlot,
+      }]
+      list.push({
+        model: model.address, version, address: mvAddress, status: 'uploading',
+        sizeBytes: body.sizeBytes, ciphertextSha256: null, base: body.base ?? null,
+        manifest: body.manifest, publishedSlot: null,
+      })
+      state.versions.set(model.address, list)
+    }))
+  })
+  app.post('/v1/models/:id/versions/write/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.WriteVersionWeightsRequest); state.owner(model, body.wallet)
+    const staged = state.stagedVersions.get(`${model.address}:${body.version}`)
+    if (!staged) fail('INVALID_VERSION', 'This staged model version was not found.', { stage: 'build' })
+    const chunk = fromBase64(body.bytesBase64)
+    if (body.offset + chunk.length > staged.sizeBytes) fail('VALIDATION_ERROR', 'Write exceeds version ciphertext size.', { stage: 'validation' })
+    return c.json(state.build('write_version_weights', [body.wallet], { model: model.address, modelVersion: staged.address, weights: [body.weights] }, () => {
+      staged.bytes.set(chunk, body.offset)
+    }))
+  })
+  app.post('/v1/models/:id/versions/seal-range/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.SealVersionRangeRequest); state.owner(model, body.wallet)
+    const staged = state.stagedVersions.get(`${model.address}:${body.version}`)
+    if (!staged) fail('INVALID_VERSION', 'This staged model version was not found.', { stage: 'build' })
+    const totalChunks = Math.ceil(staged.sizeBytes / CIPHER_CHUNK_BYTES)
+    const count = Math.min(body.chunkCount ?? s.SEAL_RANGE_CHUNKS, Math.max(0, totalChunks - staged.sealedChunks))
+    if (count === 0) fail('INVALID_VERSION', 'All version chunks are already sealed.', { stage: 'build' })
+    return c.json(state.build('seal_version_range', [body.wallet], { model: model.address, modelVersion: staged.address }, () => {
+      staged.sealedChunks += count
+    }))
+  })
+  app.post('/v1/models/:id/versions/publish/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.PublishVersionRequest); state.owner(model, body.wallet)
+    const staged = state.stagedVersions.get(`${model.address}:${body.version}`)
+    if (!staged) fail('INVALID_VERSION', 'This staged model version was not found.', { stage: 'build' })
+    if (toHex(ciphertextHash(staged.bytes, 1)) !== body.ciphertextSha256) {
+      fail('CIPHERTEXT_HASH_MISMATCH', 'The uploaded version ciphertext does not match the sealing hash.', { stage: 'build' })
+    }
+    return c.json(state.build('publish_version', [body.wallet], { model: model.address, modelVersion: staged.address }, () => {
+      const slotStr = String(state.slot)
+      const list = state.versions.get(model.address) ?? []
+      for (const item of list) {
+        if (item.status === 'live') item.status = 'archived'
+        if (item.version === staged.version) {
+          item.status = 'live'
+          item.ciphertextSha256 = body.ciphertextSha256
+          item.publishedSlot = slotStr
+        }
+      }
+      state.versions.set(model.address, list)
+      const chunks = Math.ceil(staged.sizeBytes / CIPHER_CHUNK_BYTES)
+      model.currentVersion = staged.version
+      model.sizeBytes = staged.sizeBytes
+      model.plaintextSizeBytes = Math.max(0, staged.sizeBytes - chunks * 16)
+      model.ciphertextSha256 = body.ciphertextSha256
+      model.cipher = { ...model.cipher, noncePrefix: staged.noncePrefix }
+      model.manifest = staged.manifest
+      model.base = staged.base
+      model.sealedChunks = chunks
+      model.sealedSlot = slotStr
+      state.bytes.set(model.address, staged.bytes.slice())
+      state.stagedVersions.delete(`${model.address}:${staged.version}`)
+      const liveItem = list.find(i => i.version === staged.version)
+      state.emit('model.updated', model)
+      if (liveItem) state.emit('version.published', liveItem)
+    }))
   })
   app.post('/v1/enclaves/:key/quote/build', async c => {
     const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address)); const body = await readJson(c, s.SetQuoteRequest)

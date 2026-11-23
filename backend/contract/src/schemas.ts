@@ -3,13 +3,13 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.28'
+export const CONTRACT_VERSION = '0.1.29'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
   MEASUREMENT_NOT_FOUND: 404, MEASUREMENT_ALREADY_EXISTS: 409, MEASUREMENT_DEPRECATED: 409, INVALID_MEASUREMENT: 422,
   POLICY_NOT_FOUND: 404, INVALID_POLICY: 422, POLICY_CALLER_DENIED: 403, POLICY_OPERATOR_DENIED: 403, POLICY_REQUIRED: 409,
-  GRANT_REQUIRED: 409, INVALID_QUOTE: 422, CALL_NOT_FOUND: 404, CALL_NOT_OPEN: 409,
+  GRANT_REQUIRED: 409, INVALID_QUOTE: 422, INVALID_VERSION: 422, CALL_NOT_FOUND: 404, CALL_NOT_OPEN: 409,
   CALL_NOT_REFUNDABLE: 409, CALL_DEADLINE_PASSED: 409, RECEIPT_NOT_FOUND: 404,
   INPUT_HASH_MISMATCH: 422, INVALID_ENVELOPE: 422, UPLOAD_INCOMPLETE: 409,
   CIPHERTEXT_HASH_MISMATCH: 422, PROGRAM_REFUSED: 422, INSUFFICIENT_FUNDS: 422,
@@ -132,7 +132,21 @@ export const Model = z.strictObject({
   operatorShareBps: z.int().min(0).max(10000), protocolShareBps: z.int().min(0).max(10000).nullable(),
   status: ModelStatus, manifest: Manifest, weights: z.array(Weights), upload: Upload.nullable(),
   enclavesHolding: z.int().nonnegative(), callsSettled: U64,
+  currentVersion: z.int().positive().optional(),
 })
+export const VersionStatus = z.enum(['uploading', 'live', 'archived'])
+export const ModelVersion = z.strictObject({
+  model: Address,
+  version: z.int().positive(),
+  address: Address.nullable(),
+  status: VersionStatus,
+  sizeBytes: z.int().nonnegative(),
+  ciphertextSha256: Hash.nullable(),
+  base: ModelBase.nullable(),
+  manifest: Manifest.nullable(),
+  publishedSlot: U64.nullable(),
+})
+export const ModelVersions = z.strictObject({ items: z.array(ModelVersion), currentVersion: z.int().positive() })
 export const AttestationRecord = z.strictObject({ address: Address, signingKey: Address, encryptionKey: EncryptionKey, hardwareType: HardwareType, measurement: Measurement, recordedSlot: U64, expiresAtSlot: U64, layoutVersion: z.int().positive() })
 export const Enclave = z.strictObject({ address: Address, signingKey: Address, encryptionKey: EncryptionKey, hardwareType: HardwareType, measurement: Measurement, expiresAtSlot: U64, operator: Address, endpoint: z.url(), relayPath: z.string(), status: z.enum(['live', 'expired']), reachable: z.boolean(), lastSeen: Timestamp.nullable(), modelsHeld: z.int().nonnegative(), callsSettled: U64, attestation: AttestationRecord })
 export const Grant = z.strictObject({ address: Address, model: Address, modelName: Slug, enclave: Address, wrappedKey: WrappedKey, grantedBy: Address, grantedSlot: U64, status: z.enum(['live', 'expired', 'revoked']), quotedOperatorShareBps: z.int().min(0).max(10000).nullable().optional(), medianAnswerMs: z.int().nonnegative().nullable().optional() })
@@ -258,6 +272,32 @@ export const SetPriceRequest = z.strictObject({ wallet: Address, price: Money, o
 export const GrantRequest = z.strictObject({ wallet: Address, enclave: Address, wrappedKey: WrappedKey })
 export const RevokeGrantRequest = z.strictObject({ wallet: Address, enclave: Address })
 export const SetQuoteRequest = z.strictObject({ model: ModelId, operatorShareBps: z.int().min(0).max(10000).nullable(), payer: Address.optional() })
+export const BeginVersionRequest = z.strictObject({
+  wallet: Address,
+  version: z.int().min(2).optional(),
+  weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS),
+  manifest: Manifest,
+  sizeBytes: z.int().positive(),
+  noncePrefix: Base64.refine((value) => { try { return fromBase64(value).length === 16 } catch { return false } }, 'Must encode a 16-byte nonce prefix.'),
+  base: ModelBase.optional(),
+})
+export const WriteVersionWeightsRequest = z.strictObject({
+  wallet: Address,
+  version: z.int().min(2),
+  weights: Address,
+  offset: z.int().nonnegative(),
+  bytesBase64: Base64.min(4).max(WRITE_CHUNK_MAX_BASE64).refine((value) => { try { return fromBase64(value).length <= WRITE_CHUNK_BYTES } catch { return false } }, `A write carries at most ${WRITE_CHUNK_BYTES} ciphertext bytes.`),
+})
+export const SealVersionRangeRequest = z.strictObject({
+  wallet: Address,
+  version: z.int().min(2),
+  chunkCount: z.int().min(1).max(SEAL_RANGE_CHUNKS).optional(),
+})
+export const PublishVersionRequest = z.strictObject({
+  wallet: Address,
+  version: z.int().min(2),
+  ciphertextSha256: Hash,
+})
 export const OpenCallRequest = z.strictObject({ wallet: Address, model: ModelId, enclave: Address, inputHash: Hash, answerMode: AnswerMode.default('sealed'), nonce: U64.optional(), ceiling: U64.optional() })
 export const RelayInputRequest = z.strictObject({ envelope: Envelope })
 export const StopCallRequest = z.strictObject({ stopToken: Base64 })
@@ -296,8 +336,8 @@ export const SetPolicyRequest = z.strictObject({
     ctx.addIssue({ code: 'custom', path: ['allowedRegions'], message: 'allowedRegions must contain distinct region codes.' })
   }
 })
-export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy'])
-export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional() }) })
+export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version'])
+export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional() }) })
 export const TxFailure = z.strictObject({ stage: z.enum(['build', 'wallet-rejected', 'wallet-changed', 'simulation', 'send', 'confirm']), message: z.string(), nextStep: z.string().optional(), retryable: z.boolean(), program: z.strictObject({ address: Address, code: z.int().nullable(), name: z.string().nullable() }).optional() })
 export const TxStatus = z.strictObject({ id: z.string(), status: z.enum(['built', 'submitted', 'unconfirmed', 'confirmed', 'finalized', 'failed', 'expired']), signature: Signature.optional(), error: TxFailure.nullish() })
 export const TxSubmission = z.discriminatedUnion('mode', [z.strictObject({ mode: z.literal('relay'), buildId: z.string(), signedTransactionBase64: Base64, idempotencyKey: z.string().min(1).max(128) }), z.strictObject({ mode: z.literal('wallet-sent'), buildId: z.string(), signature: Signature, idempotencyKey: z.string().min(1).max(128) })])
@@ -315,6 +355,7 @@ export const ProgramEvent = z.discriminatedUnion('type', [
   z.strictObject({ ...eventFields, type: z.literal('measurement.updated'), data: MeasurementRecord }),
   z.strictObject({ ...eventFields, type: z.literal('policy.updated'), data: ModelPolicy }),
   z.strictObject({ ...eventFields, type: z.literal('policy.cleared'), data: z.strictObject({ model: Address, policy: Address }) }),
+  z.strictObject({ ...eventFields, type: z.literal('version.published'), data: ModelVersion }),
   z.strictObject({ ...eventFields, type: z.literal('transaction.updated'), data: TxStatus }),
 ])
 
@@ -415,5 +456,12 @@ export type PublishMeasurementRequest = z.output<typeof PublishMeasurementReques
 export type PolicyRegion = z.output<typeof PolicyRegion>
 export type ModelPolicy = z.output<typeof ModelPolicy>
 export type SetPolicyRequest = z.output<typeof SetPolicyRequest>
+export type VersionStatus = z.output<typeof VersionStatus>
+export type ModelVersion = z.output<typeof ModelVersion>
+export type ModelVersions = z.output<typeof ModelVersions>
+export type BeginVersionRequest = z.output<typeof BeginVersionRequest>
+export type WriteVersionWeightsRequest = z.output<typeof WriteVersionWeightsRequest>
+export type SealVersionRangeRequest = z.output<typeof SealVersionRangeRequest>
+export type PublishVersionRequest = z.output<typeof PublishVersionRequest>
 export type Action = z.output<typeof Action>
 export type TxFailure = z.output<typeof TxFailure>
