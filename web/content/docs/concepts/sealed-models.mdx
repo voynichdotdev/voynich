@@ -130,7 +130,7 @@ A model owner can attach an optional on-chain `Policy` PDA at `["policy", model]
 
 - **Caller allow list.** When `allow_list_enabled` is true, only wallets in `allowed_callers` (up to 32 unique addresses) can open calls on the model (`PolicyCallerDenied` otherwise).
 - **Allowed operators.** When `allowed_operators` (up to 16 unique addresses) is non-empty, `grant_by_owner` and `grant_by_enclave` accept only enclaves whose `operator` is on the list (`PolicyOperatorDenied` otherwise).
-- **Rate limits and regions.** The `Policy` account also records `max_calls_per_caller_per_window`, `window_slots` (both `0` or both positive), and up to 8 `allowed_regions` (1 to 16 lowercase letters, digits or hyphens each).
+- **Rate limits and regions.** The `Policy` account also records `max_calls_per_caller_per_window`, `window_slots` (both `0` or both positive), and up to 8 `allowed_regions` (1 to 16 lowercase letters, digits or hyphens each). Enclaves read the on-chain `Policy` PDA for each granted model: if `allowed_regions` is non-empty, only enclaves configured with a matching `ENCLAVE_REGION` load, forward, or serve the model (otherwise refusing input with HTTP `403 PROGRAM_REFUSED`); if a rate ceiling is set, each enclave tracks per-`(model, caller)` call slots over the sliding `window_slots` window and refuses excess calls before inference with HTTP `429 RATE_LIMITED`, leaving the call unsettled so the caller refunds after deadline.
 
 ## Sealed adapters (base + adapter)
 

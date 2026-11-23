@@ -64,6 +64,9 @@ The port `run` listens on. `9707` when unset.
 <Field name="ENCLAVE_POLL_MS" type="integer, milliseconds">
 How often `run` checks its attestation record, its grants and other enclaves. `5000` when unset.
 </Field>
+<Field name="ENCLAVE_REGION" type="region code">
+Optional region code for this enclave (1 to 16 lowercase letters, digits or hyphens, matching `PolicyRegion`). Exposed as `region` on `GET /health` and `voynich enclave status`, and checked against each model's `Policy.allowedRegions`.
+</Field>
 <Field name="ENCLAVE_RPC_RPS" type="integer">
 The most RPC requests per second the runtime sends. Required when `SOLANA_RPC_URL` is not a local address.
 </Field>
@@ -141,7 +144,7 @@ The listener serves three routes:
 
 | Route | Returns |
 | --- | --- |
-| `GET /health` | `status` (`ready`), `enclave`, `measurement`, `models` (the addresses of the models loaded), `openWeightsSeconds` (seconds spent fetching, verifying and decrypting each model's ciphertext), `grantToFirstAnswerSeconds` (seconds from grant load to first settled answer per model, or `null` before the first settled call) and `bases` (per-model base metadata and `openBaseSeconds` for loaded adapter models). The Voynich API reads it to tell whether the enclave is [reachable](/docs/api/enclaves#reachability). |
+| `GET /health` | `status` (`ready`), `enclave`, `measurement`, `region` (`ENCLAVE_REGION` or `null`), `models` (the addresses of the models loaded), `openWeightsSeconds` (seconds spent fetching, verifying and decrypting each model's ciphertext), `grantToFirstAnswerSeconds` (seconds from grant load to first settled answer per model, or `null` before the first settled call) and `bases` (per-model base metadata and `openBaseSeconds` for loaded adapter models). The Voynich API reads it to tell whether the enclave is [reachable](/docs/api/enclaves#reachability). |
 | `POST /v1/calls/{call}/input` | Takes `{ "envelope": "<base64>" }`, the encrypted input, and returns `call` and `status` (`accepted`). |
 | `GET /v1/calls/{call}/answer` | `status` (`waiting`, `answered` or `failed`), `outputEnvelope`, `outputHash`, `signature`, `settleTransaction`, `receiptAddress` and `failure`. |
 
@@ -152,6 +155,7 @@ It writes one line of JSON per event, all on stderr:
 | `event` `listening`, with `host` and `port` | The listener is up. |
 | `event` `http`, with `method`, `route`, `status` and `ms` | A request to the listener is answered. |
 | `event` `model.loaded`, with `model` and `name` | A granted model is decrypted and loaded. |
+| `event` `model.skipped.policy_region`, with `model` and `region` | A grant is skipped or unloaded because `ENCLAVE_REGION` is outside `Policy.allowedRegions`. |
 | `event` `call.failed`, with `call` and `error` | A call could not be completed. |
 | `event` `enclave.sync.failed`, with `error` and `message` | A pass of the loop failed. |
 | `event` `rpc`, with `service`, `method`, `status` and `ms` | Each request to the RPC. `register` and `status` write these lines too. |
@@ -175,6 +179,9 @@ The enclave's signing key. `null` when no state file exists.
 </Field>
 <Field name="measurement" type="96 hex characters">
 The runtime's measurement.
+</Field>
+<Field name="region" type="string or null">
+The configured `ENCLAVE_REGION` code, or `null` when unset.
 </Field>
 <Field name="registered" type="boolean">
 Whether the Enclave account exists on chain. `false` when no state file exists.
