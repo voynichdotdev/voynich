@@ -159,8 +159,12 @@ pub struct Grant {
     pub granted_slot: u64,
     pub revoked: bool,
     pub bump: u8,
+    pub quoted_operator_share_bps: Option<u16>,
 }
-impl Grant { pub const SPACE: usize = 8 + 32 * 3 + 4 + 105 + 8 + 1 + 1; }
+impl Grant {
+    pub const BASE_SPACE: usize = 8 + 32 * 3 + 4 + 105 + 8 + 1 + 1;
+    pub const SPACE: usize = Self::BASE_SPACE + 1 + 2;
+}
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
 pub enum CallStatus { Open, Settled, Refunded }
@@ -528,5 +532,29 @@ mod tests {
         p.try_serialize(&mut buf).unwrap();
         assert_eq!(buf.len(), Policy::SPACE);
         assert_eq!(Policy::SPACE, 1770);
+    }
+
+    #[test]
+    fn worst_case_grant_fits_within_space() {
+        let mut g = Grant {
+            model: Pubkey::new_unique(),
+            enclave: Pubkey::new_unique(),
+            wrapped_key: vec![1u8; 105],
+            granted_by: Pubkey::new_unique(),
+            granted_slot: u64::MAX,
+            revoked: false,
+            bump: 255,
+            quoted_operator_share_bps: Some(2500),
+        };
+        let mut buf = Vec::new();
+        g.try_serialize(&mut buf).unwrap();
+        assert_eq!(Grant::BASE_SPACE, 223);
+        assert_eq!(Grant::SPACE, 226);
+        assert_eq!(buf.len(), Grant::SPACE);
+
+        g.quoted_operator_share_bps = None;
+        let mut none_buf = Vec::new();
+        g.try_serialize(&mut none_buf).unwrap();
+        assert_eq!(none_buf.len(), Grant::BASE_SPACE + 1);
     }
 }

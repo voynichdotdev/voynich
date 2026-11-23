@@ -42,3 +42,5 @@ pub struct MeasurementDeprecated { pub measurement: Pubkey, pub digest: [u8; 48]
 pub struct PolicyUpdated { pub policy: Pubkey, pub model: Pubkey, pub allow_list_enabled: bool, pub allowed_callers: Vec<Pubkey>, pub max_calls_per_caller_per_window: u32, pub window_slots: u64, pub allowed_operators: Vec<Pubkey>, pub allowed_regions: Vec<String>, pub updated_slot: u64 }
 #[event]
 pub struct PolicyCleared { pub policy: Pubkey, pub model: Pubkey, pub slot: u64 }
+#[event]
+pub struct GrantQuoteUpdated { pub model: Pubkey, pub enclave: Pubkey, pub operator: Pubkey, pub quoted_operator_share_bps: Option<u16>, pub slot: u64 }

@@ -4612,3 +4612,98 @@ test('Build 7 Step 3: voynich model policy CLI show, set, show, clear, and flag 
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 9 Step 1: decodeGrantAccount (223B legacy + 226B quoted), buildSetQuoteTx, fixture POST /v1/enclaves/:key/quote/build, and SDK setQuote', async () => {
+  const { Connection } = await import('@solana/web3.js')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { sha256, utf8 } = await import('../sdk/src/crypto.js')
+  const { GRANT_BASE_SPACE, GRANT_SPACE, buildSetQuoteTx, decodeGrantAccount, grantPda } = await import('../sdk/src/program.js')
+  const { createVoynich } = await import('../sdk/src/index.js')
+  const { buildApp } = await import('../src/app.js')
+
+  // 1. decodeGrantAccount on legacy 223B, 226B None, and 226B Some(1200)
+  const modelKey = Keypair.generate().publicKey
+  const enclaveKey = Keypair.generate().publicKey
+  const grantedBy = Keypair.generate().publicKey
+  const disc = sha256(utf8('account:Grant')).subarray(0, 8)
+  const makeBaseGrant = () => {
+    const buf = new Uint8Array(GRANT_BASE_SPACE)
+    const view = new DataView(buf.buffer)
+    let o = 0
+    buf.set(disc, o); o += 8
+    buf.set(modelKey.toBytes(), o); o += 32
+    buf.set(enclaveKey.toBytes(), o); o += 32
+    view.setUint32(o, 105, true); o += 4
+    buf[o] = 1; o += 105
+    buf.set(grantedBy.toBytes(), o); o += 32
+    view.setBigUint64(o, 472900000n, true); o += 8
+    buf[o++] = 0 // revoked = false
+    buf[o++] = 251 // bump
+    assert.equal(o, GRANT_BASE_SPACE)
+    return buf
+  }
+  const legacyDecoded = decodeGrantAccount(makeBaseGrant())
+  assert.equal(legacyDecoded.legacy, true)
+  assert.equal(legacyDecoded.quotedOperatorShareBps, null)
+  assert.equal(legacyDecoded.revoked, false)
+  assert.equal(legacyDecoded.bump, 251)
+
+  const quotedBuf = new Uint8Array(GRANT_SPACE)
+  quotedBuf.set(makeBaseGrant(), 0)
+  quotedBuf[GRANT_BASE_SPACE] = 1
+  new DataView(quotedBuf.buffer).setUint16(GRANT_BASE_SPACE + 1, 1200, true)
+  const quotedDecoded = decodeGrantAccount(quotedBuf)
+  assert.equal(quotedDecoded.legacy, false)
+  assert.equal(quotedDecoded.quotedOperatorShareBps, 1200)
+
+  // 2. buildSetQuoteTx builds a valid v0 VersionedTransaction targeting grantPda
+  const operator = Keypair.generate().publicKey
+  const tx = await buildSetQuoteTx({
+    connection: new Connection('http://127.0.0.1:9704', 'confirmed'),
+    operator,
+    model: modelKey,
+    enclave: enclaveKey,
+    operatorShareBps: 1200,
+    recentBlockhash: Keypair.generate().publicKey.toBase58(),
+  })
+  const staticKeys = tx.message.staticAccountKeys.map(k => k.toBase58())
+  assert.ok(staticKeys.includes(grantPda(modelKey, enclaveKey).toBase58()))
+  assert.ok(staticKeys.includes(operator.toBase58()))
+
+  // 3. Fixture API POST /v1/enclaves/:key/quote/build + SDK setQuote
+  const app = buildApp()
+  const sessionId = 'b9s1-quote-test'
+  const localFetch: typeof fetch = async (input, init) => {
+    const req = input instanceof Request ? input : new Request(String(input), init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', sessionId)
+    return app.fetch(new Request(req, { headers }))
+  }
+  const operatorWallet = {
+    publicKey: { toBase58: () => FIXTURE.operator } as import('@solana/web3.js').PublicKey,
+    async signTransaction(t: import('@solana/web3.js').VersionedTransaction) { return t },
+  }
+  const stranger = Keypair.generate()
+  const opClient = createVoynich({ apiUrl: 'http://127.0.0.1:9702', signer: operatorWallet, fetch: localFetch })
+  const strangerClient = createVoynich({ apiUrl: 'http://127.0.0.1:9702', signer: stranger, fetch: localFetch })
+
+  // Non-operator rejected
+  await assert.rejects(() => strangerClient.setQuote(FIXTURE.enclave, 'sketch-32', 1200), /operator|UNAUTHORIZED/i)
+
+  // Above model.operatorShareBps (2500) rejected with INVALID_QUOTE
+  await assert.rejects(() => opClient.setQuote(FIXTURE.enclave, 'sketch-32', 2501), /maximum operator share|INVALID_QUOTE/i)
+
+  // Valid quote updates both /v1/models/:id/enclaves and /v1/enclaves/:key
+  const txSet = await opClient.setQuote(FIXTURE.enclave, 'sketch-32', 1200)
+  assert.equal(txSet.status, 'confirmed')
+  const modelEnclaves = await opClient.api.modelEnclaves('sketch-32')
+  assert.equal(modelEnclaves.items[0]!.grant.quotedOperatorShareBps, 1200)
+  assert.equal(modelEnclaves.items[0]!.grant.medianAnswerMs, 400)
+  const enclaveDetail = await opClient.enclave(FIXTURE.enclave)
+  assert.equal(enclaveDetail.grants[0]!.quotedOperatorShareBps, 1200)
+
+  // Clearing quote resets to null
+  await opClient.setQuote(FIXTURE.enclave, 'sketch-32', null)
+  const clearedEnclaves = await opClient.api.modelEnclaves('sketch-32')
+  assert.equal(clearedEnclaves.items[0]!.grant.quotedOperatorShareBps, null)
+})

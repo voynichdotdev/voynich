@@ -1407,6 +1407,19 @@ export function createVoynich(options: VoynichOptions) {
     const wallet = signer()
     return send(await api.clearPolicy(modelId, { wallet: wallet.publicKey.toBase58() }, { signal: opts.signal }), [], undefined, opts.signal)
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  async function setQuote(
+    enclaveKey: string,
+    modelId: string,
+    operatorShareBps: number | null,
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<TxStatus> {
+    const wallet = signer()
+    return send(await api.setQuote(enclaveKey, {
+      model: modelId,
+      operatorShareBps,
+      payer: wallet.publicKey.toBase58(),
+    }, { signal: opts.signal }), [], undefined, opts.signal)
+  }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>

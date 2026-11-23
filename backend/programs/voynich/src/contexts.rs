@@ -131,7 +131,8 @@ pub struct GrantByEnclave<'info> {
     #[account(seeds = [b"config"], bump = config.bump)] pub config: Account<'info, Config>,
     #[account(mut, seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
     #[account(seeds = [b"enclave", signing_key.key().as_ref()], bump = source_enclave.bump, has_one = signing_key @ VoynichError::Unauthorized)] pub source_enclave: Box<Account<'info, Enclave>>,
-    #[account(seeds = [b"grant", model.key().as_ref(), source_enclave.key().as_ref()], bump = source_grant.bump)] pub source_grant: Account<'info, Grant>,
+    /// CHECK: verified in handler (owner, PDA ["grant", model, source_enclave], discriminator, legacy 223B or 226B layout).
+    #[account(seeds = [b"grant", model.key().as_ref(), source_enclave.key().as_ref()], bump)] pub source_grant: UncheckedAccount<'info>,
     /// CHECK: verified against the source enclave and configured verifier.
     pub source_attestation_record: UncheckedAccount<'info>,
     #[account(seeds = [b"enclave", target_enclave.signing_key.as_ref()], bump = target_enclave.bump)] pub target_enclave: Box<Account<'info, Enclave>>,
@@ -146,7 +147,19 @@ pub struct GrantByEnclave<'info> {
 pub struct RevokeGrant<'info> {
     pub owner: Signer<'info>,
     #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
-    #[account(mut, seeds = [b"grant", model.key().as_ref(), grant.enclave.as_ref()], bump = grant.bump, has_one = model)] pub grant: Account<'info, Grant>,
+    /// CHECK: verified in handler (owner, PDA ["grant", model, grant.enclave], discriminator, legacy 223B or 226B layout).
+    #[account(mut)] pub grant: UncheckedAccount<'info>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SetQuote<'info> {
+    #[account(mut)] pub operator: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
+    #[account(seeds = [b"enclave", enclave.signing_key.as_ref()], bump = enclave.bump, has_one = operator @ VoynichError::Unauthorized)] pub enclave: Box<Account<'info, Enclave>>,
+    /// CHECK: verified in handler (owner, PDA ["grant", model, enclave], discriminator, legacy 223B or 226B layout, reallocated to Grant::SPACE).
+    #[account(mut, seeds = [b"grant", model.key().as_ref(), enclave.key().as_ref()], bump)] pub grant: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[event_cpi]
@@ -160,7 +173,8 @@ pub struct OpenCall<'info> {
     #[account(seeds = [b"enclave", enclave.signing_key.as_ref()], bump = enclave.bump)] pub enclave: Box<Account<'info, Enclave>>,
     /// CHECK: verified against enclave and configured verifier.
     pub attestation_record: UncheckedAccount<'info>,
-    #[account(seeds = [b"grant", model.key().as_ref(), enclave.key().as_ref()], bump = grant.bump, has_one = model, has_one = enclave)] pub grant: Account<'info, Grant>,
+    /// CHECK: verified in handler (owner, PDA ["grant", model, enclave], discriminator, legacy 223B or 226B layout).
+    #[account(seeds = [b"grant", model.key().as_ref(), enclave.key().as_ref()], bump)] pub grant: UncheckedAccount<'info>,
     #[account(init, payer = payer, space = Call::space(callback.as_ref().map(|c| c.accounts.len()).unwrap_or(0)), seeds = [b"call", caller.key().as_ref(), &nonce.to_le_bytes()], bump)] pub call: Box<Account<'info, Call>>,
     pub mint: Option<Account<'info, Mint>>,
     #[account(mut)] pub caller_tokens: Option<Account<'info, TokenAccount>>,

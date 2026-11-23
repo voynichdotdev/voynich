@@ -160,15 +160,17 @@ model Enclave {
 }
 
 model Grant {
-  address        String  @id @db.VarChar(44)
-  modelAddress   String  @db.VarChar(44)
-  model          Model   @relation(fields: [modelAddress], references: [address])
-  enclaveAddress String  @db.VarChar(44)
-  enclave        Enclave @relation(fields: [enclaveAddress], references: [address])
-  wrappedKey     Bytes   @db.ByteA
-  grantedBy      String  @db.VarChar(44)
-  grantedSlot    BigInt
-  revokedSlot    BigInt?
+  address                String  @id @db.VarChar(44)
+  modelAddress           String  @db.VarChar(44)
+  model                  Model   @relation(fields: [modelAddress], references: [address])
+  enclaveAddress         String  @db.VarChar(44)
+  enclave                Enclave @relation(fields: [enclaveAddress], references: [address])
+  wrappedKey             Bytes   @db.ByteA
+  grantedBy              String  @db.VarChar(44)
+  grantedSlot            BigInt
+  revokedSlot            BigInt?
+  quotedOperatorShareBps Int?
+  medianAnswerMs         Int?
 
   @@unique([modelAddress, enclaveAddress])
   @@index([enclaveAddress])

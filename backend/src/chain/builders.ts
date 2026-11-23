@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BN, CALL_SPACE, MEASUREMENT_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, decodeCallAccount, decodeConfigAccount, decodeMeasurementAccount, decodePolicyAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BN, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodePolicyAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -215,7 +215,7 @@ export function builders(runtime: ChainRuntime) {
       const row = await model(id), owner = publicKey(body.wallet), targetEnclave = publicKey(body.enclave)
       const target = await enclave(targetEnclave)
       const grant = a.grant(row.key, targetEnclave)
-      const rent = await runtime.rpc.connection.getAccountInfo(grant, 'confirmed') ? 0n : BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(223))
+      const rent = await runtime.rpc.connection.getAccountInfo(grant, 'confirmed') ? 0n : BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(GRANT_SPACE))
       const policyRemaining: { pubkey: PublicKey; isWritable: boolean; isSigner: boolean }[] = []
       if ((row.value as { hasPolicy?: boolean }).hasPolicy) {
         const policyKey = a.policy(row.key)
@@ -239,9 +239,42 @@ export function builders(runtime: ChainRuntime) {
     async revoke(id: string, body: c.RevokeGrantRequest) {
       const row = await model(id), owner = publicKey(body.wallet)
       const grant = a.grant(row.key, publicKey(body.enclave))
-      if (!await voynich.account.grant.fetchNullable(grant)) fail('GRANT_REQUIRED', 'This enclave does not hold a grant for this model.', { stage: 'build' })
+      const grantInfo = await runtime.rpc.connection.getAccountInfo(grant, 'confirmed')
+      if (!grantInfo || !grantInfo.owner.equals(voynich.programId)) fail('GRANT_REQUIRED', 'This enclave does not hold a grant for this model.', { stage: 'build' })
+      decodeGrantAccount(grantInfo.data)
       const instruction = await voynich.methods.revokeGrant().accountsStrict({ owner, model: row.key, grant, ...events }).instruction()
-      return ledger.build('revoke_grant', owner, [instruction], { model: row.key.toBase58() })
+      return ledger.build('revoke_grant', owner, [instruction], { model: row.key.toBase58(), grant: grant.toBase58() })
+    },
+    async setQuote(enclaveKey: string, body: c.SetQuoteRequest) {
+      const targetEnclave = publicKey(enclaveKey)
+      const entry = await enclave(targetEnclave)
+      const row = await model(body.model)
+      const operator = body.payer ? publicKey(body.payer) : entry.operator
+      if (!operator.equals(entry.operator)) {
+        fail('UNAUTHORIZED', 'Only the enclave operator may set a quote for this grant.', { stage: 'build' })
+      }
+      const grant = a.grant(row.key, targetEnclave)
+      const grantInfo = await runtime.rpc.connection.getAccountInfo(grant, 'confirmed')
+      if (!grantInfo || !grantInfo.owner.equals(voynich.programId)) {
+        fail('GRANT_REQUIRED', 'This enclave does not hold a grant for this model.', { stage: 'build' })
+      }
+      const decoded = decodeGrantAccount(grantInfo.data)
+      if (decoded.revoked) {
+        fail('GRANT_REQUIRED', 'Cannot set a quote on a revoked grant.', { stage: 'build' })
+      }
+      if (body.operatorShareBps !== null && body.operatorShareBps > row.value.operatorShareBps) {
+        fail('INVALID_QUOTE', 'The quoted operator share exceeds the model maximum operator share.', { stage: 'build' })
+      }
+      let rentDelta = 0n
+      if (grantInfo.data.length < GRANT_SPACE) {
+        const minRent = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(GRANT_SPACE))
+        if (BigInt(grantInfo.lamports) < minRent) rentDelta = minRent - BigInt(grantInfo.lamports)
+      }
+      const instruction = await voynich.methods
+        .setQuote(body.operatorShareBps)
+        .accountsStrict({ operator, model: row.key, enclave: targetEnclave, grant, systemProgram: SystemProgram.programId, ...events })
+        .instruction()
+      return ledger.build('set_quote', operator, [instruction], { model: row.key.toBase58(), grant: grant.toBase58() }, rentDelta)
     },
     async open(body: c.OpenCallRequest) {
       const row = await model(body.model), caller = publicKey(body.wallet), target = publicKey(body.enclave)

@@ -336,10 +336,51 @@ fn load_model_policy(model_key: Pubkey, has_policy: bool, remaining_accounts: &[
     Ok(Some(policy))
 }
 
+fn load_grant(info: &AccountInfo, expected_model: Pubkey, expected_enclave: Option<Pubkey>, expected_bump: Option<u8>) -> Result<Grant> {
+    require_keys_eq!(*info.owner, crate::ID, VoynichError::GrantRequired);
+    let data = info.try_borrow_data()?;
+    require!(data.len() >= Grant::BASE_SPACE && &data[..8] == Grant::DISCRIMINATOR, VoynichError::GrantRequired);
+    let mut slice = &data[8..];
+    let model = Pubkey::deserialize(&mut slice).map_err(|_| error!(VoynichError::GrantRequired))?;
+    let enclave = Pubkey::deserialize(&mut slice).map_err(|_| error!(VoynichError::GrantRequired))?;
+    let wrapped_key = Vec::<u8>::deserialize(&mut slice).map_err(|_| error!(VoynichError::GrantRequired))?;
+    let granted_by = Pubkey::deserialize(&mut slice).map_err(|_| error!(VoynichError::GrantRequired))?;
+    let granted_slot = u64::deserialize(&mut slice).map_err(|_| error!(VoynichError::GrantRequired))?;
+    let revoked = bool::deserialize(&mut slice).map_err(|_| error!(VoynichError::GrantRequired))?;
+    let bump = u8::deserialize(&mut slice).map_err(|_| error!(VoynichError::GrantRequired))?;
+    let quoted_operator_share_bps = if slice.is_empty() {
+        None
+    } else {
+        Option::<u16>::deserialize(&mut slice).map_err(|_| error!(VoynichError::InvalidQuote))?
+    };
+    require!(model == expected_model, VoynichError::GrantRequired);
+    if let Some(enclave_key) = expected_enclave {
+        require!(enclave == enclave_key, VoynichError::GrantRequired);
+    }
+    if let Some(b) = expected_bump {
+        require!(bump == b, VoynichError::GrantRequired);
+    } else {
+        let (expected_pda, derived_bump) = Pubkey::find_program_address(&[b"grant", model.as_ref(), enclave.as_ref()], &crate::ID);
+        require_keys_eq!(info.key(), expected_pda, VoynichError::GrantRequired);
+        require!(bump == derived_bump, VoynichError::GrantRequired);
+    }
+    Ok(Grant {
+        model,
+        enclave,
+        wrapped_key,
+        granted_by,
+        granted_slot,
+        revoked,
+        bump,
+        quoted_operator_share_bps,
+    })
+}
+
 fn assign_grant(grant: &mut Grant, model: Pubkey, enclave: Pubkey, wrapped_key: Vec<u8>, granted_by: Pubkey, bump: u8) -> Result<()> {
     require!(wrapped_key.len() == 105 && wrapped_key[0] == 1, VoynichError::InvalidWrappedKey);
     grant.model = model; grant.enclave = enclave; grant.wrapped_key = wrapped_key;
     grant.granted_by = granted_by; grant.granted_slot = Clock::get()?.slot; grant.revoked = false; grant.bump = bump;
+    grant.quoted_operator_share_bps = None;
     Ok(())
 }
 pub fn grant_by_owner(ctx: Context<GrantByOwner>, wrapped_key: Vec<u8>) -> Result<()> {
@@ -363,7 +404,8 @@ pub fn grant_by_enclave(ctx: Context<GrantByEnclave>, wrapped_key: Vec<u8>) -> R
     let model = &mut ctx.accounts.model;
     require!(model.status == ModelStatus::Live, VoynichError::ModelNotLive);
     require!(ctx.accounts.source_enclave.key() != ctx.accounts.target_enclave.key(), VoynichError::InvalidEnclave);
-    require!(!ctx.accounts.source_grant.revoked && ctx.accounts.source_grant.model == model.key() && ctx.accounts.source_grant.enclave == ctx.accounts.source_enclave.key(), VoynichError::GrantRequired);
+    let source_grant = load_grant(&ctx.accounts.source_grant, model.key(), Some(ctx.accounts.source_enclave.key()), Some(ctx.bumps.source_grant))?;
+    require!(!source_grant.revoked, VoynichError::GrantRequired);
     let source = current_record(&ctx.accounts.config, &ctx.accounts.source_enclave, &ctx.accounts.source_attestation_record)?;
     let target = current_record(&ctx.accounts.config, &ctx.accounts.target_enclave, &ctx.accounts.target_attestation_record)?;
     allowed(model, &source.measurement)?; allowed(model, &target.measurement)?;
@@ -378,16 +420,64 @@ pub fn grant_by_enclave(ctx: Context<GrantByEnclave>, wrapped_key: Vec<u8>) -> R
     Ok(())
 }
 pub fn revoke_grant(ctx: Context<RevokeGrant>) -> Result<()> {
-    let grant = &mut ctx.accounts.grant;
+    let mut grant = load_grant(&ctx.accounts.grant, ctx.accounts.model.key(), None, None)?;
     grant.revoked = true;
-    emit_cpi!(GrantChanged { grant: grant.key(), model: grant.model, enclave: grant.enclave, wrapped_key: grant.wrapped_key.clone(), granted_by: grant.granted_by, slot: Clock::get()?.slot, revoked: true });
+    {
+        let mut data = ctx.accounts.grant.try_borrow_mut_data()?;
+        let len = data.len();
+        if len >= Grant::SPACE {
+            data.fill(0);
+            grant.try_serialize(&mut &mut data[..])?;
+        } else {
+            // Legacy 223-byte Grant account: revoked bool sits at fixed offset 221.
+            data[Grant::BASE_SPACE - 2] = 1;
+        }
+    }
+    emit_cpi!(GrantChanged { grant: ctx.accounts.grant.key(), model: grant.model, enclave: grant.enclave, wrapped_key: grant.wrapped_key.clone(), granted_by: grant.granted_by, slot: Clock::get()?.slot, revoked: true });
+    Ok(())
+}
+pub fn set_quote(ctx: Context<SetQuote>, operator_share_bps: Option<u16>) -> Result<()> {
+    let model = &ctx.accounts.model;
+    let grant_info = &ctx.accounts.grant;
+    let mut grant = load_grant(grant_info, model.key(), Some(ctx.accounts.enclave.key()), Some(ctx.bumps.grant))?;
+    require!(!grant.revoked, VoynichError::GrantRequired);
+    if let Some(bps) = operator_share_bps {
+        require!(bps <= model.operator_share_bps, VoynichError::InvalidQuote);
+    }
+    if grant_info.data_len() < Grant::SPACE {
+        let required_lamports = Rent::get()?.minimum_balance(Grant::SPACE);
+        if grant_info.lamports() < required_lamports {
+            system_program::transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.to_account_info(),
+                    system_program::Transfer { from: ctx.accounts.operator.to_account_info(), to: grant_info.to_account_info() },
+                ),
+                required_lamports - grant_info.lamports(),
+            )?;
+        }
+        grant_info.realloc(Grant::SPACE, false)?;
+    }
+    grant.quoted_operator_share_bps = operator_share_bps;
+    {
+        let mut data = grant_info.try_borrow_mut_data()?;
+        data.fill(0);
+        grant.try_serialize(&mut &mut data[..])?;
+    }
+    emit_cpi!(GrantQuoteUpdated {
+        model: grant.model,
+        enclave: grant.enclave,
+        operator: ctx.accounts.operator.key(),
+        quoted_operator_share_bps: grant.quoted_operator_share_bps,
+        slot: Clock::get()?.slot,
+    });
     Ok(())
 }
 
 fn open_call_inner(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answer_mode: AnswerMode, callback: Option<CallbackSpec>, price_unit: PriceUnit, ceiling: u64) -> Result<()> {
     let model = &ctx.accounts.model;
     require!(model.status == ModelStatus::Live, VoynichError::ModelNotLive);
-    require!(!ctx.accounts.grant.revoked, VoynichError::GrantRequired);
+    let grant = load_grant(&ctx.accounts.grant, model.key(), Some(ctx.accounts.enclave.key()), Some(ctx.bumps.grant))?;
+    require!(!grant.revoked, VoynichError::GrantRequired);
     let value = current_record(&ctx.accounts.config, &ctx.accounts.enclave, &ctx.accounts.attestation_record)?;
     allowed(model, &value.measurement)?;
     if let Some(policy) = load_model_policy(model.key(), model.has_policy, ctx.remaining_accounts)? {
@@ -395,7 +485,11 @@ fn open_call_inner(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answ
             require!(policy.allowed_callers.contains(&ctx.accounts.caller.key()), VoynichError::PolicyCallerDenied);
         }
     }
-    require!(u32::from(model.operator_share_bps) + u32::from(ctx.accounts.config.protocol_share_bps) <= 10000, VoynichError::InvalidConfig);
+    let effective_operator_share_bps = grant
+        .quoted_operator_share_bps
+        .map(|q| q.min(model.operator_share_bps))
+        .unwrap_or(model.operator_share_bps);
+    require!(u32::from(effective_operator_share_bps) + u32::from(ctx.accounts.config.protocol_share_bps) <= 10000, VoynichError::InvalidConfig);
     let (callback_program, callback_accounts) = match callback {
         Some(spec) => {
             require!(spec.program != Pubkey::default() && spec.program != crate::ID, VoynichError::InvalidCallback);
@@ -408,7 +502,7 @@ fn open_call_inner(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answ
     call.caller = ctx.accounts.caller.key(); call.model = model.key(); call.enclave = ctx.accounts.enclave.key(); call.nonce = nonce;
     call.input_hash = input_hash; call.price = model.price; call.price_mint = model.price_mint;
     call.owner = model.owner; call.operator = ctx.accounts.enclave.operator; call.fee_recipient = ctx.accounts.config.fee_recipient;
-    call.operator_share_bps = model.operator_share_bps; call.protocol_share_bps = ctx.accounts.config.protocol_share_bps;
+    call.operator_share_bps = effective_operator_share_bps; call.protocol_share_bps = ctx.accounts.config.protocol_share_bps;
     call.opened_slot = Clock::get()?.slot;
     call.deadline_slot = call.opened_slot.checked_add(ctx.accounts.config.call_deadline_slots).ok_or(VoynichError::ArithmeticOverflow)?;
     call.status = CallStatus::Open; call.bump = ctx.bumps.call; call.answer_mode = answer_mode;

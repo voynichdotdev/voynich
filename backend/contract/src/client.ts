@@ -31,6 +31,7 @@ export function createClient(baseUrl: string, options: Omit<HttpOptions, 'apiErr
     clearPolicy: (model: string, body: z.input<typeof s.WalletRequest>, options?: CallOptions) => http.post(`/v1/models/${id(model)}/policy/clear/build`, s.Build, body, options),
     enclaves: (query: z.input<typeof PageQuery> = {}, options?: CallOptions) => http.get('/v1/enclaves', s.EnclavesPage, { ...options, query }),
     enclave: (key: string, options?: CallOptions) => http.get(`/v1/enclaves/${id(key)}`, s.EnclaveDetail, options),
+    setQuote: (key: string, body: z.input<typeof s.SetQuoteRequest>, options?: CallOptions) => http.post(`/v1/enclaves/${id(key)}/quote/build`, s.Build, body, options),
     measurements: (query: z.input<typeof s.MeasurementQuery> = {}, options?: CallOptions) => http.get('/v1/measurements', s.MeasurementsPage, { ...options, query }),
     measurement: (digest: string, options?: CallOptions) => http.get(`/v1/measurements/${id(digest)}`, s.MeasurementRecord, options),
     publishMeasurement: (body: z.input<typeof s.PublishMeasurementRequest>, options?: CallOptions) => http.post('/v1/measurements/build', s.Build, body, options),

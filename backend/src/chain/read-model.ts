@@ -88,7 +88,7 @@ export class ReadModel {
     return { address: row.address, signingKey: row.signingKey, encryptionKey: toBase64(row.encryptionKey), operator: row.operator, endpoint: row.endpoint, relayPath: '/v1/calls/{call}/input', hardwareType: row.attestationRecord.hardwareType === 'sev_snp' ? 'sev-snp' : row.attestationRecord.hardwareType, measurement: row.attestationRecord.measurement, expiresAtSlot: String(row.attestationRecord.expiresAtSlot), status: row.attestationRecord.expiresAtSlot > slot ? 'live' : 'expired', reachable: row.reachable, lastSeen: row.lastSeen?.toISOString() ?? null, callsSettled: String(row.callsSettled), modelsHeld: await this.db.grant.count({ where: { enclaveAddress: row.address, revokedSlot: null } }), attestation: this.attestationRow(row.attestationRecord, row.encryptionKey) }
   }
   async grantRow(row: GrantRow): Promise<Grant> {
-    return { address: row.address, model: row.modelAddress, modelName: row.model.name, enclave: row.enclaveAddress, wrappedKey: toBase64(row.wrappedKey), grantedBy: row.grantedBy, grantedSlot: String(row.grantedSlot), status: row.revokedSlot !== null ? 'revoked' : row.enclave.attestationRecord.expiresAtSlot <= await this.currentSlot() ? 'expired' : 'live' }
+    return { address: row.address, model: row.modelAddress, modelName: row.model.name, enclave: row.enclaveAddress, wrappedKey: toBase64(row.wrappedKey), grantedBy: row.grantedBy, grantedSlot: String(row.grantedSlot), status: row.revokedSlot !== null ? 'revoked' : row.enclave.attestationRecord.expiresAtSlot <= await this.currentSlot() ? 'expired' : 'live', quotedOperatorShareBps: row.quotedOperatorShareBps ?? null, medianAnswerMs: row.medianAnswerMs ?? null }
   }
   async enclaves(query: Page) {
     const slot = await this.currentSlot()

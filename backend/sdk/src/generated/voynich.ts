@@ -1015,10 +1015,7 @@ export type Voynich = {
                 "account": "model"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "enclave",
@@ -1042,10 +1039,7 @@ export type Voynich = {
                 "account": "enclave"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "attestationRecord"
@@ -1256,10 +1250,7 @@ export type Voynich = {
                 "account": "model"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "enclave",
@@ -1283,10 +1274,7 @@ export type Voynich = {
                 "account": "enclave"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "attestationRecord"
@@ -1991,37 +1979,11 @@ export type Voynich = {
                 "account": "model"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "grant",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  103,
-                  114,
-                  97,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "model"
-              },
-              {
-                "kind": "account",
-                "path": "grant.enclave",
-                "account": "grant"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "eventAuthority",
@@ -2645,6 +2607,145 @@ export type Voynich = {
             "defined": {
               "name": "priceUnit"
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "setQuote",
+      "discriminator": [
+        59,
+        95,
+        185,
+        175,
+        67,
+        228,
+        200,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "enclave"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "enclave",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  99,
+                  108,
+                  97,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "enclave.signing_key",
+                "account": "enclave"
+              }
+            ]
+          }
+        },
+        {
+          "name": "grant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "enclave"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "operatorShareBps",
+          "type": {
+            "option": "u16"
           }
         }
       ]
@@ -3443,6 +3544,19 @@ export type Voynich = {
       ]
     },
     {
+      "name": "grantQuoteUpdated",
+      "discriminator": [
+        146,
+        166,
+        47,
+        92,
+        137,
+        176,
+        27,
+        246
+      ]
+    },
+    {
       "name": "measurementDeprecated",
       "discriminator": [
         37,
@@ -3754,6 +3868,11 @@ export type Voynich = {
       "code": 6030,
       "name": "policyRequired",
       "msg": "This model has an active policy; pass its Policy account in remaining accounts."
+    },
+    {
+      "code": 6031,
+      "name": "invalidQuote",
+      "msg": "The quoted operator share exceeds the model's maximum operator share."
     }
   ],
   "types": [
@@ -4533,6 +4652,12 @@ export type Voynich = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "quotedOperatorShareBps",
+            "type": {
+              "option": "u16"
+            }
           }
         ]
       }
@@ -4569,6 +4694,36 @@ export type Voynich = {
           {
             "name": "revoked",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "grantQuoteUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "enclave",
+            "type": "pubkey"
+          },
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "quotedOperatorShareBps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
           }
         ]
       }
@@ -6523,10 +6678,7 @@ export const IDL: Voynich = {
                 "account": "Model"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "enclave",
@@ -6550,10 +6702,7 @@ export const IDL: Voynich = {
                 "account": "Enclave"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "attestation_record"
@@ -6764,10 +6913,7 @@ export const IDL: Voynich = {
                 "account": "Model"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "enclave",
@@ -6791,10 +6937,7 @@ export const IDL: Voynich = {
                 "account": "Enclave"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "attestation_record"
@@ -7499,37 +7642,11 @@ export const IDL: Voynich = {
                 "account": "Model"
               }
             ]
-          },
-          "relations": [
-            "grant"
-          ]
+          }
         },
         {
           "name": "grant",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  103,
-                  114,
-                  97,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "model"
-              },
-              {
-                "kind": "account",
-                "path": "grant.enclave",
-                "account": "Grant"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "event_authority",
@@ -8153,6 +8270,145 @@ export const IDL: Voynich = {
             "defined": {
               "name": "PriceUnit"
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_quote",
+      "discriminator": [
+        59,
+        95,
+        185,
+        175,
+        67,
+        228,
+        200,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "enclave"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "enclave",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  99,
+                  108,
+                  97,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "enclave.signing_key",
+                "account": "Enclave"
+              }
+            ]
+          }
+        },
+        {
+          "name": "grant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "enclave"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "operator_share_bps",
+          "type": {
+            "option": "u16"
           }
         }
       ]
@@ -8951,6 +9207,19 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "GrantQuoteUpdated",
+      "discriminator": [
+        146,
+        166,
+        47,
+        92,
+        137,
+        176,
+        27,
+        246
+      ]
+    },
+    {
       "name": "MeasurementDeprecated",
       "discriminator": [
         37,
@@ -9262,6 +9531,11 @@ export const IDL: Voynich = {
       "code": 6030,
       "name": "PolicyRequired",
       "msg": "This model has an active policy; pass its Policy account in remaining accounts."
+    },
+    {
+      "code": 6031,
+      "name": "InvalidQuote",
+      "msg": "The quoted operator share exceeds the model's maximum operator share."
     }
   ],
   "types": [
@@ -10041,6 +10315,12 @@ export const IDL: Voynich = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "quoted_operator_share_bps",
+            "type": {
+              "option": "u16"
+            }
           }
         ]
       }
@@ -10077,6 +10357,36 @@ export const IDL: Voynich = {
           {
             "name": "revoked",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GrantQuoteUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "enclave",
+            "type": "pubkey"
+          },
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "quoted_operator_share_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
           }
         ]
       }

@@ -1,7 +1,7 @@
 import { Program } from '@coral-xyz/anchor'
 import type { Program as AnchorProgram } from '@coral-xyz/anchor'
 import BN from 'bn.js'
-import { PublicKey, type Connection } from '@solana/web3.js'
+import { PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type Connection } from '@solana/web3.js'
 import { Buffer } from 'buffer'
 import { ModelBaseSchema, type ModelBase } from '@voynich/contract'
 import { IDL as VOYNICH_IDL, type Voynich } from './generated/voynich.js'
@@ -38,6 +38,9 @@ export function measurementPda(digest: Uint8Array | string, programId: Key = PRO
 }
 export function policyPda(model: Key, programId: Key = PROGRAM_ID): PublicKey {
   return pda(key(programId), utf8('policy'), key(model).toBytes())
+}
+export function grantPda(model: Key, enclave: Key, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('grant'), key(model).toBytes(), key(enclave).toBytes())
 }
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
@@ -91,6 +94,8 @@ export const RECEIPT_METERED_EXTENSION = 16
 export const RECEIPT_METERED_SPACE = 423
 export const MEASUREMENT_SPACE = 366
 export const POLICY_SPACE = 1770
+export const GRANT_BASE_SPACE = 223
+export const GRANT_SPACE = 226
 export const DEFAULT_MAX_OPEN_ANSWER_BYTES = 1024
 
 const matchesDisc = (data: Uint8Array, label: string) => {
@@ -639,4 +644,84 @@ export function decodeModelBaseBytes(data: Uint8Array): ModelBase | null {
   const format = readString()
   const source = readString()
   return ModelBaseSchema.parse({ sha256: sha256Hex, sizeBytes, format, source })
+}
+
+export type DecodedGrantAccount = {
+  model: PublicKey
+  enclave: PublicKey
+  wrappedKey: Uint8Array
+  grantedBy: PublicKey
+  grantedSlot: BN
+  revoked: boolean
+  bump: number
+  quotedOperatorShareBps: number | null
+  legacy: boolean
+}
+
+export function decodeGrantAccount(data: Uint8Array): DecodedGrantAccount {
+  if (!matchesDisc(data, 'account:Grant') || data.length < GRANT_BASE_SPACE) {
+    throw new Error('Invalid Grant account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const enclave = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const wrappedLen = view.getUint32(offset, true); offset += 4
+  if (offset + wrappedLen + 32 + 8 + 1 + 1 > data.length) throw new Error('Truncated Grant account data')
+  const wrappedKey = new Uint8Array(data.subarray(offset, offset + wrappedLen)); offset += wrappedLen
+  const grantedBy = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const grantedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const revokedByte = data[offset++]!
+  if (revokedByte !== 0 && revokedByte !== 1) throw new Error(`Invalid Grant revoked bool: ${revokedByte}`)
+  const revoked = revokedByte === 1
+  const bump = data[offset++]!
+  let quotedOperatorShareBps: number | null = null
+  const legacy = offset === data.length
+  if (!legacy) {
+    const tag = data[offset++]!
+    if (tag === 0) {
+      quotedOperatorShareBps = null
+    } else if (tag === 1) {
+      if (offset + 2 > data.length) throw new Error('Truncated Grant quotedOperatorShareBps')
+      quotedOperatorShareBps = view.getUint16(offset, true)
+    } else {
+      throw new Error(`Invalid Grant quote option tag: ${tag}`)
+    }
+  }
+  return { model, enclave, wrappedKey, grantedBy, grantedSlot, revoked, bump, quotedOperatorShareBps, legacy }
+}
+
+export async function buildSetQuoteTx(params: {
+  connection: Connection
+  operator: Key
+  model: Key
+  enclave: Key
+  operatorShareBps: number | null
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const operator = key(params.operator)
+  const model = key(params.model)
+  const enclave = key(params.enclave)
+  const grant = grantPda(model, enclave, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .setQuote(params.operatorShareBps)
+    .accountsStrict({
+      operator,
+      model,
+      enclave,
+      grant,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  const message = new TransactionMessage({
+    payerKey: operator,
+    recentBlockhash,
+    instructions: [instruction],
+  }).compileToV0Message()
+  return new VersionedTransaction(message)
 }

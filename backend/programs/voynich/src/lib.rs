@@ -33,6 +33,7 @@ pub mod voynich {
     pub fn grant_by_owner(ctx: Context<GrantByOwner>, wrapped_key: Vec<u8>) -> Result<()> { handlers::grant_by_owner(ctx, wrapped_key) }
     pub fn grant_by_enclave(ctx: Context<GrantByEnclave>, wrapped_key: Vec<u8>) -> Result<()> { handlers::grant_by_enclave(ctx, wrapped_key) }
     pub fn revoke_grant(ctx: Context<RevokeGrant>) -> Result<()> { handlers::revoke_grant(ctx) }
+    pub fn set_quote(ctx: Context<SetQuote>, operator_share_bps: Option<u16>) -> Result<()> { handlers::set_quote(ctx, operator_share_bps) }
     pub fn open_call(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answer_mode: AnswerMode, callback: Option<CallbackSpec>) -> Result<()> { handlers::open_call(ctx, nonce, input_hash, answer_mode, callback) }
     pub fn open_metered_call(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answer_mode: AnswerMode, callback: Option<CallbackSpec>, ceiling: u64) -> Result<()> { handlers::open_metered_call(ctx, nonce, input_hash, answer_mode, callback, ceiling) }
     pub fn settle_call<'info>(ctx: Context<'_, '_, '_, 'info, SettleCall<'info>>, output_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16, open_answer: Vec<u8>) -> Result<()> { handlers::settle_call(ctx, output_hash, signature, ed25519_instruction_index, open_answer) }

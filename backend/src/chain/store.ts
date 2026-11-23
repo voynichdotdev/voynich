@@ -146,6 +146,16 @@ export function createApply(attestationProgramId: string) {
           await notify(tx, 'enclave.updated', value.enclaveAddress)
           break
         }
+        case 'grantquoteupdated': {
+          const modelAddress = text(data, 'model')
+          const enclaveAddress = text(data, 'enclave')
+          const rawQuote = data.quotedOperatorShareBps
+          const quotedOperatorShareBps = rawQuote === null || rawQuote === undefined ? null : number(data, 'quotedOperatorShareBps')
+          await tx.grant.updateMany({ where: { modelAddress, enclaveAddress }, data: { quotedOperatorShareBps } })
+          await notify(tx, 'model.updated', modelAddress)
+          await notify(tx, 'enclave.updated', enclaveAddress)
+          break
+        }
         case 'callopened': {
           const address = text(data, 'call')
           const answerMode = (data.answerMode ? enumName(data.answerMode) : 'sealed') as 'sealed' | 'open'
@@ -173,6 +183,25 @@ export function createApply(attestationProgramId: string) {
           await tx.call.update({ where: { address: receipt.callAddress }, data: { status: 'settled', updatedSlot: currentSlot } })
           await tx.model.update({ where: { address: receipt.modelAddress }, data: { callsSettled: { increment: 1 }, updatedSlot: currentSlot } })
           await tx.enclave.update({ where: { address: enclave.address }, data: { callsSettled: { increment: 1 } } })
+          const recentReceipts = await tx.receipt.findMany({
+            where: { modelAddress: receipt.modelAddress, enclaveAddress: enclave.address },
+            orderBy: { slot: 'desc' },
+            take: 25,
+            select: { slot: true, call: { select: { openedSlot: true } } },
+          })
+          const answerDeltas = recentReceipts
+            .map(item => Math.max(0, Number(item.slot - item.call.openedSlot) * 200))
+            .sort((a, b) => a - b)
+          if (answerDeltas.length > 0) {
+            const mid = Math.floor(answerDeltas.length / 2)
+            const medianAnswerMs = answerDeltas.length % 2 === 1
+              ? answerDeltas[mid]!
+              : Math.round((answerDeltas[mid - 1]! + answerDeltas[mid]!) / 2)
+            await tx.grant.updateMany({
+              where: { modelAddress: receipt.modelAddress, enclaveAddress: enclave.address },
+              data: { medianAnswerMs },
+            })
+          }
           await notify(tx, 'call.updated', receipt.callAddress)
           await notify(tx, 'receipt.created', address)
           await notify(tx, 'model.updated', receipt.modelAddress)

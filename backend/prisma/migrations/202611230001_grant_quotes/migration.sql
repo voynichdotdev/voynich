@@ -1,0 +1,3 @@
+ALTER TABLE "grants"
+  ADD COLUMN IF NOT EXISTS "quotedOperatorShareBps" INTEGER,
+  ADD COLUMN IF NOT EXISTS "medianAnswerMs" INTEGER;

@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Voynich API",
-    "version": "0.1.27",
+    "version": "0.1.28",
     "description": "Public reads and unsigned transaction builds. No sessions or login. MODE=fixture serves isolated in-memory fixture sessions selected by X-Fixture-Session. Amounts and slots are decimal strings. Null mint means native SOL. Example fixture monetary values are not launch configuration."
   },
   "servers": [
@@ -84,6 +84,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -306,6 +307,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -528,6 +530,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -750,6 +753,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1007,6 +1011,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1237,6 +1242,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1489,6 +1495,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1719,6 +1726,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1970,6 +1978,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -2193,6 +2202,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -2426,6 +2436,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -2667,6 +2678,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -2908,6 +2920,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -3149,6 +3162,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -3389,6 +3403,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -3630,6 +3645,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -3870,6 +3886,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -4111,6 +4128,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -4351,6 +4369,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -4591,6 +4610,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -4821,6 +4841,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -5061,6 +5082,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -5314,6 +5336,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -5544,6 +5567,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -5578,6 +5602,247 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EnclaveDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/enclaves/{key}/quote/build": {
+      "post": {
+        "operationId": "setQuote",
+        "summary": "Build set_quote as the enclave operator to set or clear a quoted operator share on a model grant",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetQuoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Build"
                 }
               }
             }
@@ -5799,6 +6064,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6029,6 +6295,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6251,6 +6518,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6491,6 +6759,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6732,6 +7001,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6962,6 +7232,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7185,6 +7456,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7425,6 +7697,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7656,6 +7929,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7896,6 +8170,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -8126,6 +8401,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -8357,6 +8633,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -8598,6 +8875,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -8838,6 +9116,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -9124,6 +9403,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -9354,6 +9634,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -9576,6 +9857,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -9816,6 +10098,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -10056,6 +10339,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -10296,6 +10580,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -10529,6 +10814,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -10770,6 +11056,7 @@
                 "POLICY_OPERATOR_DENIED",
                 "POLICY_REQUIRED",
                 "GRANT_REQUIRED",
+                "INVALID_QUOTE",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -12161,6 +12448,7 @@
                             "POLICY_OPERATOR_DENIED",
                             "POLICY_REQUIRED",
                             "GRANT_REQUIRED",
+                            "INVALID_QUOTE",
                             "CALL_NOT_FOUND",
                             "CALL_NOT_OPEN",
                             "CALL_NOT_REFUNDABLE",
@@ -12246,6 +12534,7 @@
           "set_price",
           "grant_by_owner",
           "revoke_grant",
+          "set_quote",
           "retire_model",
           "open_call",
           "settle_metered_call",
@@ -12307,6 +12596,7 @@
                   "POLICY_OPERATOR_DENIED",
                   "POLICY_REQUIRED",
                   "GRANT_REQUIRED",
+                  "INVALID_QUOTE",
                   "CALL_NOT_FOUND",
                   "CALL_NOT_OPEN",
                   "CALL_NOT_REFUNDABLE",
@@ -13251,6 +13541,7 @@
               "set_price",
               "grant_by_owner",
               "revoke_grant",
+              "set_quote",
               "retire_model",
               "open_call",
               "settle_metered_call",
@@ -13323,6 +13614,11 @@
                 "maxLength": 44
               },
               "policy": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              "grant": {
                 "type": "string",
                 "minLength": 32,
                 "maxLength": 44
@@ -13607,6 +13903,7 @@
                       "POLICY_OPERATOR_DENIED",
                       "POLICY_REQUIRED",
                       "GRANT_REQUIRED",
+                      "INVALID_QUOTE",
                       "CALL_NOT_FOUND",
                       "CALL_NOT_OPEN",
                       "CALL_NOT_REFUNDABLE",
@@ -13923,6 +14220,7 @@
                           "POLICY_OPERATOR_DENIED",
                           "POLICY_REQUIRED",
                           "GRANT_REQUIRED",
+                          "INVALID_QUOTE",
                           "CALL_NOT_FOUND",
                           "CALL_NOT_OPEN",
                           "CALL_NOT_REFUNDABLE",
@@ -14092,6 +14390,7 @@
                       "POLICY_OPERATOR_DENIED",
                       "POLICY_REQUIRED",
                       "GRANT_REQUIRED",
+                      "INVALID_QUOTE",
                       "CALL_NOT_FOUND",
                       "CALL_NOT_OPEN",
                       "CALL_NOT_REFUNDABLE",
@@ -14183,6 +14482,7 @@
               "POLICY_OPERATOR_DENIED",
               "POLICY_REQUIRED",
               "GRANT_REQUIRED",
+              "INVALID_QUOTE",
               "CALL_NOT_FOUND",
               "CALL_NOT_OPEN",
               "CALL_NOT_REFUNDABLE",
@@ -14346,6 +14646,7 @@
                       "POLICY_OPERATOR_DENIED",
                       "POLICY_REQUIRED",
                       "GRANT_REQUIRED",
+                      "INVALID_QUOTE",
                       "CALL_NOT_FOUND",
                       "CALL_NOT_OPEN",
                       "CALL_NOT_REFUNDABLE",
@@ -14530,6 +14831,7 @@
                       "POLICY_OPERATOR_DENIED",
                       "POLICY_REQUIRED",
                       "GRANT_REQUIRED",
+                      "INVALID_QUOTE",
                       "CALL_NOT_FOUND",
                       "CALL_NOT_OPEN",
                       "CALL_NOT_REFUNDABLE",
@@ -15515,6 +15817,30 @@
                     "expired",
                     "revoked"
                   ]
+                },
+                "quotedOperatorShareBps": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "medianAnswerMs": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -16042,6 +16368,7 @@
           "POLICY_OPERATOR_DENIED",
           "POLICY_REQUIRED",
           "GRANT_REQUIRED",
+          "INVALID_QUOTE",
           "CALL_NOT_FOUND",
           "CALL_NOT_OPEN",
           "CALL_NOT_REFUNDABLE",
@@ -16102,6 +16429,30 @@
               "live",
               "expired",
               "revoked"
+            ]
+          },
+          "quotedOperatorShareBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "medianAnswerMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         },
@@ -16350,6 +16701,30 @@
                   "expired",
                   "revoked"
                 ]
+              },
+              "quotedOperatorShareBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "medianAnswerMs": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -16583,6 +16958,30 @@
                         "live",
                         "expired",
                         "revoked"
+                      ]
+                    },
+                    "quotedOperatorShareBps": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "medianAnswerMs": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     }
                   },
@@ -20614,6 +21013,7 @@
                                       "POLICY_OPERATOR_DENIED",
                                       "POLICY_REQUIRED",
                                       "GRANT_REQUIRED",
+                                      "INVALID_QUOTE",
                                       "CALL_NOT_FOUND",
                                       "CALL_NOT_OPEN",
                                       "CALL_NOT_REFUNDABLE",
@@ -20783,6 +21183,7 @@
                                   "POLICY_OPERATOR_DENIED",
                                   "POLICY_REQUIRED",
                                   "GRANT_REQUIRED",
+                                  "INVALID_QUOTE",
                                   "CALL_NOT_FOUND",
                                   "CALL_NOT_OPEN",
                                   "CALL_NOT_REFUNDABLE",
@@ -21849,6 +22250,7 @@
                               "POLICY_OPERATOR_DENIED",
                               "POLICY_REQUIRED",
                               "GRANT_REQUIRED",
+                              "INVALID_QUOTE",
                               "CALL_NOT_FOUND",
                               "CALL_NOT_OPEN",
                               "CALL_NOT_REFUNDABLE",
@@ -22154,6 +22556,7 @@
                               "POLICY_OPERATOR_DENIED",
                               "POLICY_REQUIRED",
                               "GRANT_REQUIRED",
+                              "INVALID_QUOTE",
                               "CALL_NOT_FOUND",
                               "CALL_NOT_OPEN",
                               "CALL_NOT_REFUNDABLE",
@@ -24125,6 +24528,48 @@
         "required": [
           "wallet",
           "price",
+          "operatorShareBps"
+        ],
+        "additionalProperties": false
+      },
+      "SetQuoteRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              }
+            ]
+          },
+          "operatorShareBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payer": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          }
+        },
+        "required": [
+          "model",
           "operatorShareBps"
         ],
         "additionalProperties": false

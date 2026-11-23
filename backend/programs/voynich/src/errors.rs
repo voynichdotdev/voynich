@@ -33,4 +33,5 @@ pub enum VoynichError {
     #[msg("The caller is not on this model's allow list.")] PolicyCallerDenied,
     #[msg("The enclave operator is not allowed by this model's policy.")] PolicyOperatorDenied,
     #[msg("This model has an active policy; pass its Policy account in remaining accounts.")] PolicyRequired,
+    #[msg("The quoted operator share exceeds the model's maximum operator share.")] InvalidQuote,
 }

@@ -104,6 +104,7 @@ export function buildChainApp(runtime: ChainRuntime) {
     '/v1/models/:id/price/build', '/v1/models/:id/grant/build',
     '/v1/models/:id/revoke/build', '/v1/models/:id/retire/build',
     '/v1/models/:id/policy/build', '/v1/models/:id/policy/clear/build',
+    '/v1/enclaves/:key/quote/build',
     '/v1/calls/build', '/v1/calls/:id/refund/build',
     '/v1/bounties/build', '/v1/bounties/:address/draw/build',
     '/v1/bounties/:address/collect/build', '/v1/bounties/:address/cancel/build',
@@ -319,6 +320,7 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/models/:id/retire/build', async c => c.json(await build.retire(readParam(c, 'id', s.ModelId), await readJson(c, s.WalletRequest))))
   app.post('/v1/models/:id/policy/build', async c => c.json(await build.setPolicy(readParam(c, 'id', s.ModelId), await readJson(c, s.SetPolicyRequest))))
   app.post('/v1/models/:id/policy/clear/build', async c => c.json(await build.clearPolicy(readParam(c, 'id', s.ModelId), await readJson(c, s.WalletRequest))))
+  app.post('/v1/enclaves/:key/quote/build', async c => c.json(await build.setQuote(readParam(c, 'key', s.Address), await readJson(c, s.SetQuoteRequest))))
   app.post('/v1/calls/build', async c => c.json(await build.open(await readJson(c, s.OpenCallRequest))))
   app.post('/v1/calls/:id/settle/build', async c => c.json(await build.settleMetered(readParam(c, 'id', s.Address), await readJson(c, s.SettleCallRequest))))
   app.post('/v1/calls/:id/refund/build', async c => c.json(await build.refund(readParam(c, 'id', s.Address), await readJson(c, s.WalletRequest))))

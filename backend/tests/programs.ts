@@ -1882,4 +1882,118 @@ test('Voynich program flows on the supplied local validator', { timeout: 180_000
     assert.equal((await voynich.account.model.fetch(tokenModel.address)).hasPolicy, false)
     await open(tokenModel)
   })
+
+  await t.test('Build 9 Step 1: set_quote on Grant, two enclaves with different quoted_operator_share_bps settle with exact operator/owner splits', async () => {
+    const { decodeGrantAccount, GRANT_SPACE } = await import('../sdk/src/program.js')
+    const quoteModel = await createModel('quote-model')
+    await uploadAndSeal(quoteModel)
+    await refresh(first)
+    await refresh(second)
+    await execute([await ownerGrant(quoteModel, first)], [owner])
+    await execute([await ownerGrant(quoteModel, second)], [owner])
+
+    const grantFirst = grantAddress(quoteModel, first)
+    const grantSecond = grantAddress(quoteModel, second)
+
+    // 1. Non-operator cannot set_quote -> Unauthorized
+    await assert.rejects(
+      execute([await voynich.methods.setQuote(1000).accountsStrict({
+        operator: owner.publicKey, model: quoteModel.address, enclave: first.address, grant: grantFirst, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [owner]),
+      /Unauthorized/,
+    )
+
+    // 2. Quote above model.operator_share_bps (OPERATOR_BPS) -> InvalidQuote
+    await assert.rejects(
+      execute([await voynich.methods.setQuote(OPERATOR_BPS + 1).accountsStrict({
+        operator: first.operator.publicKey, model: quoteModel.address, enclave: first.address, grant: grantFirst, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [first.operator]),
+      /InvalidQuote/,
+    )
+
+    // 3. Two enclaves set distinct quotes: first = 1000 bps (10%), second = 2000 bps (20%)
+    const quoteFirst = 1000
+    const quoteSecond = 2000
+    await execute([await voynich.methods.setQuote(quoteFirst).accountsStrict({
+      operator: first.operator.publicKey, model: quoteModel.address, enclave: first.address, grant: grantFirst, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [first.operator])
+    await execute([await voynich.methods.setQuote(quoteSecond).accountsStrict({
+      operator: second.operator.publicKey, model: quoteModel.address, enclave: second.address, grant: grantSecond, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [second.operator])
+
+    const infoFirst = await connection.getAccountInfo(grantFirst, 'confirmed')
+    const infoSecond = await connection.getAccountInfo(grantSecond, 'confirmed')
+    assert.ok(infoFirst && infoSecond)
+    assert.equal(infoFirst.data.length, GRANT_SPACE)
+    assert.equal(infoSecond.data.length, GRANT_SPACE)
+    assert.equal(decodeGrantAccount(infoFirst.data).quotedOperatorShareBps, quoteFirst)
+    assert.equal(decodeGrantAccount(infoSecond.data).quotedOperatorShareBps, quoteSecond)
+
+    // Helper to open & settle on a specific enclave and return the Receipt account
+    const openAndSettleOn = async (target: TestEnclave) => {
+      const c = callArgs(quoteModel)
+      const openIx = await voynich.methods.openCall(bn(c.nonce), [...c.inputHash], { sealed: {} }, null).accountsStrict({
+        payer: caller.publicKey, caller: caller.publicKey, config, model: quoteModel.address, enclave: target.address,
+        attestationRecord: target.record, grant: grantAddress(quoteModel, target), call: c.address,
+        mint: null, callerTokens: null, escrowTokens: null, tokenProgram: null, associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()
+      await execute([openIx], [caller])
+      const outputHash = sha256(utf8(`quote-out-${c.nonce}`))
+      const sig = signReceipt(target.signing.secretKey.subarray(0, 32), c.address.toBytes(), c.inputHash, outputHash)
+      const verifyIx = Ed25519Program.createInstructionWithPublicKey({
+        publicKey: target.signing.publicKey.toBytes(),
+        message: receiptMessage(c.address.toBytes(), c.inputHash, outputHash),
+        signature: sig,
+      })
+      const receiptAddr = pda(voynich.programId, utf8('receipt'), c.address.toBytes())
+      const settleIx = await voynich.methods.settleCall([...outputHash], [...sig], 0, Buffer.alloc(0)).accountsStrict({
+        payer: admin.publicKey, config, model: quoteModel.address, enclave: target.address, attestationRecord: target.record,
+        call: c.address, receipt: receiptAddr, caller: caller.publicKey, owner: owner.publicKey,
+        operator: target.operator.publicKey, feeRecipient: feeRecipient.publicKey, instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        escrowTokens: null, ownerTokens: null, operatorTokens: null, protocolTokens: null, callerTokens: null, tokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()
+      await execute([verifyIx, settleIx])
+      return { call: await voynich.account.call.fetch(c.address), receipt: await voynich.account.receipt.fetch(receiptAddr) }
+    }
+
+    // 4. First enclave settles at 10% operator / 5% protocol / 85% owner
+    const res1 = await openAndSettleOn(first)
+    assert.equal(res1.call.operatorShareBps, quoteFirst)
+    const expOp1 = (PRICE * BigInt(quoteFirst)) / 10_000n
+    const expProto = (PRICE * BigInt(PROTOCOL_BPS)) / 10_000n
+    const expOwner1 = PRICE - expOp1 - expProto
+    assert.equal(BigInt(res1.receipt.operatorAmount.toString()), expOp1)
+    assert.equal(BigInt(res1.receipt.protocolAmount.toString()), expProto)
+    assert.equal(BigInt(res1.receipt.ownerAmount.toString()), expOwner1)
+
+    // 5. Second enclave settles at 20% operator / 5% protocol / 75% owner
+    const res2 = await openAndSettleOn(second)
+    assert.equal(res2.call.operatorShareBps, quoteSecond)
+    const expOp2 = (PRICE * BigInt(quoteSecond)) / 10_000n
+    const expOwner2 = PRICE - expOp2 - expProto
+    assert.equal(BigInt(res2.receipt.operatorAmount.toString()), expOp2)
+    assert.equal(BigInt(res2.receipt.protocolAmount.toString()), expProto)
+    assert.equal(BigInt(res2.receipt.ownerAmount.toString()), expOwner2)
+
+    // 6. Clearing quote (null) reverts snapshot to model.operator_share_bps
+    await execute([await voynich.methods.setQuote(null).accountsStrict({
+      operator: first.operator.publicKey, model: quoteModel.address, enclave: first.address, grant: grantFirst, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [first.operator])
+    const res3 = await openAndSettleOn(first)
+    assert.equal(res3.call.operatorShareBps, OPERATOR_BPS)
+    assert.equal(BigInt(res3.receipt.operatorAmount.toString()), (PRICE * BigInt(OPERATOR_BPS)) / 10_000n)
+
+    // 7. Revoking grant blocks set_quote with GrantRequired
+    await execute([await voynich.methods.revokeGrant().accountsStrict({
+      owner: owner.publicKey, model: quoteModel.address, grant: grantSecond, ...events(voynich.programId),
+    }).instruction()], [owner])
+    await assert.rejects(
+      execute([await voynich.methods.setQuote(500).accountsStrict({
+        operator: second.operator.publicKey, model: quoteModel.address, enclave: second.address, grant: grantSecond, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [second.operator]),
+      /GrantRequired/,
+    )
+  })
 })

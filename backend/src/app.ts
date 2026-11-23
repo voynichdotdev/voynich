@@ -268,6 +268,22 @@ export function buildApp() {
     if (body.operatorShareBps + model.protocolShareBps! > 10000) fail('VALIDATION_ERROR', 'The operator and protocol shares exceed the price.', { stage: 'validation' })
     return c.json(state.build('set_price', [body.wallet], { model: model.address }, () => { model.price = body.price; model.priceUnit = body.priceUnit ?? model.priceUnit; model.operatorShareBps = body.operatorShareBps; state.emit('model.updated', model) }))
   })
+  app.post('/v1/enclaves/:key/quote/build', async c => {
+    const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address)); const body = await readJson(c, s.SetQuoteRequest)
+    const model = state.model(body.model)
+    const operator = body.payer ?? enclave.operator
+    if (operator !== enclave.operator) fail('UNAUTHORIZED', 'Only the enclave operator may set a quote for this grant.', { stage: 'build' })
+    const grant = state.grants.find(g => g.model === model.address && g.enclave === enclave.address)
+    if (!grant || grant.status === 'revoked') fail('GRANT_REQUIRED', 'This enclave does not hold an active grant for this model.', { stage: 'build' })
+    if (body.operatorShareBps !== null && body.operatorShareBps > model.operatorShareBps) {
+      fail('INVALID_QUOTE', 'The quoted operator share exceeds the model maximum operator share.', { stage: 'build' })
+    }
+    return c.json(state.build('set_quote', [operator], { model: model.address, grant: grant.address }, () => {
+      grant.quotedOperatorShareBps = body.operatorShareBps
+      state.emit('model.updated', model)
+      state.emit('enclave.updated', enclave)
+    }))
+  })
   app.post('/v1/models/:id/grant/build', async c => {
     const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.GrantRequest); state.owner(model, body.wallet)
     if (model.status !== 'sealed' && model.status !== 'live') fail('MODEL_NOT_LIVE', 'Seal this model before granting an enclave.', { stage: 'build' })
