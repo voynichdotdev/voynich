@@ -18,8 +18,9 @@ import {
 } from 'voynich/crypto'
 import { streamSSE } from 'hono/streaming'
 import { applyOnnxAdapter } from 'voynich/adapter'
-import { BN, addresses, chainPrograms, decodeAttestation, decodeCallAccount, decodeConfigAccount, decodeReceiptAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BN, addresses, chainPrograms, decodeAttestation, decodeCallAccount, decodeConfigAccount, decodePolicyAccount, decodeReceiptAccount, decodeWeightsHeader, eventAccounts, type DecodedPolicyAccount } from 'voynich/program'
 import { defaultBaseCacheDir, fetchVerifiedBase, type BaseModelRef } from './base-cache.js'
+import { EnclaveRateLimiter, isRegionAllowed, parseEnclaveRegion } from './policy.js'
 import { loadTokenizer, type LoadedTokenizer } from './tokenizer.js'
 import { createRpc, type RpcLog } from '../../src/engines/rpc/client.js'
 import { buildUnsignedV0 } from '../../src/engines/tx/server/build.js'
@@ -299,6 +300,7 @@ export class EnclaveRuntime {
   readonly sealing = sealingKey(process.env.DEV_SEALING_KEY, this.operator.secretKey)
   readonly developmentRoot = keypair('DEV_ATTESTATION_ROOT_KEYPAIR')
   readonly endpoint = process.env.ENCLAVE_ENDPOINT ?? `http://127.0.0.1:${enclaveListenConfig().port}`
+  readonly region = parseEnclaveRegion(process.env.ENCLAVE_REGION)
   readonly rpc = createRpc({ url: required('SOLANA_RPC_URL'), service: 'voynich-enclave', rps: optionalNumber('ENCLAVE_RPC_RPS'), scanIntervalMs: optionalNumber('ENCLAVE_SCAN_INTERVAL_MS'), log: logRpc })
   readonly programs = chainPrograms(this.rpc.connection, {
     programId: process.env.PROGRAM_ID ? new PublicKey(process.env.PROGRAM_ID) : undefined,
@@ -314,6 +316,8 @@ export class EnclaveRuntime {
   readonly inFlight = new Map<string, Promise<void>>()
   readonly pieceHub = new EventHub()
   readonly stopRequested = new Set<string>()
+  readonly policyCache = new Map<string, { policy: DecodedPolicyAccount | null; fetchedAtMs: number }>()
+  readonly rateLimiter = new EnclaveRateLimiter()
   private grantsLoading?: Promise<Awaited<ReturnType<EnclaveRuntime['loadGrants']>>>
   private initialScan = true
   private lastProgramSignature: string | null = null
@@ -420,6 +424,21 @@ export class EnclaveRuntime {
       await this.execute(`refresh:${record.expiresAtSlot}`, [instruction], [this.signing])
     }
   }
+  async fetchModelPolicy(modelAddress: PublicKey, hasPolicyHint?: boolean, forceRefresh = false): Promise<DecodedPolicyAccount | null> {
+    const key = modelAddress.toBase58()
+    if (hasPolicyHint === false) {
+      this.policyCache.set(key, { policy: null, fetchedAtMs: Date.now() })
+      return null
+    }
+    const cached = this.policyCache.get(key)
+    if (!forceRefresh && cached && Date.now() - cached.fetchedAtMs < 15_000) {
+      return cached.policy
+    }
+    const info = await this.rpc.connection.getAccountInfo(this.pda.policy(modelAddress), 'confirmed')
+    const policy = info && info.owner.equals(this.programs.voynich.programId) ? decodePolicyAccount(info.data) : null
+    this.policyCache.set(key, { policy, fetchedAtMs: Date.now() })
+    return policy
+  }
   async loadGrants() {
     const grants = await this.programs.voynich.account.grant.all([{ memcmp: { offset: 40, bytes: this.enclave.toBase58() } }])
     const active = new Set<string>()
@@ -428,6 +447,12 @@ export class EnclaveRuntime {
       const modelAddress = grant.model.toBase58()
       const model = await this.programs.voynich.account.model.fetch(grant.model)
       if (!model.allowedMeasurements.some(value => toHex(Uint8Array.from(value)) === this.softwareMeasurement)) continue
+      const hasPolicy = Boolean((model as { hasPolicy?: boolean }).hasPolicy)
+      const policy = await this.fetchModelPolicy(grant.model, hasPolicy, true)
+      if (!isRegionAllowed(policy, this.region)) {
+        console.log(JSON.stringify({ event: 'model.skipped.policy_region', model: modelAddress, region: this.region, allowedRegions: policy?.allowedRegions ?? [] }))
+        continue
+      }
       active.add(modelAddress)
       const wrappedKey = toBase64(Uint8Array.from(grant.wrappedKey))
       if (this.loaded.has(modelAddress) && this.state.grants[publicKey.toBase58()]?.wrappedKey === wrappedKey) continue
@@ -508,9 +533,13 @@ export class EnclaveRuntime {
       if (!loaded) continue
       const model = await this.programs.voynich.account.model.fetch(source.account.model)
       if (!('live' in model.status)) continue
+      const hasPolicy = Boolean((model as { hasPolicy?: boolean }).hasPolicy)
+      const policy = await this.fetchModelPolicy(source.account.model, hasPolicy)
+      if (!isRegionAllowed(policy, this.region)) continue
       for (const target of enclaves) {
         if (target.publicKey.equals(this.enclave)) continue
         if (!model.allowedMeasurements.some(value => Buffer.from(value).equals(Buffer.from(target.account.measurement)))) continue
+        if (policy && policy.allowedOperators.length > 0 && !policy.allowedOperators.some(op => op.equals(target.account.operator))) continue
         const info = await this.rpc.connection.getAccountInfo(target.account.attestationRecord, 'confirmed')
         if (!info || !info.owner.equals(this.programs.attest.programId)) continue
         const record = decodeAttestation(info.data)
@@ -519,13 +548,14 @@ export class EnclaveRuntime {
         const existing = await this.programs.voynich.account.grant.fetchNullable(grant)
         if (existing) continue // An owner-revoked grant requires an owner to restore it.
         const wrapped = wrapKey(loaded.key, Uint8Array.from(target.account.encryptionKey))
+        const policyRemaining = hasPolicy ? [{ pubkey: this.pda.policy(source.account.model), isWritable: false, isSigner: false }] : []
         const instruction = await this.programs.voynich.methods.grantByEnclave(Buffer.from(wrapped)).accountsStrict({
           signingKey: this.signing.publicKey, payer: this.operator.publicKey, config: this.pda.config,
           model: source.account.model, sourceEnclave: this.enclave, sourceGrant: source.publicKey,
           sourceAttestationRecord: this.record, targetEnclave: target.publicKey,
           targetAttestationRecord: target.account.attestationRecord, grant,
           systemProgram: SystemProgram.programId, ...eventAccounts(this.programs.voynich.programId),
-        }).instruction()
+        }).remainingAccounts(policyRemaining).instruction()
         await this.execute(`grant:${grant}`, [instruction], [this.signing])
       }
     }
@@ -560,12 +590,29 @@ export class EnclaveRuntime {
     const id = address.toBase58()
     if (this.state.inputHashes[id] === hash && (this.state.answers[id]?.status === 'answered' || this.inFlight.has(id) || this.state.pending[`settle:${address}`])) return
     if (!('open' in call.status)) fail('CALL_NOT_OPEN', 'This call is no longer open.', { stage: 'upload' })
-    if (BigInt(call.deadlineSlot.toString()) < BigInt(await this.rpc.connection.getSlot('confirmed'))) fail('CALL_DEADLINE_PASSED', 'The settlement deadline has passed.', { stage: 'upload' })
+    const currentSlot = BigInt(await this.rpc.connection.getSlot('confirmed'))
+    if (BigInt(call.deadlineSlot.toString()) < currentSlot) fail('CALL_DEADLINE_PASSED', 'The settlement deadline has passed.', { stage: 'upload' })
     if (!this.loaded.has(call.model.toBase58())) {
       const wasRunning = Boolean(this.grantsLoading)
       await this.ensureGrantsLoaded()
       if (wasRunning && !this.loaded.has(call.model.toBase58())) await this.ensureGrantsLoaded()
       if (!this.loaded.has(call.model.toBase58())) fail('GRANT_REQUIRED', 'This enclave does not hold an active loaded grant for this model.', { stage: 'upload' })
+    }
+    const policy = await this.fetchModelPolicy(call.model)
+    if (!isRegionAllowed(policy, this.region)) {
+      throw new ApiFailure(403, { error: { code: 'PROGRAM_REFUSED', message: `This enclave region (${this.region ?? 'unset'}) is not allowed by the model policy.`, retryable: false, stage: 'upload' } })
+    }
+    if (policy && policy.maxCallsPerCallerPerWindow > 0 && BigInt(policy.windowSlots.toString()) > 0n) {
+      const rateCheck = this.rateLimiter.checkAndRecord(
+        call.model.toBase58(),
+        call.caller.toBase58(),
+        currentSlot,
+        policy.maxCallsPerCallerPerWindow,
+        BigInt(policy.windowSlots.toString()),
+      )
+      if (!rateCheck.allowed) {
+        throw new ApiFailure(429, { error: { code: 'RATE_LIMITED', message: `Caller exceeded the model policy ceiling of ${rateCheck.limit} calls per ${rateCheck.windowSlots} slots.`, retryable: true, stage: 'upload' } })
+      }
     }
     if (call.priceUnit === 'token') {
       const loaded = this.loaded.get(call.model.toBase58())!
@@ -1159,7 +1206,8 @@ export async function statusFromEnv() {
   loadEnvironment()
   const statePath = resolve(process.env.ENCLAVE_STATE_PATH ?? '.local/enclave.sealed.json')
   const softwareMeasurement = measurement()
-  if (!existsSync(statePath)) return { enclave: null, signingKey: null, measurement: softwareMeasurement, registered: false, expiresAtSlot: null, openWeightsSeconds: {} as Record<string, number | null>, grantToFirstAnswerSeconds: {} as Record<string, number | null>, bases: {} as Record<string, EnclaveBaseStatus> }
+  const region = parseEnclaveRegion(process.env.ENCLAVE_REGION)
+  if (!existsSync(statePath)) return { enclave: null, signingKey: null, measurement: softwareMeasurement, region, registered: false, expiresAtSlot: null, openWeightsSeconds: {} as Record<string, number | null>, grantToFirstAnswerSeconds: {} as Record<string, number | null>, bases: {} as Record<string, EnclaveBaseStatus> }
   const sealKey = sealingKey(process.env.DEV_SEALING_KEY, process.env.DEV_SEALING_KEY ? undefined : keypair('OPERATOR_KEYPAIR').secretKey)
   const state = readSealed<SealedState>(statePath, sealKey)!
   if (state.version !== 1) throw new Error('Unsupported enclave state version.')
@@ -1170,9 +1218,10 @@ export async function statusFromEnv() {
   if (state.chain && state.chain !== chain) throw new Error('The sealed enclave state belongs to another chain. Choose a separate ENCLAVE_STATE_PATH.')
   const address = addresses(programs.voynich.programId, programs.attest.programId).enclave(signing)
   const enclave = await programs.voynich.account.enclave.fetchNullable(address)
-  return { enclave: address.toBase58(), signingKey: signing.toBase58(), measurement: softwareMeasurement, registered: !!enclave, expiresAtSlot: enclave?.expiresAtSlot.toString() ?? null, openWeightsSeconds: openWeightsSecondsMap(state.modelTimings), grantToFirstAnswerSeconds: grantToFirstAnswerSecondsMap(state.modelTimings), bases: basesMap(state.modelTimings) }
+  return { enclave: address.toBase58(), signingKey: signing.toBase58(), measurement: softwareMeasurement, region, registered: !!enclave, expiresAtSlot: enclave?.expiresAtSlot.toString() ?? null, openWeightsSeconds: openWeightsSecondsMap(state.modelTimings), grantToFirstAnswerSeconds: grantToFirstAnswerSecondsMap(state.modelTimings), bases: basesMap(state.modelTimings) }
 }
 export type EnclaveAppRuntime = Pick<EnclaveRuntime, 'enclave' | 'softwareMeasurement' | 'loaded' | 'acceptInput' | 'getAnswer'> & {
+  region?: string | null
   state?: Pick<SealedState, 'modelTimings'>
   getPieces?: EnclaveRuntime['getPieces']
   requestStop?: EnclaveRuntime['requestStop']
@@ -1190,6 +1239,7 @@ export function createEnclaveApp(runtime: EnclaveAppRuntime, isReady: () => bool
     status: isReady() ? 'ready' : 'waiting',
     enclave: runtime.enclave.toBase58(),
     measurement: runtime.softwareMeasurement,
+    region: runtime.region ?? null,
     models: [...runtime.loaded.keys()],
     openWeightsSeconds: openWeightsSecondsMap(runtime.state?.modelTimings),
     grantToFirstAnswerSeconds: grantToFirstAnswerSecondsMap(runtime.state?.modelTimings),

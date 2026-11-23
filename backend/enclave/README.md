@@ -56,6 +56,7 @@ Required configuration:
 | `LOOKUP_TABLE` | The prepared table written by setup into `.local/services.env`. |
 | `ENCLAVE_STATE_PATH` | Sealed persistent state; default `.local/enclave.sealed.json`. A second enclave needs a separate path. |
 | `ENCLAVE_ENDPOINT` | Published endpoint; default `http://127.0.0.1:9707`, or the configured port. |
+| `ENCLAVE_REGION` | Optional lowercase region code (1 to 16 characters, `a-z`, `0-9`, `-`, e.g. `us-east`), reported on `/health` and `voynich enclave status` and checked against each model's on-chain `Policy.allowed_regions`. |
 | `ENCLAVE_HOST`, `ENCLAVE_PORT`, `PORT` | Listener; defaults `127.0.0.1` (`0.0.0.0` when `PORT` is set), `9707`. `PORT` overrides `ENCLAVE_PORT` for Railway/container hosts. Use `9708` for the second local enclave. |
 | `ENCLAVE_POLL_MS` | Grant, discovery and pre-expiry refresh interval; default `5000`. |
 | `ENCLAVE_RPC_RPS`, `ENCLAVE_SCAN_INTERVAL_MS` | Required budgets for a remote RPC; loopback uses the verified RPC engine's local defaults. |

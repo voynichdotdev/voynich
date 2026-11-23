@@ -230,6 +230,8 @@ test('Promoted Backlog: enclave acceptInput triggers coalesced loadGrants() once
         },
       },
       save: () => {},
+      region: null,
+      fetchModelPolicy: async () => null,
       startAnswer: () => { startAnswerCalls++ },
       loadGrants: async () => {
         loadGrantsCalls++
@@ -375,6 +377,7 @@ test('Waiting-mode enclave serves 200 waiting health, returns retryable 502 UPST
     status: 'waiting',
     enclave: enclaveKey.toBase58(),
     measurement: 'ab'.repeat(48),
+    region: null,
     models: [],
     openWeightsSeconds: {},
     grantToFirstAnswerSeconds: {},
@@ -919,6 +922,7 @@ test('Build 2 Step 1: transactionFeeLamports, SealProgress/SealResult metrics, a
     status: 'ready',
     enclave: enclavePubkey.toBase58(),
     measurement: 'ab'.repeat(48),
+    region: null,
     models: [],
     openWeightsSeconds: {},
     grantToFirstAnswerSeconds: {},
@@ -4403,4 +4407,95 @@ test('Build 7 Step 1: policyPda, decodePolicyAccount, fixture policy routes (all
   assert.equal(await ownerClient.policy('sketch-32'), null)
   const openAfterClear = await deniedClient.api.openCall({ wallet: deniedCaller.publicKey.toBase58(), model: 'sketch-32', enclave: enclaveAddr, inputHash: '22'.repeat(32) })
   assert.equal(openAfterClear.action, 'open_call')
+})
+
+test('Build 7 Step 2: enclave ENCLAVE_REGION parsing, region allow/deny, sliding-window rate limiter, /health region, and acceptInput 403/429 enforcement', async () => {
+  const { Keypair } = await import('@solana/web3.js')
+  const { ApiFailure } = await import('../src/engines/server/errors.js')
+  const { EnclaveRateLimiter, isRegionAllowed, parseEnclaveRegion } = await import('../enclave/src/policy.js')
+  const { createEnclaveApp } = await import('../enclave/src/runtime.js')
+
+  // 1. parseEnclaveRegion validation
+  assert.equal(parseEnclaveRegion(undefined), null)
+  assert.equal(parseEnclaveRegion('   '), null)
+  assert.equal(parseEnclaveRegion('us-east'), 'us-east')
+  assert.equal(parseEnclaveRegion(' eu-west-1 '), 'eu-west-1')
+  assert.throws(() => parseEnclaveRegion('US_EAST'), /ENCLAVE_REGION/)
+  assert.throws(() => parseEnclaveRegion('region-way-too-long-123'), /ENCLAVE_REGION/)
+
+  // 2. isRegionAllowed
+  assert.equal(isRegionAllowed(null, null), true)
+  assert.equal(isRegionAllowed({ allowedRegions: [] }, null), true)
+  assert.equal(isRegionAllowed({ allowedRegions: ['us-east', 'eu-west'] }, 'us-east'), true)
+  assert.equal(isRegionAllowed({ allowedRegions: ['us-east', 'eu-west'] }, 'ap-northeast'), false)
+  assert.equal(isRegionAllowed({ allowedRegions: ['us-east'] }, null), false)
+
+  // 3. EnclaveRateLimiter sliding window + expiry reset + per-(model, caller) isolation
+  const limiter = new EnclaveRateLimiter()
+  assert.deepEqual(limiter.checkAndRecord('m1', 'c1', 100n, 0, 0n), { allowed: true, count: 0 })
+  assert.deepEqual(limiter.checkAndRecord('m1', 'c1', 100n, 2, 10n), { allowed: true, count: 1 })
+  assert.deepEqual(limiter.checkAndRecord('m1', 'c1', 105n, 2, 10n), { allowed: true, count: 2 })
+  const denied = limiter.checkAndRecord('m1', 'c1', 109n, 2, 10n)
+  assert.equal(denied.allowed, false)
+  if (!denied.allowed) {
+    assert.equal(denied.limit, 2)
+    assert.equal(denied.windowSlots, 10n)
+  }
+  // Separate caller on same model is unaffected
+  assert.deepEqual(limiter.checkAndRecord('m1', 'c2', 109n, 2, 10n), { allowed: true, count: 1 })
+  // Once currentSlot reaches 110 (slot 100 + window 10), slot 100 expires and caller c1 can call again
+  assert.deepEqual(limiter.checkAndRecord('m1', 'c1', 110n, 2, 10n), { allowed: true, count: 2 })
+
+  // 4. createEnclaveApp /health exposes region and POST /v1/calls/:call/input surfaces 403 & 429 RATE_LIMITED
+  const enclaveKey = Keypair.generate().publicKey
+  const callKey = Keypair.generate().publicKey
+  const validEnvelope = Buffer.concat([Buffer.from([1]), Buffer.alloc(72, 2)]).toString('base64')
+  let activePolicy: { allowedRegions: string[]; maxCallsPerCallerPerWindow: number; windowSlots: bigint } | null = null
+  const appLimiter = new EnclaveRateLimiter()
+  let fakeSlot = 500n
+  const enclaveRegion = 'us-east'
+  const app = createEnclaveApp({
+    enclave: enclaveKey,
+    softwareMeasurement: 'ab'.repeat(48),
+    region: enclaveRegion,
+    loaded: new Map(),
+    async acceptInput() {
+      if (!isRegionAllowed(activePolicy, enclaveRegion)) {
+        throw new ApiFailure(403, { error: { code: 'PROGRAM_REFUSED', message: 'Region not allowed.', retryable: false, stage: 'upload' } })
+      }
+      if (activePolicy && activePolicy.maxCallsPerCallerPerWindow > 0 && activePolicy.windowSlots > 0n) {
+        const res = appLimiter.checkAndRecord('m1', 'c1', fakeSlot, activePolicy.maxCallsPerCallerPerWindow, activePolicy.windowSlots)
+        if (!res.allowed) {
+          throw new ApiFailure(429, { error: { code: 'RATE_LIMITED', message: 'Rate ceiling exceeded.', retryable: true, stage: 'upload' } })
+        }
+      }
+    },
+    async getAnswer() { throw new Error('unused') },
+  }, () => true)
+
+  const health = await (await app.request('/health')).json() as { region: string | null }
+  assert.equal(health.region, 'us-east')
+
+  const postInput = () => app.request(`/v1/calls/${callKey.toBase58()}/input`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ envelope: validEnvelope }),
+  })
+
+  // No policy -> pass-through 200
+  assert.equal((await postInput()).status, 200)
+
+  // Disallowed region -> 403
+  activePolicy = { allowedRegions: ['eu-west'], maxCallsPerCallerPerWindow: 0, windowSlots: 0n }
+  assert.equal((await postInput()).status, 403)
+
+  // Allowed region + rate ceiling 1 per 20 slots -> 1st 200, 2nd 429 RATE_LIMITED, after window 200
+  activePolicy = { allowedRegions: ['us-east'], maxCallsPerCallerPerWindow: 1, windowSlots: 20n }
+  assert.equal((await postInput()).status, 200)
+  const limitedRes = await postInput()
+  assert.equal(limitedRes.status, 429)
+  const limitedBody = await limitedRes.json() as { error: { code: string } }
+  assert.equal(limitedBody.error.code, 'RATE_LIMITED')
+  fakeSlot = 520n
+  assert.equal((await postInput()).status, 200)
 })
