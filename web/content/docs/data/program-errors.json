@@ -215,5 +215,12 @@
     "hex": "`0x178e`",
     "message": "This model has an active policy; pass its Policy account in remaining accounts.",
     "raisedWhen": "In `open_call`, `open_metered_call`, `grant_by_owner` or `grant_by_enclave`: `model.has_policy` is true, but the canonical Policy PDA (`[\"policy\", model]`, owned by the Voynich program) was omitted from remaining accounts."
+  },
+  {
+    "name": "InvalidQuote",
+    "code": "6031",
+    "hex": "`0x178f`",
+    "message": "The quoted operator share exceeds the model's maximum operator share.",
+    "raisedWhen": "In `set_quote`: `operator_share_bps` exceeds `model.operator_share_bps`."
   }
 ]

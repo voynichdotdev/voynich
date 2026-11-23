@@ -20,7 +20,7 @@
     "writable": "yes",
     "signer": "",
     "optional": "",
-    "address": "PDA `[\"grant\", model, grant.enclave]`",
+    "address": "",
     "is": "The Grant to revoke."
   },
   {

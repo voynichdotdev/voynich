@@ -3,7 +3,7 @@ title: Enclaves
 description: The enclave routes of the Voynich HTTP API, with the Enclave, attestation record and Grant objects they return.
 ---
 
-Two routes read enclaves and four routes read, publish and deprecate on-chain measurement records. An enclave reaches the chain by registering its attestation record with the program, which is told in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation) and, for operators, in [Register and get granted](/docs/operators/register-and-get-granted).
+Two routes read enclaves, one builds an operator quote transaction, and four routes read, publish and deprecate on-chain measurement records. An enclave reaches the chain by registering its attestation record with the program, which is told in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation) and, for operators, in [Register and get granted](/docs/operators/register-and-get-granted).
 
 The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
 
@@ -125,6 +125,12 @@ The slot the grant was written in.
 <Field name="status" type="string" required>
 `revoked`: the owner revoked it. `expired`: it is not revoked and the enclave's attestation record has expired. `live`: neither.
 </Field>
+<Field name="quotedOperatorShareBps" type="integer, 0 to 10000, or null">
+Optional lower operator share quoted by the enclave operator on this grant via `set_quote` (at most `model.operatorShareBps`). `null` or omitted uses the model's `operatorShareBps`.
+</Field>
+<Field name="medianAnswerMs" type="integer or null">
+Rolling median answer time in milliseconds across the 25 latest settled receipts for this `(model, enclave)` pair (computed at 200 ms per slot), or `null` before any settled call.
+</Field>
 </Fields>
 
 ## `GET /v1/enclaves`
@@ -160,6 +166,43 @@ The operator share of the calls this enclave settled, one [Money](/docs/api/over
 | `ENCLAVE_NOT_FOUND` | No enclave has this address or signing key. |
 
 Next: an owner grants this enclave a model with [`POST /v1/models/{id}/grant/build`](/docs/api/models#post-v1modelsidgrantbuild) and revokes the grant with [`POST /v1/models/{id}/revoke/build`](/docs/api/models#post-v1modelsidrevokebuild). A caller names it in [`POST /v1/calls/build`](/docs/api/calls-and-receipts#post-v1callsbuild).
+
+## `POST /v1/enclaves/{key}/quote/build`
+
+Builds [`set_quote`](/docs/program/instructions#setquote): sets or clears the enclave operator's quoted operator share on an active `Grant` for `model`, bounded at or below `model.operatorShareBps`. `{key}` is the Enclave account's address or signing key.
+
+```http
+POST /v1/enclaves/{key}/quote/build
+Content-Type: application/json
+
+{
+  "model": "sketch-32",
+  "operatorShareBps": 1500,
+  "payer": "<operator address>"
+}
+```
+
+<Fields>
+<Field name="model" type="model name or address" required>
+The model whose Grant is being quoted.
+</Field>
+<Field name="operatorShareBps" type="integer, 0 to 10000, or null" required>
+Lower operator share in basis points (`<= model.operatorShareBps`), or `null` to clear the quote and revert to the model's `operatorShareBps`.
+</Field>
+<Field name="payer" type="address">
+Optional fee payer and signer address (defaults to `enclave.operator`). Must be `enclave.operator`.
+</Field>
+</Fields>
+
+Returns a [Build](/docs/api/transactions#build) with `action: "set_quote"` and `addresses: { model, grant }`.
+
+| Code | When |
+| --- | --- |
+| `ENCLAVE_NOT_FOUND` | No enclave has this address or signing key. |
+| `MODEL_NOT_FOUND` | No model has this name or address. |
+| `GRANT_REQUIRED` | No active (unrevoked) Grant exists for this model and enclave. |
+| `INVALID_QUOTE` | `operatorShareBps` exceeds `model.operatorShareBps` (`422`). |
+| `UNAUTHORIZED`, `SIMULATION_FAILED` | Signer is not `enclave.operator`. |
 
 ## MeasurementRecord
 

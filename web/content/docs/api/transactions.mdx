@@ -8,7 +8,7 @@ Every change to the chain that the API offers goes through the same three steps:
 <Steps>
 <Step title="Build">
 
-Call one of the twenty build routes. It returns a [Build](#build).
+Call one of the twenty-one build routes. It returns a [Build](#build).
 
 </Step>
 <Step title="Sign">
@@ -49,7 +49,7 @@ The last block height at which that blockhash lands.
 Whether the API adds a signature of its own. `false` for every action.
 </Field>
 <Field name="action" type="string" required>
-The instruction built. One of the twenty [actions](#actions).
+The instruction built. One of the twenty-one [actions](#actions).
 </Field>
 <Field name="requiredSigners" type="array of addresses" required>
 Every key that signs the transaction, the request's `wallet` among them.
@@ -58,7 +58,7 @@ Every key that signs the transaction, the request's `wallet` among them.
 `false` for a build made against a cluster.
 </Field>
 <Field name="addresses" type="object" required>
-The accounts the action is about. Each is present when the action has it: `model` (address), `call` (address), `receipt` (address), `weights` (array of addresses), `uploadKey` (address), `bounty` (address), `attempt` (address), `measurement` (address), `policy` (address).
+The accounts the action is about. Each is present when the action has it: `model` (address), `call` (address), `receipt` (address), `weights` (array of addresses), `uploadKey` (address), `bounty` (address), `attempt` (address), `measurement` (address), `policy` (address), `grant` (address).
 </Field>
 </Fields>
 
@@ -76,6 +76,7 @@ The API simulates the transaction before it returns the Build, so a Build in han
 | `set_price` | [`POST /v1/models/{id}/price/build`](/docs/api/models#post-v1modelsidpricebuild) | owner | `model` |
 | `grant_by_owner` | [`POST /v1/models/{id}/grant/build`](/docs/api/models#post-v1modelsidgrantbuild) | owner | `model` |
 | `revoke_grant` | [`POST /v1/models/{id}/revoke/build`](/docs/api/models#post-v1modelsidrevokebuild) | owner | `model` |
+| `set_quote` | [`POST /v1/enclaves/{key}/quote/build`](/docs/api/enclaves#post-v1enclaveskeyquotebuild) | enclave operator | `model`, `grant` |
 | `retire_model` | [`POST /v1/models/{id}/retire/build`](/docs/api/models#post-v1modelsidretirebuild) | owner | `model` |
 | `open_call` | [`POST /v1/calls/build`](/docs/api/calls-and-receipts#post-v1callsbuild) | caller | `model`, `call` |
 | `settle_metered_call` | [`POST /v1/calls/{id}/settle/build`](/docs/api/calls-and-receipts#post-v1callsidsettlebuild) | caller or operator | `model`, `call`, `receipt` |
@@ -142,6 +143,7 @@ For `open_call` with a price in a mint, the API first reads the caller's associa
 | `PolicyCallerDenied` | `POLICY_CALLER_DENIED` |
 | `PolicyOperatorDenied` | `POLICY_OPERATOR_DENIED` |
 | `PolicyRequired` | `POLICY_REQUIRED` |
+| `InvalidQuote` | `INVALID_QUOTE` |
 
 Every other error of the program arrives as `SIMULATION_FAILED` with its name in `programError.name`. They are listed in [Program errors](/docs/program/errors).
 

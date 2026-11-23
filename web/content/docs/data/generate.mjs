@@ -124,6 +124,7 @@ const FIELDS = {
     granted_slot: 'The slot the grant was written in.',
     revoked: 'True once the owner has revoked the grant.',
     bump: 'The PDA bump.',
+    quoted_operator_share_bps: 'Optional lower operator share quoted by the enclave operator for this grant, in basis points (at most `model.operator_share_bps`). `None` uses `model.operator_share_bps`.',
   },
   Call: {
     caller: 'The wallet that opened the call and paid the escrow.',
@@ -214,6 +215,7 @@ const SAYS = {
   grant_by_owner: 'Writes a Grant from the owner to an enclave and moves the model to `Live`.',
   grant_by_enclave: 'Writes a Grant from an enclave that holds one to another enclave.',
   revoke_grant: 'Marks a Grant revoked. No new calls open on it.',
+  set_quote: 'Sets or clears an enclave operator\'s quoted operator share on an active Grant (`<= model.operator_share_bps`), reallocating legacy 223-byte Grants to 226 bytes.',
   open_call: 'Creates a per-call Call and moves the model\'s price into its escrow.',
   open_metered_call: 'Creates a per-token metered Call and moves the caller\'s escrow ceiling into its escrow.',
   settle_call: 'Checks the enclave\'s signature, writes the Receipt and pays out the escrow.',
@@ -297,6 +299,11 @@ const ACCOUNTS = {
   revoke_grant: {
     owner: 'The model\'s owner.',
     grant: 'The Grant to revoke.',
+  },
+  set_quote: {
+    operator: 'The enclave\'s operator. Signs and pays the 3-byte reallocation rent difference on legacy 223-byte Grants.',
+    enclave: 'The Enclave whose Grant is being quoted.',
+    grant: 'The active Grant PDA at `["grant", model, enclave]`, reallocated to 226 bytes if legacy.',
   },
   open_call: {
     payer: 'Pays the Call\'s rent and, for a price in a mint, the escrow token account rent. Equals `caller` for a wallet call, or a transaction fee payer when `caller` is a program-derived address signed via CPI.',
@@ -435,6 +442,7 @@ const EVENTS = {
   MeasurementDeprecated: ['deprecate_measurement', 'A published measurement was marked `Deprecated`.'],
   PolicyUpdated: ['set_policy', 'A model\'s on-chain Policy PDA was created or updated.'],
   PolicyCleared: ['clear_policy', 'A model\'s on-chain Policy PDA was closed and cleared.'],
+  GrantQuoteUpdated: ['set_quote', 'An enclave operator set or cleared a quoted operator share on a Grant.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -479,6 +487,7 @@ const RAISED = {
   PolicyCallerDenied: 'In `open_call` or `open_metered_call`: the model\'s Policy has `allow_list_enabled` set and `caller` is not in `allowed_callers`.',
   PolicyOperatorDenied: 'In `grant_by_owner` or `grant_by_enclave`: the model\'s Policy has a non-empty `allowed_operators` list and `target_enclave.operator` is not in it.',
   PolicyRequired: 'In `open_call`, `open_metered_call`, `grant_by_owner` or `grant_by_enclave`: `model.has_policy` is true, but the canonical Policy PDA (`["policy", model]`, owned by the Voynich program) was omitted from remaining accounts.',
+  InvalidQuote: 'In `set_quote`: `operator_share_bps` exceeds `model.operator_share_bps`.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -536,6 +545,7 @@ const API_ERRORS = {
   POLICY_CALLER_DENIED: 'The caller is not on this model\'s allow list.',
   POLICY_OPERATOR_DENIED: 'The enclave operator is not allowed by this model\'s policy.',
   POLICY_REQUIRED: 'This model has an active policy; pass its Policy account in remaining accounts.',
+  INVALID_QUOTE: 'The quoted operator share exceeds the model\'s maximum operator share.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

@@ -1,0 +1,58 @@
+[
+  {
+    "account": "operator",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The enclave's operator. Signs and pays the 3-byte reallocation rent difference on legacy 223-byte Grants."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "enclave",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"enclave\", enclave.signing_key]`",
+    "is": "The Enclave whose Grant is being quoted."
+  },
+  {
+    "account": "grant",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"grant\", model, enclave]`",
+    "is": "The active Grant PDA at `[\"grant\", model, enclave]`, reallocated to 226 bytes if legacy."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

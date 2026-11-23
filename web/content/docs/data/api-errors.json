@@ -155,6 +155,11 @@
     "meaning": "The enclave holds no live grant for the model."
   },
   {
+    "code": "INVALID_QUOTE",
+    "status": "422",
+    "meaning": "The quoted operator share exceeds the model's maximum operator share."
+  },
+  {
     "code": "CALL_NOT_FOUND",
     "status": "404",
     "meaning": "No call has this address."

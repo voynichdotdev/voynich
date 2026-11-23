@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 26 instructions.
+The program has 27 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -202,6 +202,17 @@ Marks a Grant revoked.
 - **Checks.** The signer is the model's owner (`Unauthorized`). The Grant belongs to the model.
 - **Effects.** The Grant's `revoked` is true. `open_call` refuses the enclave for this model, and the enclave cannot pass the key on. Calls already open with it settle. Emits `GrantChanged`.
 
+## set_quote
+
+Sets or clears an enclave operator's quoted operator share on an active `Grant`, bounded at or below `model.operator_share_bps`.
+
+<Rows data="ix-set-quote-args" />
+
+<Rows data="ix-set-quote" />
+
+- **Checks.** `operator` is `enclave.operator` (`Unauthorized`). The Grant is the canonical `["grant", model, enclave]` PDA and is not revoked (`GrantRequired`). When `operator_share_bps` is `Some(q)`, `q <= model.operator_share_bps` (`InvalidQuote`).
+- **Effects.** Reallocates a legacy 223-byte Grant to `Grant::SPACE` (`226` bytes, rent difference paid by `operator`), writes `grant.quoted_operator_share_bps`, and emits `GrantQuoteUpdated`. Subsequent `open_call` and `open_metered_call` instructions on this Grant snapshot the lower quoted share into `call.operator_share_bps`, with the model owner keeping the difference. Passing `None` clears the quote and restores `model.operator_share_bps`.
+
 ## open_call
 
 Creates a per-call Call and moves the model's price into its escrow.
@@ -213,7 +224,7 @@ Creates a per-call Call and moves the model's price into its escrow.
 `nonce` is any number the caller has not used before: it gives the Call its address, `["call", caller, nonce]`. For a direct wallet call, `payer` and `caller` are the same signer. When another Solana program opens a call through CPI, `caller` is that program's system-owned PDA signed via `invoke_signed` (which holds the escrow and receives any refund), while `payer` is a signer paying the Call account rent and any escrow token account rent. `callback` is optional (`CallbackSpec { program: pubkey, accounts: Vec<CallbackAccount> }`, where each `CallbackAccount` is `{ pubkey: pubkey, is_writable: bool }`) and registers an `on_receipt` CPI target invoked during `settle_call`. For a price in SOL the five token accounts and programs are left out.
 
 - **Checks.** The model is `Live` (`ModelNotLive`) and has `price_unit == PriceUnit::Call` (`InvalidCall`). The enclave's Grant for the model is not revoked (`GrantRequired`). The record is the one the Enclave names, valid and unexpired (`InvalidEnclave`, `InvalidAttestation`), and its measurement is allowed (`MeasurementNotAllowed`). When `model.has_policy` is true, remaining accounts must include the canonical `Policy` PDA (`PolicyRequired`) and, if `policy.allow_list_enabled` is true, `caller` must be in `policy.allowed_callers` (`PolicyCallerDenied`). The operator share plus the protocol share is at most 10,000 (`InvalidConfig`). When `callback` is `Some`: `callback.program` is neither the default address nor the `voynich` program itself, and `callback.accounts` has at most 8 entries (`InvalidCallback`). For a price in a mint: the mint is the model's price mint, the caller's token account holds that mint, and the escrow account is the Call's associated token account (`InvalidTokenAccount`).
-- **Effects.** The Call holds the caller, the model, the enclave, the input hash, `answer_mode`, `caller_is_program` (`true` when invoked via CPI, `false` otherwise), `callback_program` and `callback_accounts` (default address and empty list when `callback` is `None`), `price_unit = Call`, `ceiling = model.price`, the price and mint, the owner, the operator, the fee recipient and both shares as they are now, the opening slot and the deadline slot (the opening slot plus the Config's `call_deadline_slots`). The price moves from `caller` into the escrow. Emits `CallOpened`.
+- **Effects.** The Call holds the caller, the model, the enclave, the input hash, `answer_mode`, `caller_is_program` (`true` when invoked via CPI, `false` otherwise), `callback_program` and `callback_accounts` (default address and empty list when `callback` is `None`), `price_unit = Call`, `ceiling = model.price`, the price and mint, the owner, the operator, the fee recipient, `operator_share_bps` (snapshotted as `grant.quoted_operator_share_bps.map(|q| q.min(model.operator_share_bps)).unwrap_or(model.operator_share_bps)`), `protocol_share_bps`, the opening slot and the deadline slot (the opening slot plus the Config's `call_deadline_slots`). The price moves from `caller` into the escrow. Emits `CallOpened`.
 
 ## open_metered_call
 

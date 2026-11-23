@@ -102,6 +102,12 @@
     "does": "Marks a Grant revoked. No new calls open on it."
   },
   {
+    "instruction": "set_quote",
+    "arguments": "`operator_share_bps: Option<u16>`",
+    "signers": "`operator`",
+    "does": "Sets or clears an enclave operator's quoted operator share on an active Grant (`<= model.operator_share_bps`), reallocating legacy 223-byte Grants to 226 bytes."
+  },
+  {
     "instruction": "open_call",
     "arguments": "`nonce: u64`, `input_hash: [u8; 32]`, `answer_mode: AnswerMode`, `callback: Option<CallbackSpec>`",
     "signers": "`payer`, `caller`",

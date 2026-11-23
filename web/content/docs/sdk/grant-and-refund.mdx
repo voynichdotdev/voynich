@@ -3,7 +3,7 @@ title: grant and refund
 description: Grant a model to an enclave as its owner, revoke a grant, set the price, retire the model, take back the escrow of an expired call, and send any other transaction the API builds.
 ---
 
-Four functions are the owner's: `grant`, `revoke`, `setPrice` and `retire`. `settle` is for a metered call's caller or operator, and `refund` is for any wallet. The owner functions and `refund` each sign one transaction with the client's signer, submit it, follow it until it confirms and resolve to its status, a [TxStatus](/docs/api/transactions#txstatus): `{ id, status, signature }`. `settle` signs `settle_metered_call`, waits for indexing, verifies the 423-byte metered Receipt, and resolves to `{ receipt, verification }`.
+Four functions are the owner's: `grant`, `revoke`, `setPrice` and `retire`. `setQuote` is for an enclave operator, `settle` is for a metered call's caller or operator, and `refund` is for any wallet. The owner functions, `setQuote` and `refund` each sign one transaction with the client's signer, submit it, follow it until it confirms and resolve to its status, a [TxStatus](/docs/api/transactions#txstatus): `{ id, status, signature }`. `settle` signs `settle_metered_call`, waits for indexing, verifies the 423-byte metered Receipt, and resolves to `{ receipt, verification }`.
 
 ## grant
 
@@ -137,6 +137,40 @@ retire(model: string, options?: { signal?: AbortSignal }): Promise<TxStatus>
 | `WALLET_REQUIRED` | The client has no signer. |
 | `ApiClientError` with `MODEL_NOT_FOUND` | No model has this name or address. |
 | `ApiClientError` with `SIMULATION_FAILED` | The signer is not the model's owner. |
+| `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction did not land. |
+
+## setQuote
+
+`setQuote` sets or clears an enclave operator's quoted operator share on an active `Grant`, bounded at or below `model.operatorShareBps`. It signs [`set_quote`](/docs/program/instructions#setquote) as `enclave.operator`.
+
+```ts
+const quoted = await voynich.setQuote(enclaveAddress, 'sketch-32', 1500)
+const cleared = await voynich.setQuote(enclaveAddress, 'sketch-32', null)
+```
+
+```ts
+setQuote(enclaveKey: string, modelId: string, operatorShareBps: number | null, options?: { signal?: AbortSignal }): Promise<TxStatus>
+```
+
+<Fields>
+<Field name="enclaveKey" type="string" required>
+The enclave's account address or signing key.
+</Field>
+<Field name="modelId" type="string" required>
+The model's name or address.
+</Field>
+<Field name="operatorShareBps" type="number | null" required>
+Lower operator share in basis points (`0` to `model.operatorShareBps`), or `null` to clear the quote and revert to the model's `operatorShareBps`.
+</Field>
+</Fields>
+
+| Code | When |
+| --- | --- |
+| `WALLET_REQUIRED` | The client has no signer. |
+| `ApiClientError` with `ENCLAVE_NOT_FOUND`, `MODEL_NOT_FOUND` | No enclave or model matches the identifier. |
+| `ApiClientError` with `GRANT_REQUIRED` | The enclave has no active (unrevoked) Grant for the model. |
+| `ApiClientError` with `INVALID_QUOTE` | `operatorShareBps` exceeds `model.operatorShareBps`. |
+| `ApiClientError` with `SIMULATION_FAILED` | The signer is not `enclave.operator`. |
 | `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The transaction did not land. |
 
 ## settle

@@ -17,7 +17,7 @@ The `voynich` program is an Anchor program. Its address on a cluster is `program
 | Enclave | PDA `["enclave", signing_key]` | 470 bytes | the operator |
 | Measurement | PDA `["measurement", digest[..32], digest[32..]]` | 366 bytes | the publisher |
 | Policy | PDA `["policy", model]` | 1,770 bytes | the model's owner |
-| Grant | PDA `["grant", model, enclave]` | 223 bytes | the grant's payer |
+| Grant | PDA `["grant", model, enclave]` | 226 bytes (223 bytes legacy) | the grant's payer |
 | Call | PDA `["call", caller, nonce]` | 349 bytes plus 33 bytes per callback account (302, 303, 304 or 340 + 33 * N legacy) | the payer |
 | Receipt | PDA `["receipt", call]` | 407 bytes plus `open_answer` (423 bytes for metered calls; 401 or 406 plus `open_answer` legacy) | the settling payer |
 
@@ -79,9 +79,11 @@ Limits: at most 32 unique `allowed_callers`, 16 unique `allowed_operators`, and 
 
 ## Grant
 
-One per model and enclave, at PDA `["grant", model, enclave]`. Written by `grant_by_owner` and `grant_by_enclave`. Marked by `revoke_grant`.
+One per model and enclave, at PDA `["grant", model, enclave]`. Written by `grant_by_owner` and `grant_by_enclave`, marked by `revoke_grant`, and optionally quoted by `set_quote`.
 
 <Rows data="account-grant" columns="field,type,meaning" />
+
+Legacy 223-byte `Grant` accounts decode `quoted_operator_share_bps` as `None` (using `model.operator_share_bps`). Calling `set_quote` reallocates a legacy 223-byte Grant in place to `Grant::SPACE` (`226` bytes, rent difference paid by `enclave.operator`).
 
 ## Call
 

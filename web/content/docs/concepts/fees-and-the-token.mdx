@@ -35,7 +35,7 @@ Settlement pays three parties in the instruction that writes the receipt:
 
 Shares are in basis points: 10,000 is the whole price.
 
-- **The operator share** is set by the owner for each model, with the price. It is what an operator earns for answering a call to that model.
+- **The operator share** is set by the owner for each model, with the price. It is the maximum share an operator earns for answering a call to that model. An enclave operator can quote a lower share on their `Grant` via `set_quote` (`quoted_operator_share_bps <= model.operator_share_bps`); calls opened on that grant snapshot the quoted share and the model owner keeps the difference.
 - **The protocol share** is one rate for every model. It is `protocolShareBps` in `GET /v1/config`.
 - The operator share plus the protocol share is at most 10,000.
 

@@ -40,5 +40,11 @@
     "type": "u8",
     "offset": "",
     "meaning": "The PDA bump."
+  },
+  {
+    "field": "quoted_operator_share_bps",
+    "type": "Option<u16>",
+    "offset": "",
+    "meaning": "Optional lower operator share quoted by the enclave operator for this grant, in basis points (at most `model.operator_share_bps`). `None` uses `model.operator_share_bps`."
   }
 ]

@@ -106,5 +106,11 @@
     "discriminator": "`71d1840effc00c0b`",
     "emittedBy": "`clear_policy`",
     "says": "A model's on-chain Policy PDA was closed and cleared."
+  },
+  {
+    "event": "GrantQuoteUpdated",
+    "discriminator": "`92a62f5c89b01bf6`",
+    "emittedBy": "`set_quote`",
+    "says": "An enclave operator set or cleared a quoted operator share on a Grant."
   }
 ]

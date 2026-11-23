@@ -1,0 +1,6 @@
+[
+  {
+    "argument": "operator_share_bps",
+    "type": "Option<u16>"
+  }
+]

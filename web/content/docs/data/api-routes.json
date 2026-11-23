@@ -120,6 +120,11 @@
     "does": "Attestation, grants, receipts and earnings"
   },
   {
+    "route": "POST /v1/enclaves/{key}/quote/build",
+    "operation": "setQuote",
+    "does": "Build set_quote as the enclave operator to set or clear a quoted operator share on a model grant"
+  },
+  {
     "route": "GET /v1/measurements",
     "operation": "measurements",
     "does": "Browse published enclave runtime measurements"

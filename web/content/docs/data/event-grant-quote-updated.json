@@ -1,0 +1,22 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "enclave",
+    "type": "pubkey"
+  },
+  {
+    "field": "operator",
+    "type": "pubkey"
+  },
+  {
+    "field": "quoted_operator_share_bps",
+    "type": "Option<u16>"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  }
+]
