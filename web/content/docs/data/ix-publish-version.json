@@ -1,0 +1,42 @@
+[
+  {
+    "account": "owner",
+    "writable": "",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The model's owner."
+  },
+  {
+    "account": "model",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "model_version",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"version\", model, model_version.version]`",
+    "is": "The uploading ModelVersion PDA finalized and flipped to `Live`."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

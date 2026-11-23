@@ -1,0 +1,38 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "model_version",
+    "type": "pubkey"
+  },
+  {
+    "field": "version",
+    "type": "u32"
+  },
+  {
+    "field": "weights",
+    "type": "Vec<pubkey>"
+  },
+  {
+    "field": "size_bytes",
+    "type": "u64"
+  },
+  {
+    "field": "nonce_prefix",
+    "type": "[u8; 16]"
+  },
+  {
+    "field": "manifest",
+    "type": "bytes"
+  },
+  {
+    "field": "base",
+    "type": "Option<ModelBase>"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  }
+]

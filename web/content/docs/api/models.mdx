@@ -1,9 +1,9 @@
 ---
 title: Models
-description: Every model route of the Voynich HTTP API, from listing and reading models, policies and ciphertext to the cost quote and the eleven builds of a model.
+description: Every model route of the Voynich HTTP API, from listing and reading models, versions, policies and ciphertext to the cost quote and the fifteen builds of a model.
 ---
 
-Six routes read models and policies, one quotes the cost of sealing, and eleven build the transactions that create and change a model. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models).
+Seven routes read models, versions and policies, one quotes the cost of sealing, and fifteen build the transactions that create, upgrade and change a model. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models).
 
 In every path, `{id}` is the model's account address or its name, such as `sketch-32`. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
 
@@ -83,6 +83,9 @@ Calls to this model that settled.
 </Field>
 <Field name="hasPolicy" type="boolean" required>
 True when the model has an active on-chain [ModelPolicy](#modelpolicy) PDA (`["policy", model]`).
+</Field>
+<Field name="currentVersion" type="integer">
+Active release number (`1` on initial seal; incremented atomically by `publish_version`).
 </Field>
 </Fields>
 
@@ -376,6 +379,40 @@ Reads the model's active on-chain [ModelPolicy](#modelpolicy).
 | `MODEL_NOT_FOUND` | No model has this name or address. |
 | `POLICY_NOT_FOUND` | The model has no active on-chain Policy PDA (`404`). |
 
+## `GET /v1/models/{id}/versions`
+
+Lists a model's versions newest-first (`{ model, currentVersion, items, asOf }`). On models with no upgrades yet, `items` synthesizes version `1` from the active `Model` account. Each item is a `ModelVersion`:
+
+<Fields>
+<Field name="address" type="address or null" required>
+The `ModelVersion` PDA (`["version", model, version_le]`), or `null` for synthesized version `1`.
+</Field>
+<Field name="model" type="address" required>
+The parent Model account.
+</Field>
+<Field name="version" type="integer" required>
+Version number, from `1`.
+</Field>
+<Field name="status" type="'uploading' | 'live' | 'archived'" required>
+Whether this version is uploading, currently live, or archived by a newer release.
+</Field>
+<Field name="sizeBytes" type="integer" required>
+Ciphertext size in bytes.
+</Field>
+<Field name="ciphertextSha256" type="hash or null" required>
+64 KiB chunk Merkle root (`null` while uploading).
+</Field>
+<Field name="base" type="ModelBase or null" required>
+Optional [ModelBase](#modelbase) for this version.
+</Field>
+<Field name="manifest" type="Manifest" required>
+The [manifest](#manifest) for this version.
+</Field>
+<Field name="publishedSlot" type="slot or null" required>
+Slot the version went live (`null` while uploading).
+</Field>
+</Fields>
+
 ## `POST /v1/models/quote`
 
 Computes what sealing a model of a given ciphertext size costs, from the cluster's rent and the fees of the transactions a sealing sends. With the model's create metadata in `create`, it also measures the `create_model` transaction and says whether it fits. It builds nothing, signs nothing and needs no Weights account to exist.
@@ -517,7 +554,7 @@ Next: when `canCreate` is `true`, create the Weights accounts at the addresses i
 
 ## Builds
 
-The eleven routes below each return a [Build](/docs/api/transactions#build): an unsigned transaction and the addresses it creates. Sign it and send it through [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit). Signing, the order of signatures and the errors every build shares are in [Transactions](/docs/api/transactions).
+The fifteen routes below each return a [Build](/docs/api/transactions#build): an unsigned transaction and the addresses it creates. Sign it and send it through [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit). Signing, the order of signatures and the errors every build shares are in [Transactions](/docs/api/transactions).
 
 Each build route can return `MODEL_NOT_FOUND` (except `POST /v1/models/build`), `INSUFFICIENT_FUNDS`, `SIMULATION_FAILED` and `PROGRAM_REFUSED` as told in [Errors from a build](/docs/api/transactions#errors-from-a-build). The tables below list what each adds.
 
@@ -947,6 +984,30 @@ The Build's `action` is `clear_policy`. Its `addresses` hold `model` and `policy
 | --- | --- |
 | `POLICY_NOT_FOUND` | The model has no active Policy PDA. |
 | `SIMULATION_FAILED` | `wallet` is not the model's owner (`Unauthorized`). |
+
+## `POST /v1/models/{id}/versions/build`
+
+Builds [`begin_version`](/docs/program/instructions#beginversion): creates an 8,192-byte `ModelVersion` PDA (`["version", model, version_le]`) in `uploading` and binds its preallocated `Weights` accounts while the model stays live on its current version.
+
+Body (`BeginVersionRequest`): `{ wallet, version?, weights (1..8), manifest, sizeBytes, noncePrefix (16 bytes base64), base? }`. When `version` is omitted, defaults to `currentVersion + 1`. Returns a Build with `action: "begin_version"` and `addresses: { model, modelVersion, weights }`.
+
+## `POST /v1/models/{id}/versions/write/build`
+
+Builds [`write_version_weights`](/docs/program/instructions#writeversionweights): writes 1 to 888 ciphertext bytes into one `Weights` account of an uploading version.
+
+Body (`WriteVersionWeightsRequest`): `{ wallet, version, weights, offset, bytesBase64 }`. Returns a Build with `action: "write_version_weights"` and `addresses: { model, modelVersion, weights }`.
+
+## `POST /v1/models/{id}/versions/seal-range/build`
+
+Builds [`seal_version_range`](/docs/program/instructions#sealversionrange): folds 1 to 8 consecutive 65,552-byte ciphertext chunks into an uploading version's Merkle frontier.
+
+Body (`SealVersionRangeRequest`): `{ wallet, version, chunkCount? }`. Returns a Build with `action: "seal_version_range"` and `addresses: { model, modelVersion, weights }`.
+
+## `POST /v1/models/{id}/versions/publish/build`
+
+Builds [`publish_version`](/docs/program/instructions#publishversion): verifies the Merkle root (`ciphertextSha256`) and atomically swaps the uploading version live onto `Model`, archiving the prior version without invalidating existing grants.
+
+Body (`PublishVersionRequest`): `{ wallet, version, ciphertextSha256 }`. Returns a Build with `action: "publish_version"` and `addresses: { model, modelVersion }`. Answers `INVALID_VERSION` (`422`), `UPLOAD_INCOMPLETE`, or `CIPHERTEXT_HASH_MISMATCH` on invalid state or hash.
 
 ## Read next
 

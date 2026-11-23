@@ -110,6 +110,31 @@
     "does": "Build clear_policy to remove a model policy and return rent to the owner"
   },
   {
+    "route": "GET /v1/models/{id}/versions",
+    "operation": "modelVersions",
+    "does": "List published and uploading versions for a model, newest first"
+  },
+  {
+    "route": "POST /v1/models/{id}/versions/build",
+    "operation": "beginVersion",
+    "does": "Build begin_version to open a new uploading ModelVersion PDA for a sealed or live model"
+  },
+  {
+    "route": "POST /v1/models/{id}/versions/write/build",
+    "operation": "writeVersionWeights",
+    "does": "Build write_version_weights to write a ciphertext chunk into a staged ModelVersion"
+  },
+  {
+    "route": "POST /v1/models/{id}/versions/seal-range/build",
+    "operation": "sealVersionRange",
+    "does": "Build seal_version_range to hash 64 KiB chunks into a staged ModelVersion Merkle frontier"
+  },
+  {
+    "route": "POST /v1/models/{id}/versions/publish/build",
+    "operation": "publishVersion",
+    "does": "Build publish_version to atomically promote a staged ModelVersion to live on the model"
+  },
+  {
     "route": "GET /v1/enclaves",
     "operation": "enclaves",
     "does": "Browse live and expired enclaves"

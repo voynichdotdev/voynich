@@ -1,0 +1,6 @@
+[
+  {
+    "argument": "chunk_count",
+    "type": "u32"
+  }
+]

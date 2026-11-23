@@ -27,6 +27,7 @@ A sealed model is two kinds of account:
 | Price and mint | What one call costs, in base units of the mint the owner chose. No mint means SOL. |
 | Operator share | The part of each call's price paid to the operator whose enclave answers, in basis points. The split is told in [Fees and the token](/docs/concepts/fees-and-the-token). |
 | Status | `uploading`, `sealed`, `live` or `retired`. See [Statuses](#statuses). |
+| Current version | Active release number (`1` on initial seal; incremented atomically by `publish_version`). See [Model versions](#model-versions). |
 | Calls settled | How many calls to the model have settled. |
 
 The exact account layout is in [Program: Accounts](/docs/program/accounts).
@@ -133,6 +134,12 @@ A model owner can attach an optional on-chain `Policy` PDA at `["policy", model]
 - **Rate limits and regions.** The `Policy` account also records `max_calls_per_caller_per_window`, `window_slots` (both `0` or both positive), and up to 8 `allowed_regions` (1 to 16 lowercase letters, digits or hyphens each). Enclaves read the on-chain `Policy` PDA for each granted model: if `allowed_regions` is non-empty, only enclaves configured with a matching `ENCLAVE_REGION` load, forward, or serve the model (otherwise refusing input with HTTP `403 PROGRAM_REFUSED`); if a rate ceiling is set, each enclave tracks per-`(model, caller)` call slots over the sliding `window_slots` window and refuses excess calls before inference with HTTP `429 RATE_LIMITED`, leaving the call unsettled so the caller refunds after deadline.
 
 Owners manage a model's policy from `/models/<name>` (**Owner** panel), `voynich model policy show|set|clear`, or the SDK (`policy`, `setPolicy`, `clearPolicy`); when a policy is active, `/models/<name>` displays its summary and the call panel refuses wallets outside an enabled allow list before building a transaction. See [Manage a model](/docs/guides/manage-a-model#set-or-clear-the-policy).
+
+## Model versions
+
+A live model can be upgraded in place at the same name and address without downtime or re-granting enclaves. The owner encrypts the new weights (or adapter) under the model's existing 32-byte model key with a fresh 16-byte `nonce_prefix`, uploads them to a `ModelVersion` PDA (`["version", model, version_le]`) via `begin_version`, `write_version_weights`, and `seal_version_range`, and atomically flips the parent `Model` with `publish_version`.
+
+While the new version uploads, the model stays `Live` on its current version. When `publish_version` lands, `Model`'s active `weights`, `size_bytes`, `nonce_prefix`, `ciphertext_sha256`, `manifest`, `base`, and `current_version` update in one transaction, `ModelVersionPublished` records the prior version snapshot (archived in `GET /v1/models/{id}/versions`), and every existing `Grant` wrapped key remains valid.
 
 ## Sealed adapters (base + adapter)
 

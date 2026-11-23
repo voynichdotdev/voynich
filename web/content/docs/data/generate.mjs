@@ -80,6 +80,24 @@ const FIELDS = {
     base: 'Optional `ModelBase` (`sha256`, `size_bytes`, `format`, `source`) binding a sealed adapter to a public open-weight base model. `None` for standalone models.',
     price_unit: 'Whether `price` is charged per `Call` (`0`) or per output `Token` (`1`).',
     has_policy: 'True when an active Policy PDA exists for this model (`["policy", model]`). When true, `open_call`, `open_metered_call`, `grant_by_owner` and `grant_by_enclave` require the Policy PDA in remaining accounts.',
+    current_version: 'Active version number on chain (`0` on legacy accounts, interpreted as `1` via `effective_version()`). Incremented atomically by `publish_version`.',
+  },
+  ModelVersion: {
+    model: 'The Model this version belongs to.',
+    version: 'Version number, starting at 2 (`effective_version() + 1` when begun).',
+    status: '`Uploading` (`0`), `Live` (`1`) or `Archived` (`2`).',
+    weights: 'The Weights accounts holding this version\'s ciphertext, in order (1 to 64).',
+    size_bytes: 'The length of this version\'s ciphertext across its Weights accounts.',
+    nonce_prefix: 'The 16-byte nonce prefix for this version\'s weights cipher (fresh per version, encrypted under the model\'s existing key).',
+    ciphertext_sha256: 'Ciphertext 64 KiB chunk Merkle root (`hash_version = 1`). All zero until `publish_version` lands.',
+    manifest: 'This version\'s manifest as compact UTF-8 JSON, up to 4,096 bytes.',
+    base: 'Optional `ModelBase` (`sha256`, `size_bytes`, `format`, `source`) for this version. `None` for standalone weights.',
+    hash_version: 'Always `1` (64 KiB chunk binary Merkle root).',
+    sealed_chunks: 'Count of 65,552-byte ciphertext chunks folded into `merkle_frontier` so far during `seal_version_range`.',
+    merkle_frontier: 'Incremental binary Merkle peaks (up to 20 hashes) maintained across `seal_version_range` calls and cleared on `publish_version`.',
+    merkle_frontier_mask: 'Bitmask of occupied levels in `merkle_frontier`, cleared to 0 on `publish_version`.',
+    published_slot: 'The slot `publish_version` flipped this version live. 0 while uploading.',
+    bump: 'The PDA bump.',
   },
   Enclave: {
     signing_key: 'The enclave\'s Ed25519 signing key, the key its attestation record names.',
@@ -225,6 +243,10 @@ const SAYS = {
   deprecate_measurement: 'Marks a published Measurement PDA as `Deprecated`. Callable only by its publisher or `Config.admin`.',
   set_policy: 'Creates or updates a model\'s Policy PDA and sets `model.has_policy = true`. Callable only by the model\'s owner.',
   clear_policy: 'Closes a model\'s Policy PDA, returns its rent to the owner and sets `model.has_policy = false`. Callable only by the model\'s owner.',
+  begin_version: 'Creates a ModelVersion PDA in `Uploading` for `model.effective_version() + 1` and binds its preallocated Weights accounts while the model stays live on its current version.',
+  write_version_weights: 'Writes ciphertext bytes into one Weights account belonging to an uploading ModelVersion.',
+  seal_version_range: 'Hashes 1 to 8 consecutive 65,552-byte ciphertext chunks into an uploading ModelVersion\'s Merkle frontier.',
+  publish_version: 'Finalizes an uploading ModelVersion\'s Merkle root and atomically flips the Model\'s active weights, hash, manifest, base, nonce prefix and `current_version`.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -380,6 +402,23 @@ const ACCOUNTS = {
     owner: 'The model\'s owner. Receives the closed Policy PDA\'s rent.',
     policy: 'The Policy PDA at `["policy", model]`, closed here.',
   },
+  begin_version: {
+    owner: 'The model\'s owner. Pays the 8,192-byte ModelVersion PDA\'s rent.',
+    model_version: 'The ModelVersion PDA at `["version", model, version_le]`, created here in `Uploading`.',
+  },
+  write_version_weights: {
+    owner: 'The model\'s owner.',
+    model_version: 'The uploading ModelVersion PDA.',
+    weights: 'One of the ModelVersion\'s Weights accounts.',
+  },
+  seal_version_range: {
+    owner: 'The model\'s owner.',
+    model_version: 'The uploading ModelVersion PDA whose Merkle frontier is updated.',
+  },
+  publish_version: {
+    owner: 'The model\'s owner.',
+    model_version: 'The uploading ModelVersion PDA finalized and flipped to `Live`.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -443,6 +482,8 @@ const EVENTS = {
   PolicyUpdated: ['set_policy', 'A model\'s on-chain Policy PDA was created or updated.'],
   PolicyCleared: ['clear_policy', 'A model\'s on-chain Policy PDA was closed and cleared.'],
   GrantQuoteUpdated: ['set_quote', 'An enclave operator set or cleared a quoted operator share on a Grant.'],
+  ModelVersionStarted: ['begin_version', 'A new ModelVersion PDA was created in `Uploading` while the model stayed live.'],
+  ModelVersionPublished: ['publish_version', 'A ModelVersion was finalized and atomically flipped live on the Model, carrying the prior version snapshot.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -488,6 +529,7 @@ const RAISED = {
   PolicyOperatorDenied: 'In `grant_by_owner` or `grant_by_enclave`: the model\'s Policy has a non-empty `allowed_operators` list and `target_enclave.operator` is not in it.',
   PolicyRequired: 'In `open_call`, `open_metered_call`, `grant_by_owner` or `grant_by_enclave`: `model.has_policy` is true, but the canonical Policy PDA (`["policy", model]`, owned by the Voynich program) was omitted from remaining accounts.',
   InvalidQuote: 'In `set_quote`: `operator_share_bps` exceeds `model.operator_share_bps`.',
+  InvalidVersion: 'In `begin_version`: `version` is not `model.effective_version() + 1` or the model is not `Live`. In `write_version_weights`, `seal_version_range` or `publish_version`: `model_version.status` is not `Uploading` or `version` does not match.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -546,6 +588,7 @@ const API_ERRORS = {
   POLICY_OPERATOR_DENIED: 'The enclave operator is not allowed by this model\'s policy.',
   POLICY_REQUIRED: 'This model has an active policy; pass its Policy account in remaining accounts.',
   INVALID_QUOTE: 'The quoted operator share exceeds the model\'s maximum operator share.',
+  INVALID_VERSION: 'The requested model version number or upload state is invalid.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

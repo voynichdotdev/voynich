@@ -9,6 +9,8 @@ Eight read functions read what the API indexes from the chain (none needs a wall
 | --- | --- | --- |
 | `models(query?)` | A page of models. | [`GET /v1/models`](/docs/api/models) |
 | `model(id)` | One model, by name or address. | [`GET /v1/models/{id}`](/docs/api/models) |
+| `listVersions(modelId, options?)` | The model's versions newest-first (`ModelVersions`). | [`GET /v1/models/{id}/versions`](/docs/api/models#get-v1modelsidversions) |
+| `publishVersion(modelId, options)` | Encrypts new weights under the existing model key, uploads, seals and atomically publishes `version + 1`. | [`POST /v1/models/{id}/versions/build`](/docs/api/models#post-v1modelsidversionsbuild) |
 | `policy(modelId)` | The model's active `ModelPolicy`, or `null` when none exists. | [`GET /v1/models/{id}/policy`](/docs/api/models#get-v1modelsidpolicy) |
 | `setPolicy(modelId, input, options?)` | Signs `set_policy` and returns the indexed `ModelPolicy`. | [`POST /v1/models/{id}/policy/build`](/docs/api/models#post-v1modelsidpolicybuild) |
 | `clearPolicy(modelId, options?)` | Signs `clear_policy` and returns the confirmed `TxStatus`. | [`POST /v1/models/{id}/policy/clear/build`](/docs/api/models#post-v1modelsidpolicyclearbuild) |
@@ -51,6 +53,20 @@ console.log(model.manifest.labels)
 ```
 
 Takes the model's name or address. Throws an `ApiClientError` with `MODEL_NOT_FOUND` when there is none.
+
+## listVersions and publishVersion
+
+```ts
+const history = await voynich.listVersions('text-1m')
+
+const published = await voynich.publishVersion('text-1m', {
+  weights: nextAdapterBytes,
+  modelKey, // optional: derived via signSealDerivation when omitted
+})
+console.log(published.version, published.ciphertextSha256, published.transactionsSent)
+```
+
+`listVersions(modelId, options?)` reads `GET /v1/models/{id}/versions` and returns `{ model, currentVersion, items, asOf }`. `publishVersion(modelId, options)` requires the model owner's signer (`WALLET_REQUIRED`), encrypts `options.weights` under `options.modelKey` (or derives it via `signSealDerivation`), allocates new `Weights` accounts, runs `begin_version`, `write_version_weights`, `seal_version_range`, and `publish_version`, waits for indexing, and resolves to `{ model, version, ciphertextSha256, noncePrefix, transactionsSent }`.
 
 ## policy, setPolicy and clearPolicy
 

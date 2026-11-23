@@ -154,5 +154,11 @@
     "type": "bool",
     "offset": "",
     "meaning": "True when an active Policy PDA exists for this model (`[\"policy\", model]`). When true, `open_call`, `open_metered_call`, `grant_by_owner` and `grant_by_enclave` require the Policy PDA in remaining accounts."
+  },
+  {
+    "field": "current_version",
+    "type": "u32",
+    "offset": "",
+    "meaning": "Active version number on chain (`0` on legacy accounts, interpreted as `1` via `effective_version()`). Incremented atomically by `publish_version`."
   }
 ]

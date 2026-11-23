@@ -112,5 +112,17 @@
     "discriminator": "`92a62f5c89b01bf6`",
     "emittedBy": "`set_quote`",
     "says": "An enclave operator set or cleared a quoted operator share on a Grant."
+  },
+  {
+    "event": "ModelVersionStarted",
+    "discriminator": "`4f4e8f2de89cc8c4`",
+    "emittedBy": "`begin_version`",
+    "says": "A new ModelVersion PDA was created in `Uploading` while the model stayed live."
+  },
+  {
+    "event": "ModelVersionPublished",
+    "discriminator": "`c16024082906d0c4`",
+    "emittedBy": "`publish_version`",
+    "says": "A ModelVersion was finalized and atomically flipped live on the Model, carrying the prior version snapshot."
   }
 ]

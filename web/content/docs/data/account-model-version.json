@@ -1,0 +1,92 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model this version belongs to."
+  },
+  {
+    "field": "version",
+    "type": "u32",
+    "offset": "40",
+    "meaning": "Version number, starting at 2 (`effective_version() + 1` when begun)."
+  },
+  {
+    "field": "status",
+    "type": "VersionStatus",
+    "offset": "44",
+    "meaning": "`Uploading` (`0`), `Live` (`1`) or `Archived` (`2`)."
+  },
+  {
+    "field": "weights",
+    "type": "Vec<pubkey>",
+    "offset": "45",
+    "meaning": "The Weights accounts holding this version's ciphertext, in order (1 to 64)."
+  },
+  {
+    "field": "size_bytes",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The length of this version's ciphertext across its Weights accounts."
+  },
+  {
+    "field": "nonce_prefix",
+    "type": "[u8; 16]",
+    "offset": "",
+    "meaning": "The 16-byte nonce prefix for this version's weights cipher (fresh per version, encrypted under the model's existing key)."
+  },
+  {
+    "field": "ciphertext_sha256",
+    "type": "[u8; 32]",
+    "offset": "",
+    "meaning": "Ciphertext 64 KiB chunk Merkle root (`hash_version = 1`). All zero until `publish_version` lands."
+  },
+  {
+    "field": "manifest",
+    "type": "bytes",
+    "offset": "",
+    "meaning": "This version's manifest as compact UTF-8 JSON, up to 4,096 bytes."
+  },
+  {
+    "field": "base",
+    "type": "Option<ModelBase>",
+    "offset": "",
+    "meaning": "Optional `ModelBase` (`sha256`, `size_bytes`, `format`, `source`) for this version. `None` for standalone weights."
+  },
+  {
+    "field": "hash_version",
+    "type": "u8",
+    "offset": "",
+    "meaning": "Always `1` (64 KiB chunk binary Merkle root)."
+  },
+  {
+    "field": "sealed_chunks",
+    "type": "u32",
+    "offset": "",
+    "meaning": "Count of 65,552-byte ciphertext chunks folded into `merkle_frontier` so far during `seal_version_range`."
+  },
+  {
+    "field": "merkle_frontier",
+    "type": "Vec<[u8; 32]>",
+    "offset": "",
+    "meaning": "Incremental binary Merkle peaks (up to 20 hashes) maintained across `seal_version_range` calls and cleared on `publish_version`."
+  },
+  {
+    "field": "merkle_frontier_mask",
+    "type": "u32",
+    "offset": "",
+    "meaning": "Bitmask of occupied levels in `merkle_frontier`, cleared to 0 on `publish_version`."
+  },
+  {
+    "field": "published_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot `publish_version` flipped this version live. 0 while uploading."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "",
+    "meaning": "The PDA bump."
+  }
+]

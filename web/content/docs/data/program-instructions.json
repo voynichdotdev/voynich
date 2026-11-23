@@ -160,5 +160,29 @@
     "arguments": "",
     "signers": "`owner`",
     "does": "Closes a model's Policy PDA, returns its rent to the owner and sets `model.has_policy = false`. Callable only by the model's owner."
+  },
+  {
+    "instruction": "begin_version",
+    "arguments": "`version: u32`, `args: BeginVersionArgs`",
+    "signers": "`owner`",
+    "does": "Creates a ModelVersion PDA in `Uploading` for `model.effective_version() + 1` and binds its preallocated Weights accounts while the model stays live on its current version."
+  },
+  {
+    "instruction": "write_version_weights",
+    "arguments": "`offset: u32`, `bytes: bytes`",
+    "signers": "`owner`",
+    "does": "Writes ciphertext bytes into one Weights account belonging to an uploading ModelVersion."
+  },
+  {
+    "instruction": "seal_version_range",
+    "arguments": "`chunk_count: u32`",
+    "signers": "`owner`",
+    "does": "Hashes 1 to 8 consecutive 65,552-byte ciphertext chunks into an uploading ModelVersion's Merkle frontier."
+  },
+  {
+    "instruction": "publish_version",
+    "arguments": "`ciphertext_sha256: [u8; 32]`",
+    "signers": "`owner`",
+    "does": "Finalizes an uploading ModelVersion's Merkle root and atomically flips the Model's active weights, hash, manifest, base, nonce prefix and `current_version`."
   }
 ]

@@ -222,5 +222,12 @@
     "hex": "`0x178f`",
     "message": "The quoted operator share exceeds the model's maximum operator share.",
     "raisedWhen": "In `set_quote`: `operator_share_bps` exceeds `model.operator_share_bps`."
+  },
+  {
+    "name": "InvalidVersion",
+    "code": "6032",
+    "hex": "`0x1790`",
+    "message": "The model version is invalid or not in the required state.",
+    "raisedWhen": "In `begin_version`: `version` is not `model.effective_version() + 1` or the model is not `Live`. In `write_version_weights`, `seal_version_range` or `publish_version`: `model_version.status` is not `Uploading` or `version` does not match."
   }
 ]

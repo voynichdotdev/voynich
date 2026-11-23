@@ -1,0 +1,50 @@
+[
+  {
+    "account": "owner",
+    "writable": "",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The model's owner."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "model_version",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"version\", model, model_version.version]`",
+    "is": "The uploading ModelVersion PDA."
+  },
+  {
+    "account": "weights",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "One of the ModelVersion's Weights accounts."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

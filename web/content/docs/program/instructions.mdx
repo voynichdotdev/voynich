@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 27 instructions.
+The program has 31 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -311,3 +311,47 @@ Closes a model's `Policy` PDA, returns its rent to `owner`, and sets `model.has_
 
 - **Checks.** `owner` is `model.owner` (`Unauthorized`). `policy` is the canonical `["policy", model]` PDA belonging to `model`.
 - **Effects.** Closes `policy` to `owner`, sets `model.has_policy = false`, and emits `PolicyCleared`.
+
+## begin_version
+
+Creates an 8,192-byte `ModelVersion` PDA at `["version", model, version_le]` in `Uploading` and binds its preallocated `Weights` accounts (passed as writable remaining accounts), leaving the parent `Model` live on its current version.
+
+<Rows data="ix-begin-version-args" />
+
+<Rows data="ix-begin-version" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). The model is `Live` (`ModelNotLive`) and `version == model.effective_version() + 1` (`InvalidVersion`). `manifest`, `size_bytes`, optional `base`, and remaining `Weights` accounts pass the same checks as `create_model` (`InvalidModel`, `InvalidWeights`).
+- **Effects.** Initializes the `ModelVersion` PDA in `Uploading` with `hash_version = 1`, `sealed_chunks = 0`, empty `merkle_frontier`, and the fresh `nonce_prefix`; initializes each attached `Weights` account header; emits `ModelVersionStarted`.
+
+## write_version_weights
+
+Writes ciphertext bytes into one `Weights` account belonging to an uploading `ModelVersion`. Signed by `model.owner`.
+
+<Rows data="ix-write-version-weights-args" />
+
+<Rows data="ix-write-version-weights" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). `model_version.status` is `Uploading` (`InvalidVersion`). `weights` belongs to `model_version.weights` (`InvalidWeights`), and `bytes` is non-empty within account bounds (`InvalidWrite`).
+- **Effects.** Writes the ciphertext slice into `weights`, updates `written_bytes`, and emits `WeightsWritten`.
+
+## seal_version_range
+
+Hashes 1 to 8 consecutive 65,552-byte ciphertext chunks into an uploading `ModelVersion`'s binary Merkle frontier. Remaining accounts carry the 1 or 2 covering `Weights` accounts.
+
+<Rows data="ix-seal-version-range-args" />
+
+<Rows data="ix-seal-version-range" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). `model_version.status` is `Uploading` (`InvalidVersion`). `chunk_count` is 1 to 8 and covering `Weights` accounts are written to their end (`InvalidWeights`, `UploadIncomplete`).
+- **Effects.** Folds the chunks into `model_version.merkle_frontier`, increments `model_version.sealed_chunks`, and emits `RangeSealed`.
+
+## publish_version
+
+Finalizes an uploading `ModelVersion`'s Merkle root and atomically swaps it live onto the parent `Model` at the same model address. Remaining accounts carry the covering `Weights` accounts for up to 8 remaining unhashed chunks (or are empty if `seal_version_range` hashed all chunks).
+
+<Rows data="ix-publish-version-args" />
+
+<Rows data="ix-publish-version" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). `model_version.status` is `Uploading` (`InvalidVersion`), every `Weights` account is written to its end (`UploadIncomplete`), and folding `merkle_frontier` matches `ciphertext_sha256` (`CiphertextHashMismatch`).
+- **Effects.** Marks `model_version.status = Live`, records `published_slot = clock.slot`, clears its `merkle_frontier`, atomically replaces `model.weights`, `model.size_bytes`, `model.nonce_prefix`, `model.ciphertext_sha256`, `model.manifest`, `model.base`, `model.hash_version = 1`, and `model.current_version = model_version.version`, and emits `ModelVersionPublished` (carrying the prior version snapshot so indexers archive the superseded version without altering existing `Grant` accounts).

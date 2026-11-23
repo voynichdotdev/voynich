@@ -13,6 +13,7 @@ The `voynich` program is an Anchor program. Its address on a cluster is `program
 | --- | --- | --- | --- |
 | Config | PDA `["config"]` | 118 bytes (116 bytes before migration) | the admin |
 | Model | PDA `["model", name]` | 8,192 bytes (6,000 bytes legacy) | the owner |
+| ModelVersion | PDA `["version", model, version_le]` | 8,192 bytes | the owner |
 | Weights | any address, created by the owner | 56 bytes plus its ciphertext | the owner |
 | Enclave | PDA `["enclave", signing_key]` | 470 bytes | the operator |
 | Measurement | PDA `["measurement", digest[..32], digest[32..]]` | 366 bytes | the publisher |
@@ -31,11 +32,19 @@ One per program, at PDA `["config"]`. Written by `initialize`, `set_config` and 
 
 ## Model
 
-One per sealed model, at PDA `["model", name]`. Created by `create_model`. Changed by `attach_weights`, `seal_range`, `seal_model`, `set_price`, `set_allowed_measurements`, `set_policy`, `clear_policy`, `retire_model`, `grant_by_owner` and `settle_call`.
+One per sealed model, at PDA `["model", name]`. Created by `create_model`. Changed by `attach_weights`, `seal_range`, `seal_model`, `set_price`, `set_allowed_measurements`, `set_policy`, `clear_policy`, `publish_version`, `retire_model`, `grant_by_owner` and `settle_call`.
 
 <Rows data="account-model" columns="field,type,meaning" />
 
-`status` is one byte: 0 `Uploading`, 1 `Sealed`, 2 `Live`, 3 `Retired`. `price_unit` is one byte: 0 `Call`, 1 `Token`. A measurement is 48 bytes. `ModelBase` is `sha256: [u8; 32]`, `size_bytes: u64`, `format: string` (`onnx`, `safetensors` or `gguf`, at most 32 bytes), and `source: string` (1 to 256 bytes starting with `https://`, `http://`, `ipfs://` or `hf://`, no ASCII whitespace or control bytes). Legacy 6,000-byte and earlier 8,192-byte Model accounts decode trailing zeros as `base: None`, `price_unit: Call` and `has_policy: false`. What these facts mean is in [Sealed models](/docs/concepts/sealed-models).
+`status` is one byte: 0 `Uploading`, 1 `Sealed`, 2 `Live`, 3 `Retired`. `price_unit` is one byte: 0 `Call`, 1 `Token`. A measurement is 48 bytes. `ModelBase` is `sha256: [u8; 32]`, `size_bytes: u64`, `format: string` (`onnx`, `safetensors` or `gguf`, at most 32 bytes), and `source: string` (1 to 256 bytes starting with `https://`, `http://`, `ipfs://` or `hf://`, no ASCII whitespace or control bytes). Legacy 6,000-byte and earlier 8,192-byte Model accounts decode trailing zeros as `base: None`, `price_unit: Call`, `has_policy: false` and `current_version: 0` (interpreted as `1` via `effective_version()`). What these facts mean is in [Sealed models](/docs/concepts/sealed-models).
+
+## ModelVersion
+
+One per staged or published upgrade of a live model, at PDA `["version", model, version_le]` (`ModelVersion::SPACE = 8,192` bytes, where `version_le` is `version: u32` in little-endian). Created in `Uploading` by `begin_version`, populated by `write_version_weights` and `seal_version_range`, and flipped to `Live` by `publish_version`.
+
+<Rows data="account-model-version" columns="field,type,meaning" />
+
+`status` is one byte: 0 `Uploading`, 1 `Live`, 2 `Archived`. While a new `ModelVersion` uploads, the parent `Model` stays `Live` on its current version; `publish_version` atomically swaps `Model`'s active weights, hash, manifest, base, nonce prefix and `current_version` without invalidating existing `Grant` accounts.
 
 ## Weights
 

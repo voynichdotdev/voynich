@@ -1,0 +1,22 @@
+[
+  {
+    "argument": "version",
+    "type": "u32"
+  },
+  {
+    "argument": "manifest",
+    "type": "bytes"
+  },
+  {
+    "argument": "size_bytes",
+    "type": "u64"
+  },
+  {
+    "argument": "nonce_prefix",
+    "type": "[u8; 16]"
+  },
+  {
+    "argument": "base",
+    "type": "Option<ModelBase>"
+  }
+]

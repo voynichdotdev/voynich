@@ -8,7 +8,7 @@ Every change to the chain that the API offers goes through the same three steps:
 <Steps>
 <Step title="Build">
 
-Call one of the twenty-one build routes. It returns a [Build](#build).
+Call one of the twenty-five build routes. It returns a [Build](#build).
 
 </Step>
 <Step title="Sign">
@@ -49,7 +49,7 @@ The last block height at which that blockhash lands.
 Whether the API adds a signature of its own. `false` for every action.
 </Field>
 <Field name="action" type="string" required>
-The instruction built. One of the twenty-one [actions](#actions).
+The instruction built. One of the twenty-five [actions](#actions).
 </Field>
 <Field name="requiredSigners" type="array of addresses" required>
 Every key that signs the transaction, the request's `wallet` among them.
@@ -58,7 +58,7 @@ Every key that signs the transaction, the request's `wallet` among them.
 `false` for a build made against a cluster.
 </Field>
 <Field name="addresses" type="object" required>
-The accounts the action is about. Each is present when the action has it: `model` (address), `call` (address), `receipt` (address), `weights` (array of addresses), `uploadKey` (address), `bounty` (address), `attempt` (address), `measurement` (address), `policy` (address), `grant` (address).
+The accounts the action is about. Each is present when the action has it: `model` (address), `call` (address), `receipt` (address), `weights` (array of addresses), `uploadKey` (address), `bounty` (address), `attempt` (address), `measurement` (address), `policy` (address), `grant` (address), `modelVersion` (address).
 </Field>
 </Fields>
 
@@ -89,6 +89,10 @@ The API simulates the transaction before it returns the Build, so a Build in han
 | `deprecate_measurement` | [`POST /v1/measurements/{digest}/deprecate/build`](/docs/api/enclaves#post-v1measurementsdigestdeprecatebuild) | publisher or `Config.admin` | `measurement` |
 | `set_policy` | [`POST /v1/models/{id}/policy/build`](/docs/api/models#post-v1modelsidpolicybuild) | owner | `model`, `policy` |
 | `clear_policy` | [`POST /v1/models/{id}/policy/clear/build`](/docs/api/models#post-v1modelsidpolicyclearbuild) | owner | `model`, `policy` |
+| `begin_version` | [`POST /v1/models/{id}/versions/build`](/docs/api/models#post-v1modelsidversionsbuild) | owner | `model`, `modelVersion`, `weights` |
+| `write_version_weights` | [`POST /v1/models/{id}/versions/write/build`](/docs/api/models#post-v1modelsidversionswritebuild) | owner | `model`, `modelVersion`, `weights` |
+| `seal_version_range` | [`POST /v1/models/{id}/versions/seal-range/build`](/docs/api/models#post-v1modelsidversionssealrangebuild) | owner | `model`, `modelVersion`, `weights` |
+| `publish_version` | [`POST /v1/models/{id}/versions/publish/build`](/docs/api/models#post-v1modelsidversionspublishbuild) | owner | `model`, `modelVersion` |
 
 What each instruction checks and does is in [Instructions](/docs/program/instructions).
 
@@ -119,6 +123,7 @@ When a program raised the error, the envelope's `programError` names the program
 | `settle_metered_call` | The 423-byte metered Receipt account's rent, plus any missing SPL associated token accounts for owner, operator, fee recipient, or caller. |
 | `publish_measurement` | The 366-byte Measurement PDA's rent. |
 | `set_policy` | The 1,770-byte Policy PDA's rent, when the Policy does not exist yet. |
+| `begin_version` | The 8,192-byte ModelVersion PDA's rent. |
 | any other | None. For `write_weights` the wallet is the upload key, which pays the fee from the upload funding. |
 
 `required` is at least the fee plus the rent-exempt minimum of an account with no data. When the payment would leave the wallet below that minimum, the minimum is added to `required`. Lamport amounts carry `mint: null`.
@@ -144,6 +149,7 @@ For `open_call` with a price in a mint, the API first reads the caller's associa
 | `PolicyOperatorDenied` | `POLICY_OPERATOR_DENIED` |
 | `PolicyRequired` | `POLICY_REQUIRED` |
 | `InvalidQuote` | `INVALID_QUOTE` |
+| `InvalidVersion` | `INVALID_VERSION` |
 
 Every other error of the program arrives as `SIMULATION_FAILED` with its name in `programError.name`. They are listed in [Program errors](/docs/program/errors).
 

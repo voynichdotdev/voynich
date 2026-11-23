@@ -1,0 +1,62 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "model_version",
+    "type": "pubkey"
+  },
+  {
+    "field": "version",
+    "type": "u32"
+  },
+  {
+    "field": "previous_version",
+    "type": "u32"
+  },
+  {
+    "field": "previous_ciphertext_sha256",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "previous_size_bytes",
+    "type": "u64"
+  },
+  {
+    "field": "previous_sealed_slot",
+    "type": "u64"
+  },
+  {
+    "field": "previous_base",
+    "type": "Option<ModelBase>"
+  },
+  {
+    "field": "weights",
+    "type": "Vec<pubkey>"
+  },
+  {
+    "field": "size_bytes",
+    "type": "u64"
+  },
+  {
+    "field": "nonce_prefix",
+    "type": "[u8; 16]"
+  },
+  {
+    "field": "ciphertext_sha256",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "manifest",
+    "type": "bytes"
+  },
+  {
+    "field": "base",
+    "type": "Option<ModelBase>"
+  },
+  {
+    "field": "published_slot",
+    "type": "u64"
+  }
+]

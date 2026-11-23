@@ -326,6 +326,7 @@ The object the event is about, whole, as its read route returns it.
 | `measurement.updated` | [MeasurementRecord](/docs/api/enclaves#measurementrecord) | A measurement record was published or deprecated on chain. |
 | `policy.updated` | [ModelPolicy](/docs/api/models#modelpolicy) | A model's on-chain Policy PDA was created or updated. |
 | `policy.cleared` | `{ model, policy }` | A model's on-chain Policy PDA was closed and cleared. |
+| `version.published` | `ModelVersion` | A new `ModelVersion` was published and flipped live on a model. |
 | `call.updated` | [Call](/docs/api/calls-and-receipts#call) | A call opened, settled or was refunded. |
 | `call.piece` | [StreamPiece](/docs/api/calls-and-receipts#streampiece) | The enclave signed and emitted one encrypted output piece on a per-token stream. |
 | `call.stream.done` | [CallStreamDone](/docs/api/calls-and-receipts#callstreamdone) | A per-token piece stream completed or failed. |

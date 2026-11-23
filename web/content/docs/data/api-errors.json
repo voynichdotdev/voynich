@@ -160,6 +160,11 @@
     "meaning": "The quoted operator share exceeds the model's maximum operator share."
   },
   {
+    "code": "INVALID_VERSION",
+    "status": "422",
+    "meaning": "The requested model version number or upload state is invalid."
+  },
+  {
     "code": "CALL_NOT_FOUND",
     "status": "404",
     "meaning": "No call has this address."

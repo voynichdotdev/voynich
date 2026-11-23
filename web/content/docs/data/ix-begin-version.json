@@ -1,0 +1,50 @@
+[
+  {
+    "account": "owner",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The model's owner. Pays the 8,192-byte ModelVersion PDA's rent."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "model_version",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"version\", model, version]`",
+    "is": "The ModelVersion PDA at `[\"version\", model, version_le]`, created here in `Uploading`."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]
