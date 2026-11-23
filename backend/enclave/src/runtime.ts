@@ -18,7 +18,7 @@ import {
 } from 'voynich/crypto'
 import { streamSSE } from 'hono/streaming'
 import { applyOnnxAdapter } from 'voynich/adapter'
-import { BN, addresses, chainPrograms, decodeAttestation, decodeCallAccount, decodeConfigAccount, decodePolicyAccount, decodeReceiptAccount, decodeWeightsHeader, eventAccounts, type DecodedPolicyAccount } from 'voynich/program'
+import { BN, addresses, chainPrograms, decodeAttestation, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodePolicyAccount, decodeReceiptAccount, decodeWeightsHeader, eventAccounts, type DecodedPolicyAccount } from 'voynich/program'
 import { defaultBaseCacheDir, fetchVerifiedBase, type BaseModelRef } from './base-cache.js'
 import { EnclaveRateLimiter, isRegionAllowed, parseEnclaveRegion } from './policy.js'
 import { loadTokenizer, type LoadedTokenizer } from './tokenizer.js'
@@ -212,7 +212,23 @@ type SealedState = {
   pending: Record<string, Pending>
   modelTimings?: Record<string, ModelTiming>
 }
-type LoadedModel = { key: Uint8Array; manifest: z.output<typeof Manifest>; session: InferenceSession; baseSha256: Uint8Array | null; tokenizer?: LoadedTokenizer }
+export function loadedVersionsMap(loaded: ReadonlyMap<string, { version?: number }>): Record<string, number> {
+  const result: Record<string, number> = {}
+  for (const [model, entry] of loaded) {
+    result[model] = entry.version ?? 1
+  }
+  return result
+}
+
+type LoadedModel = {
+  key: Uint8Array
+  manifest: z.output<typeof Manifest>
+  session: InferenceSession
+  baseSha256: Uint8Array | null
+  tokenizer?: LoadedTokenizer
+  version: number
+  ciphertextSha256: string
+}
 
 export function measurement(): string {
   return createHash('sha384').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex')
@@ -440,7 +456,18 @@ export class EnclaveRuntime {
     return policy
   }
   async loadGrants() {
-    const grants = await this.programs.voynich.account.grant.all([{ memcmp: { offset: 40, bytes: this.enclave.toBase58() } }])
+    const grantDisc = toBase58(sha256(utf8('account:Grant')).subarray(0, 8))
+    const rawGrants = await this.rpc.connection.getProgramAccounts(this.programs.voynich.programId, {
+      commitment: 'confirmed',
+      filters: [
+        { memcmp: { offset: 0, bytes: grantDisc } },
+        { memcmp: { offset: 40, bytes: this.enclave.toBase58() } },
+      ],
+    })
+    const grants = rawGrants.map(({ pubkey, account }) => ({
+      publicKey: pubkey,
+      account: decodeGrantAccount(account.data),
+    }))
     const active = new Set<string>()
     for (const { publicKey, account: grant } of grants) {
       if (grant.revoked) continue
@@ -455,7 +482,15 @@ export class EnclaveRuntime {
       }
       active.add(modelAddress)
       const wrappedKey = toBase64(Uint8Array.from(grant.wrappedKey))
-      if (this.loaded.has(modelAddress) && this.state.grants[publicKey.toBase58()]?.wrappedKey === wrappedKey) continue
+      const modelVersion = Math.max(1, Number((model as { currentVersion?: number }).currentVersion ?? 0))
+      const ciphertextSha256 = toHex(Uint8Array.from(model.ciphertextSha256))
+      const existingLoaded = this.loaded.get(modelAddress)
+      if (
+        existingLoaded
+        && this.state.grants[publicKey.toBase58()]?.wrappedKey === wrappedKey
+        && existingLoaded.version === modelVersion
+        && existingLoaded.ciphertextSha256 === ciphertextSha256
+      ) continue
       try {
         const key = unwrapKey(fromBase64(wrappedKey), this.encryptionSecret)
         const hashVersion = (model as { hashVersion?: number }).hashVersion ?? 0
@@ -483,7 +518,7 @@ export class EnclaveRuntime {
           weightsAddresses: model.weights,
           sizeBytes: Number(model.sizeBytes.toString()),
           hashVersion,
-          expectedHashHex: toHex(Uint8Array.from(model.ciphertextSha256)),
+          expectedHashHex: ciphertextSha256,
           key,
           noncePrefix: Uint8Array.from(model.noncePrefix),
         })
@@ -497,7 +532,20 @@ export class EnclaveRuntime {
           : undefined
         const ort = await import('onnxruntime-node')
         const session = await ort.InferenceSession.create(sessionBytes, { executionProviders: ['cpu'] })
-        this.loaded.set(modelAddress, { key, manifest, session, baseSha256: baseRef ? fromHex(baseRef.sha256) : null, ...(tokenizer ? { tokenizer } : {}) })
+        const previousLoaded = this.loaded.get(modelAddress)
+        this.loaded.set(modelAddress, {
+          key,
+          manifest,
+          session,
+          baseSha256: baseRef ? fromHex(baseRef.sha256) : null,
+          ...(tokenizer ? { tokenizer } : {}),
+          version: modelVersion,
+          ciphertextSha256,
+        })
+        if (previousLoaded && previousLoaded.session !== session) {
+          const pending = [...this.inFlight.values()]
+          void Promise.allSettled(pending).then(() => previousLoaded.session.release().catch(() => {}))
+        }
         this.state.grants[publicKey.toBase58()] = { model: modelAddress, wrappedKey }
         this.state.modelTimings ??= {}
         const existingTiming = this.state.modelTimings[modelAddress]
@@ -512,7 +560,15 @@ export class EnclaveRuntime {
           }
         }
         this.save()
-        console.log(JSON.stringify({ event: 'model.loaded', model: modelAddress, name: manifest.name, openWeightsMs, ...(openBaseMs !== undefined ? { openBaseMs } : {}) }))
+        console.log(JSON.stringify({
+          event: previousLoaded ? 'model.reloaded' : 'model.loaded',
+          model: modelAddress,
+          name: manifest.name,
+          version: modelVersion,
+          ciphertextSha256,
+          openWeightsMs,
+          ...(openBaseMs !== undefined ? { openBaseMs } : {}),
+        }))
       } catch (error) {
         console.error(JSON.stringify({
           event: 'model.load.failed',
@@ -592,11 +648,21 @@ export class EnclaveRuntime {
     if (!('open' in call.status)) fail('CALL_NOT_OPEN', 'This call is no longer open.', { stage: 'upload' })
     const currentSlot = BigInt(await this.rpc.connection.getSlot('confirmed'))
     if (BigInt(call.deadlineSlot.toString()) < currentSlot) fail('CALL_DEADLINE_PASSED', 'The settlement deadline has passed.', { stage: 'upload' })
-    if (!this.loaded.has(call.model.toBase58())) {
+    const loadedEntry = this.loaded.get(call.model.toBase58())
+    if (!loadedEntry) {
       const wasRunning = Boolean(this.grantsLoading)
       await this.ensureGrantsLoaded()
       if (wasRunning && !this.loaded.has(call.model.toBase58())) await this.ensureGrantsLoaded()
       if (!this.loaded.has(call.model.toBase58())) fail('GRANT_REQUIRED', 'This enclave does not hold an active loaded grant for this model.', { stage: 'upload' })
+    } else if (this.programs?.voynich?.account?.model?.fetch) {
+      const onChainModel = await this.programs.voynich.account.model.fetch(call.model).catch(() => null)
+      if (onChainModel) {
+        const nextVersion = Math.max(1, Number((onChainModel as { currentVersion?: number }).currentVersion ?? 0))
+        const nextHash = toHex(Uint8Array.from(onChainModel.ciphertextSha256))
+        if (nextVersion !== loadedEntry.version || nextHash !== loadedEntry.ciphertextSha256) {
+          await this.ensureGrantsLoaded()
+        }
+      }
     }
     const policy = await this.fetchModelPolicy(call.model)
     if (!isRegionAllowed(policy, this.region)) {
@@ -1241,6 +1307,7 @@ export function createEnclaveApp(runtime: EnclaveAppRuntime, isReady: () => bool
     measurement: runtime.softwareMeasurement,
     region: runtime.region ?? null,
     models: [...runtime.loaded.keys()],
+    versions: loadedVersionsMap(runtime.loaded),
     openWeightsSeconds: openWeightsSecondsMap(runtime.state?.modelTimings),
     grantToFirstAnswerSeconds: grantToFirstAnswerSecondsMap(runtime.state?.modelTimings),
     bases: basesMap(runtime.state?.modelTimings),

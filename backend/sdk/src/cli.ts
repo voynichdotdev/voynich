@@ -29,6 +29,7 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   repo: { type: 'string' }, commit: { type: 'string' }, version: { type: 'string' }, source: { type: 'string' }, rebuild: { type: 'boolean' },
   'allow-list': { type: 'boolean' }, caller: { type: 'string', multiple: true }, 'max-calls': { type: 'string' }, 'window-slots': { type: 'string' },
   operator: { type: 'string', multiple: true }, region: { type: 'string', multiple: true },
+  'owner-key': { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } })
 if (values['api-url'] ?? values.api) process.env.VOYNICH_API_URL = values['api-url'] ?? values.api
@@ -83,7 +84,7 @@ async function configureCliSigner(): Promise<void> {
     process.env.VOYNICH_KEYPAIR = values.keypair ?? process.env.VOYNICH_KEYPAIR ?? process.env.OPERATOR_KEYPAIR ?? await solanaCliKeypairPath()
   } else if (
     ['call', 'seal', 'grant', 'refund', 'settle'].includes(command ?? '')
-    || (command === 'model' && ['price', 'retire', 'revoke'].includes(argument ?? ''))
+    || (command === 'model' && ['price', 'retire', 'revoke', 'upgrade'].includes(argument ?? ''))
     || (command === 'model' && argument === 'policy' && ['set', 'clear'].includes(third ?? ''))
     || (command === 'measurement' && ['publish', 'deprecate'].includes(argument ?? ''))
   ) {
@@ -152,7 +153,7 @@ async function loadCliKeypair(): Promise<Keypair> {
   return Keypair.fromSecretKey(Uint8Array.from(decoded))
 }
 async function main(): Promise<unknown> {
-  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
+  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
   await configureCliSigner()
   if (command === 'models') return voynich.models()
   if (command === 'enclaves') return voynich.enclaves()
@@ -487,6 +488,58 @@ async function main(): Promise<unknown> {
       throw new Error('Use model policy show <model>, model policy set <model>, or model policy clear <model>.')
     }
     const modelId = required(third, 'model')
+    if (argument === 'versions') return voynich.listVersions(modelId)
+    if (argument === 'upgrade') {
+      const weightsPath = required(fourth, 'weights file')
+      const weights = new Uint8Array(await readFile(weightsPath))
+      const existingModel = await voynich.model(modelId)
+      const manifest = values.manifest ? decodeManifest(await readFile(values.manifest, 'utf8')) : undefined
+      let modelKey: Uint8Array | undefined
+      const ownerKeyPath = values['owner-key'] ?? values.state
+      if (ownerKeyPath) {
+        const raw = (await readFile(ownerKeyPath, 'utf8')).trim()
+        if (/^[0-9a-fA-F]{64}$/.test(raw)) {
+          modelKey = fromHex(raw)
+        } else {
+          const parsed = JSON.parse(raw) as unknown
+          if (Array.isArray(parsed) && parsed.length === 32 && parsed.every(v => Number.isInteger(v) && v >= 0 && v <= 255)) {
+            modelKey = Uint8Array.from(parsed)
+          } else {
+            const loaded = await loadOwnerFile(ownerKeyPath, await password())
+            if (loaded.model !== existingModel.address) throw new Error('The owner key file belongs to another model')
+            modelKey = loaded.modelKey
+          }
+        }
+      }
+      const hasBaseFlags = Boolean(values.base || values['base-file'] || values['base-sha256'] || values['base-size'] || values['base-format'])
+      const base = hasBaseFlags
+        ? await resolveCliSealBase({
+            flags: {
+              base: values.base,
+              baseFile: values['base-file'],
+              baseSha256: values['base-sha256'],
+              baseSize: values['base-size'],
+              baseFormat: values['base-format'],
+            },
+            weights,
+            existingBase: existingModel.base ?? null,
+          })
+        : undefined
+      const res = await voynich.publishVersion(modelId, {
+        weights,
+        ...(manifest ? { manifest } : {}),
+        ...(base ? { base } : {}),
+        ...(modelKey ? { modelKey } : {}),
+      })
+      return {
+        model: res.model.address,
+        name: res.model.name,
+        version: res.version,
+        ciphertextSha256: res.ciphertextSha256,
+        noncePrefix: res.noncePrefix,
+        transactionsSent: res.transactionsSent,
+      }
+    }
     if (argument === 'retire') return voynich.retire(modelId)
     if (argument === 'revoke') return voynich.revoke(modelId, required(fourth, 'enclave'))
     if (argument === 'price') {
@@ -500,7 +553,7 @@ async function main(): Promise<unknown> {
         symbol: values.symbol ?? (sameMint ? model.price.symbol : mint ?? 'SOL'),
       }, values['operator-share-bps'] === undefined ? model.operatorShareBps : Number(values['operator-share-bps']), priceUnit !== undefined ? { priceUnit } : {})
     }
-    throw new Error('Use model price, model policy, model retire, or model revoke.')
+    throw new Error('Use model price, model policy, model versions, model upgrade, model retire, or model revoke.')
   }
   if (command === 'grant') {
     const model = await voynich.model(required(argument, 'model'))

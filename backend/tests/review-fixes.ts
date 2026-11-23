@@ -379,6 +379,7 @@ test('Waiting-mode enclave serves 200 waiting health, returns retryable 502 UPST
     measurement: 'ab'.repeat(48),
     region: null,
     models: [],
+    versions: {},
     openWeightsSeconds: {},
     grantToFirstAnswerSeconds: {},
     bases: {},
@@ -924,6 +925,7 @@ test('Build 2 Step 1: transactionFeeLamports, SealProgress/SealResult metrics, a
     measurement: 'ab'.repeat(48),
     region: null,
     models: [],
+    versions: {},
     openWeightsSeconds: {},
     grantToFirstAnswerSeconds: {},
     bases: {},
@@ -4892,4 +4894,154 @@ test('Build 10 Step 1: modelVersionPda, buildBeginVersionTx/buildPublishVersionT
   assert.equal(after.items[0]!.ciphertextSha256, published.ciphertextSha256)
   assert.equal(after.items[1]!.version, 1)
   assert.equal(after.items[1]!.status, 'archived')
+})
+
+test('Build 10 Step 2: enclave hot-reload on version bump, /health versions, and CLI model versions / model upgrade', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const execFileAsync = promisify(execFile)
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { fixtureModel, fixtureEnclave } = await import('@voynich/contract/fixtures')
+  const { buildApp } = await import('../src/app.js')
+  const { createVoynich } = await import('../sdk/src/index.js')
+  const { EnclaveRuntime, createEnclaveApp, loadedVersionsMap } = await import('../enclave/src/runtime.js')
+  const { sha256 } = await import('../sdk/src/crypto.js')
+
+  // 1. loadedVersionsMap and /health versions
+  const modelKey = Keypair.generate().publicKey
+  const enclaveKey = Keypair.generate().publicKey
+  const loaded = new Map<string, { version: number; ciphertextSha256: string }>([
+    [modelKey.toBase58(), { version: 2, ciphertextSha256: 'aa'.repeat(32) }],
+  ])
+  assert.deepEqual(loadedVersionsMap(loaded), { [modelKey.toBase58()]: 2 })
+  const healthApp = createEnclaveApp({
+    enclave: enclaveKey,
+    softwareMeasurement: 'ab'.repeat(48),
+    region: 'us-east',
+    loaded: loaded as never,
+    async acceptInput() {},
+    async getAnswer() { throw new Error('unused') },
+  }, () => true)
+  const healthJson = await (await healthApp.request('/health')).json() as { versions: Record<string, number> }
+  assert.deepEqual(healthJson.versions, { [modelKey.toBase58()]: 2 })
+
+  // 2. Enclave acceptInput detects on-chain version bump and triggers hot-reload via loadGrants()
+  const programId = Keypair.generate().publicKey
+  const callKey = Keypair.generate().publicKey
+  const envelopeBytes = Buffer.concat([Buffer.from([1]), Buffer.alloc(72, 3)])
+  const envelope = envelopeBytes.toString('base64')
+  const inputHash = sha256(envelopeBytes)
+  const callBuf = Buffer.alloc(349)
+  Buffer.from(sha256(new TextEncoder().encode('account:Call')).subarray(0, 8)).copy(callBuf, 0)
+  Keypair.generate().publicKey.toBuffer().copy(callBuf, 8) // caller
+  modelKey.toBuffer().copy(callBuf, 40) // model
+  enclaveKey.toBuffer().copy(callBuf, 72) // enclave
+  Buffer.from(inputHash).copy(callBuf, 112) // input_hash
+  callBuf.writeBigUInt64LE(100n, 292) // deadline_slot
+  callBuf[300] = 0 // status = open
+
+  let reloadCount = 0
+  let startCount = 0
+  const rt = Object.create(EnclaveRuntime.prototype) as InstanceType<typeof EnclaveRuntime>
+  const rtLoaded = new Map<string, { version: number; ciphertextSha256: string }>([
+    [modelKey.toBase58(), { version: 1, ciphertextSha256: '11'.repeat(32) }],
+  ])
+  Object.assign(rt, {
+    programId,
+    enclave: enclaveKey,
+    region: null,
+    loaded: rtLoaded,
+    inFlight: new Map(),
+    state: { version: 1, signingSeed: '', encryptionSecret: '', chain: null, grants: {}, answers: {}, inputHashes: {}, inputs: {}, pending: {} },
+    rpc: {
+      connection: {
+        getSlot: async () => 10,
+        getAccountInfo: async () => ({ data: callBuf, owner: programId }),
+      },
+    },
+    programs: {
+      voynich: {
+        programId,
+        account: {
+          model: {
+            fetch: async () => ({ currentVersion: 2, ciphertextSha256: Array.from(Buffer.alloc(32, 0x22)) }),
+          },
+        },
+      },
+    },
+    fetchModelPolicy: async () => null,
+    save: () => {},
+    startAnswer: () => { startCount++ },
+    loadGrants: async () => {
+      reloadCount++
+      rtLoaded.set(modelKey.toBase58(), { version: 2, ciphertextSha256: '22'.repeat(32) })
+      return []
+    },
+  })
+  await rt.acceptInput(callKey, envelope)
+  assert.equal(reloadCount, 1)
+  assert.equal(startCount, 1)
+  assert.equal(rtLoaded.get(modelKey.toBase58())?.version, 2)
+
+  // 3. CLI voynich model versions & voynich model upgrade
+  const app = buildApp()
+  const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b10s2-cli-'))
+  const owner = Keypair.generate()
+  const ownerKeyPath = join(scratch, 'owner.json')
+  writeFileSync(ownerKeyPath, JSON.stringify([...owner.secretKey]))
+  const modelKeyPath = join(scratch, 'model.key')
+  writeFileSync(modelKeyPath, '04'.repeat(32))
+  const v2WeightsPath = join(scratch, 'v2.onnx')
+  writeFileSync(v2WeightsPath, Buffer.alloc(160, 0x55))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  const runCli = async (args: string[]) => {
+    const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, '--keypair', ownerKeyPath, ...args], {
+      cwd: resolve('.'),
+      encoding: 'utf8',
+    })
+    return JSON.parse(stdout) as Record<string, unknown>
+  }
+
+  try {
+    const sdk = createVoynich({ apiUrl, signer: owner, pollMs: 5 })
+    const sealed = await sdk.seal({
+      weights: new Uint8Array(64).fill(3),
+      manifest: { ...fixtureModel.manifest, name: 'upgrade-cli-test' },
+      price: { mint: null, amount: '100000', decimals: 9, symbol: 'SOL' },
+      operatorShareBps: 2500,
+      allowedMeasurements: [fixtureEnclave.measurement],
+      uploadFundingLamports: '1000000',
+    })
+    const modelAddr = sealed.model.address
+
+    const before = await runCli(['model', 'versions', modelAddr, '--json'])
+    assert.equal(before.currentVersion, 1)
+    assert.equal((before.items as unknown[]).length, 1)
+
+    const upgraded = await runCli(['model', 'upgrade', modelAddr, v2WeightsPath, '--owner-key', modelKeyPath, '--json'])
+    assert.equal(upgraded.model, modelAddr)
+    assert.equal(upgraded.version, 2)
+    assert.ok(typeof upgraded.ciphertextSha256 === 'string' && (upgraded.ciphertextSha256 as string).length === 64)
+
+    const after = await runCli(['model', 'versions', modelAddr])
+    assert.equal(after.currentVersion, 2)
+    const items = after.items as Array<{ version: number; status: string }>
+    assert.equal(items.length, 2)
+    assert.equal(items[0]!.version, 2)
+    assert.equal(items[0]!.status, 'live')
+    assert.equal(items[1]!.version, 1)
+    assert.equal(items[1]!.status, 'archived')
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
 })
