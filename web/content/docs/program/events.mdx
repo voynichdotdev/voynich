@@ -3,7 +3,7 @@ title: Events
 description: Every event the voynich program emits, its fields and how to decode it from a transaction.
 ---
 
-The program emits an event for every change of state. There are 21.
+The program emits an event for every change of state. There are 24.
 
 <Rows data="program-events" columns="event,emittedBy,says,discriminator" />
 
@@ -119,3 +119,15 @@ The fields are the Receipt's, with the Receipt's address as `receipt`, plus opti
 ## ModelVersionPublished
 
 <Rows data="event-model-version-published" />
+
+## SessionOpened
+
+<Rows data="event-session-opened" />
+
+## SessionDebited
+
+<Rows data="event-session-debited" />
+
+## SessionClosed
+
+<Rows data="event-session-closed" />

@@ -1,0 +1,30 @@
+[
+  {
+    "argument": "delegate",
+    "type": "pubkey"
+  },
+  {
+    "argument": "nonce",
+    "type": "u64"
+  },
+  {
+    "argument": "mint",
+    "type": "pubkey"
+  },
+  {
+    "argument": "model",
+    "type": "pubkey"
+  },
+  {
+    "argument": "budget",
+    "type": "u64"
+  },
+  {
+    "argument": "expires_at_slot",
+    "type": "u64"
+  },
+  {
+    "argument": "delegate_gas_lamports",
+    "type": "u64"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "field": "session",
+    "type": "pubkey"
+  },
+  {
+    "field": "caller",
+    "type": "pubkey"
+  },
+  {
+    "field": "delegate",
+    "type": "pubkey"
+  },
+  {
+    "field": "closer",
+    "type": "pubkey"
+  },
+  {
+    "field": "returned_amount",
+    "type": "u64"
+  },
+  {
+    "field": "spent",
+    "type": "u64"
+  },
+  {
+    "field": "calls_opened",
+    "type": "u64"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  },
+  {
+    "field": "status",
+    "type": "SessionStatus"
+  }
+]

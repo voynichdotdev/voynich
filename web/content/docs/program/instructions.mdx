@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 31 instructions.
+The program has 35 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -355,3 +355,45 @@ Finalizes an uploading `ModelVersion`'s Merkle root and atomically swaps it live
 
 - **Checks.** `owner` is `model.owner` (`Unauthorized`). `model_version.status` is `Uploading` (`InvalidVersion`), every `Weights` account is written to its end (`UploadIncomplete`), and folding `merkle_frontier` matches `ciphertext_sha256` (`CiphertextHashMismatch`).
 - **Effects.** Marks `model_version.status = Live`, records `published_slot = clock.slot`, clears its `merkle_frontier`, atomically replaces `model.weights`, `model.size_bytes`, `model.nonce_prefix`, `model.ciphertext_sha256`, `model.manifest`, `model.base`, `model.hash_version = 1`, and `model.current_version = model_version.version`, and emits `ModelVersionPublished` (carrying the prior version snapshot so indexers archive the superseded version without altering existing `Grant` accounts).
+
+## open_session
+
+Creates a 186-byte `Session` PDA at `["session", caller, delegate, nonce_le]`, deposits `budget` (SOL lamports into the PDA or SPL tokens into `session_escrow`), optionally funds `delegate_gas_lamports`, and authorizes `delegate` to open calls until `expires_at_slot`.
+
+<Rows data="ix-open-session-args" />
+
+<Rows data="ix-open-session" />
+
+- **Checks.** `budget > 0`, `ttl_slots > 0`, and `delegate` is not the default address (`InvalidSession`). For an SPL `mint`, `caller_tokens` and `session_escrow` match the mint (`InvalidTokenAccount`).
+- **Effects.** Initializes `Session` in `Open` with `expires_at_slot = clock.slot + ttl_slots`, transfers `budget` (and any `delegate_gas_lamports` to `delegate`), and emits `SessionOpened`.
+
+## close_session
+
+Sweeps unspent `budget - spent` from an open `Session` PDA back to `caller` and marks the session `Closed`.
+
+<Rows data="ix-close-session" />
+
+- **Checks.** `session.status` is `Open` (`InvalidSession`). `closer` is `session.caller` (at any slot) or any wallet once `clock.slot > session.expires_at_slot` (`Unauthorized` / `InvalidSession`). `caller` matches `session.caller` (`InvalidRecipient`).
+- **Effects.** Returns `budget - spent` to `caller` (for SOL directly in lamports; for SPL closing `session_escrow` back to `caller_tokens`), marks `session.status = Closed`, and emits `SessionClosed`.
+
+## open_session_call
+
+Opens a per-call `Call` signed by `delegate` alone (zero `caller` signature required), debiting `model.price` directly from the `Session` PDA.
+
+<Rows data="ix-open-session-call-args" />
+
+<Rows data="ix-open-session-call" />
+
+- **Checks.** `delegate` matches `session.delegate` (`Unauthorized`). `session.status == Open`, `clock.slot <= session.expires_at_slot`, `session.mint == model.price_mint`, `session.model` is either the default address or `model.key()`, and `session.budget - session.spent >= model.price` (`InvalidSession`). Model, Grant, attestation, optional `Policy` (enforced against `session.caller`), and optional `callback` pass the same checks as `open_call`.
+- **Effects.** Debits `model.price` from `session` into `call` escrow, increments `session.spent` and `session.calls_opened`, writes the canonical `Call` PDA at `["call", session.caller, nonce_le]` with `call.caller = session.caller`, and emits `CallOpened` and `SessionDebited`.
+
+## open_session_metered_call
+
+Opens a per-token metered `Call` signed by `delegate` alone, debiting `ceiling` directly from the `Session` PDA.
+
+<Rows data="ix-open-session-metered-call-args" />
+
+<Rows data="ix-open-session-metered-call" />
+
+- **Checks.** Passes the same session checks as `open_session_call` against `ceiling` (`session.budget - session.spent >= ceiling`) plus the per-token model and ceiling checks of `open_metered_call`.
+- **Effects.** Debits `ceiling` from `session` into `call` escrow, increments `session.spent` and `session.calls_opened`, writes the canonical metered `Call` PDA with `call.caller = session.caller`, and emits `CallOpened` and `SessionDebited`.

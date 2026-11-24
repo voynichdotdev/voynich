@@ -52,5 +52,11 @@
     "discriminator": "`279a496a50669199`",
     "fields": 19,
     "bytes": ""
+  },
+  {
+    "account": "Session",
+    "discriminator": "`f3514873d6bc4890`",
+    "fields": 12,
+    "bytes": "186"
   }
 ]

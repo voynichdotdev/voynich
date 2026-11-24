@@ -124,5 +124,23 @@
     "discriminator": "`c16024082906d0c4`",
     "emittedBy": "`publish_version`",
     "says": "A ModelVersion was finalized and atomically flipped live on the Model, carrying the prior version snapshot."
+  },
+  {
+    "event": "SessionOpened",
+    "discriminator": "`224f4d5fc3cf68df`",
+    "emittedBy": "`open_session`",
+    "says": "A funded Session PDA was created authorizing a delegate until `expires_at_slot`."
+  },
+  {
+    "event": "SessionDebited",
+    "discriminator": "`886ca02cb17d246d`",
+    "emittedBy": "`open_session_call`, `open_session_metered_call`",
+    "says": "Escrow was debited from a Session PDA to open a delegated call."
+  },
+  {
+    "event": "SessionClosed",
+    "discriminator": "`39ed0bf3c222781b`",
+    "emittedBy": "`close_session`",
+    "says": "A Session PDA was closed and its unspent budget returned to `caller`."
   }
 ]

@@ -21,6 +21,7 @@ The `voynich` program is an Anchor program. Its address on a cluster is `program
 | Grant | PDA `["grant", model, enclave]` | 226 bytes (223 bytes legacy) | the grant's payer |
 | Call | PDA `["call", caller, nonce]` | 349 bytes plus 33 bytes per callback account (302, 303, 304 or 340 + 33 * N legacy) | the payer |
 | Receipt | PDA `["receipt", call]` | 407 bytes plus `open_answer` (423 bytes for metered calls; 401 or 406 plus `open_answer` legacy) | the settling payer |
+| Session | PDA `["session", caller, delegate, nonce]` | 186 bytes | the caller |
 
 In a seed, `name` is the model's name as UTF-8, an address is its 32 bytes, and `nonce` is 8 bytes little-endian.
 
@@ -113,3 +114,11 @@ One per settled call, at PDA `["receipt", call]`. Created by `settle_call` (per-
 <Rows data="account-receipt" columns="field,type,offset,meaning" />
 
 `owner_amount`, `operator_amount` and `protocol_amount` add up to `total`. Flat per-call receipts stay at `407 + open_answer.len()` bytes. A metered receipt created by `settle_metered_call` writes the exact 407-byte `Receipt` prefix (`answer_mode = Sealed`, `open_answer = []`, `output_hash = running_hash`, `total = count * price`) followed by 16 trailing bytes (`Receipt::METERED_SPACE = 423`): `delivered_count: u64` (offset 407) and `returned_amount: u64` (offset 415). Opening a call via CPI and verifying a Receipt from your own program is in [Calling a model from a program](/docs/program/calling-a-model).
+
+## Session
+
+One per delegated caller budget, at PDA `["session", caller, delegate, nonce_le]` (`Session::SPACE = 186` bytes). Created by `open_session`, debited by `open_session_call` and `open_session_metered_call`, and closed by `close_session`.
+
+<Rows data="account-session" columns="field,type,offset,meaning" />
+
+`status` is one byte: 0 `Open`, 1 `Closed`. A SOL session holds its `budget - spent` lamports inside the Session PDA above rent; an SPL session holds its budget in its associated token account `session_escrow`. Delegated calls write the exact same `Call` PDA with `call.caller = session.caller`, keeping `Policy` allow lists, `settle_call`, `settle_metered_call`, `refund_call`, `Receipt`, and enclave verification unchanged.

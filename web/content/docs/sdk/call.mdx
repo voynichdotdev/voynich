@@ -183,3 +183,24 @@ For custom enclave selection outside `call` or `stream`, import `selectEnclave(e
 `voynich.streamPieces(callAddress, options)` subscribes to `GET /v1/calls/{id}/stream` (with automatic `?after=<index>` reconnect catch-up against `GET /v1/calls/{id}/pieces`) and verifies every piece through `verifyStreamPiece` before yielding `VerifiedStreamPiece` (`{ piece, payload, text, tokens, count, runningHash, finishReason, spentAmount?, remainingAmount? }`). `verifyStreamPiece` checks sequential `index`, monotonic `count`, non-zero `deltaTokens` on intermediate pieces (`deltaTokens === 0` is allowed only on terminal pieces with a non-null `finishReason`, such as `'stopped'` or `'eos'`), `SHA-256(envelope) === pieceHash`, the `streamNextHash` running hash chain, and the Ed25519 signature over `voynich/piece/v1` (120 bytes) or `voynich/piece/v2` (152 bytes with `baseSha256`) before decrypting the piece envelope.
 
 For a complete autonomous agent script that calls a model with a keypair, enforces all receipt checks and forwards the receipt proof downstream, see [Calling from an agent](/docs/sdk/from-an-agent).
+
+## Caller sessions
+
+To run multiple calls or streams with one upfront wallet signature, open a funded `Session` PDA (`openSession`) that authorizes an ephemeral `delegate` keypair until `expiresAtSlot`:
+
+```ts
+const session = await voynich.openSession({
+  budget: '500000',
+  ttlSlots: '1800',
+  model: 'sketch-32',
+})
+
+// Zero wallet prompts per call, signed by session.delegate alone
+const first = await session.call('sketch-32', pixels)
+const second = await session.call('sketch-32', pixels)
+
+await session.refresh()
+const closed = await session.close() // returns remaining budget to caller
+```
+
+`voynich.openSession(options)` signs `open_session` once with the client's wallet and returns a `VoynichSession` handle (`session.call`, `session.openStream`, `session.stream`, `session.refresh`, `session.close`). `voynich.listSessions(wallet?)` reads `GET /v1/accounts/{wallet}/sessions`, `voynich.session(address)` reads `GET /v1/sessions/{address}`, and `voynich.closeSession(address)` sweeps any remaining budget back to `caller`.

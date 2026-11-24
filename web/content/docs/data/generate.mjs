@@ -189,6 +189,20 @@ const FIELDS = {
     open_answer: 'Plaintext answer bytes stored on chain for an `Open` call (SHA-256 equals `output_hash`). Empty for a `Sealed` call.',
     caller_is_program: 'True when the settled Call was opened through CPI by another Solana program.',
   },
+  Session: {
+    caller: 'The wallet that opened and funded the session. Recorded as `call.caller` on every delegated call and receives remaining budget on close.',
+    delegate: 'The ephemeral keypair authorized to sign `open_session_call` and `open_session_metered_call` without further caller signatures.',
+    nonce: 'Caller-chosen u64 nonce deriving the Session PDA `["session", caller, delegate, nonce_le]`.',
+    mint: 'The mint of the session budget. The default (all-zero) address means native SOL.',
+    model: 'Optional model restriction. The default (all-zero) address allows any live model priced in `mint`.',
+    budget: 'Total escrow deposited into the session in base units of `mint`.',
+    spent: 'Cumulative escrow debited from the session across opened calls.',
+    calls_opened: 'Number of calls opened under this session.',
+    opened_slot: 'The slot the session was opened in.',
+    expires_at_slot: 'The last slot the delegate may open new calls. After it, anyone may call `close_session` to return unspent budget to `caller`.',
+    status: '`Open` (`0`) or `Closed` (`1`).',
+    bump: 'The PDA bump.',
+  },
 }
 
 const accounts = idl.accounts.map((account) => {
@@ -247,6 +261,10 @@ const SAYS = {
   write_version_weights: 'Writes ciphertext bytes into one Weights account belonging to an uploading ModelVersion.',
   seal_version_range: 'Hashes 1 to 8 consecutive 65,552-byte ciphertext chunks into an uploading ModelVersion\'s Merkle frontier.',
   publish_version: 'Finalizes an uploading ModelVersion\'s Merkle root and atomically flips the Model\'s active weights, hash, manifest, base, nonce prefix and `current_version`.',
+  open_session: 'Creates a 186-byte Session PDA funded with `budget` (SOL or SPL) and authorizes `delegate` to open calls until `expires_at_slot`.',
+  close_session: 'Sweeps remaining `budget - spent` from a Session PDA back to `caller` and marks it `Closed`. Callable by `caller` anytime or by anyone after `expires_at_slot`.',
+  open_session_call: 'Opens a per-call Call signed by `delegate` alone, debiting `model.price` from the Session PDA and recording `call.caller = session.caller`.',
+  open_session_metered_call: 'Opens a per-token metered Call signed by `delegate` alone, debiting `ceiling` from the Session PDA and recording `call.caller = session.caller`.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -419,6 +437,41 @@ const ACCOUNTS = {
     owner: 'The model\'s owner.',
     model_version: 'The uploading ModelVersion PDA finalized and flipped to `Live`.',
   },
+  open_session: {
+    caller: 'The wallet opening and funding the session. Pays Session PDA rent, deposits `budget`, and optionally funds `delegate_gas_lamports`.',
+    delegate: 'The ephemeral keypair authorized to open delegated calls (writable when receiving `delegate_gas_lamports`).',
+    session: 'The 186-byte Session PDA at `["session", caller, delegate, nonce_le]`, created here.',
+    mint: 'The session budget mint. Only for an SPL mint.',
+    caller_tokens: 'The caller\'s token account for `mint`. Only for an SPL mint.',
+    session_escrow: 'The Session PDA\'s associated token account for `mint`, created here. Only for an SPL mint.',
+  },
+  close_session: {
+    closer: 'Either `session.caller` (at any slot) or any wallet once `clock.slot > session.expires_at_slot`.',
+    session: 'The open Session PDA being closed.',
+    caller: 'The session\'s `caller`. Receives remaining `budget - spent` and closed SPL escrow rent.',
+    session_escrow: 'The Session PDA\'s associated token account. Only for an SPL mint.',
+    caller_tokens: 'The caller\'s token account for `mint`. Only for an SPL mint.',
+  },
+  open_session_call: {
+    delegate: 'The session\'s `delegate`. Signs and pays the Call account rent (zero `caller` signature required).',
+    session: 'The open Session PDA debited by `model.price`.',
+    enclave: 'The Enclave chosen to answer.',
+    grant: 'That enclave\'s Grant for the model, not revoked.',
+    call: 'The Call PDA at `["call", session.caller, nonce_le]`, created here with `call.caller = session.caller`.',
+    mint: 'The model\'s price mint. Only for a price in a mint.',
+    session_escrow: 'The Session PDA\'s associated token account. Only for a price in a mint.',
+    escrow_tokens: 'The Call\'s associated token account for the mint, created here. Only for a price in a mint.',
+  },
+  open_session_metered_call: {
+    delegate: 'The session\'s `delegate`. Signs and pays the Call account rent (zero `caller` signature required).',
+    session: 'The open Session PDA debited by `ceiling`.',
+    enclave: 'The Enclave chosen to answer.',
+    grant: 'That enclave\'s Grant for the model, not revoked.',
+    call: 'The Call PDA at `["call", session.caller, nonce_le]`, created here with `call.caller = session.caller`.',
+    mint: 'The model\'s price mint. Only for a price in a mint.',
+    session_escrow: 'The Session PDA\'s associated token account. Only for a price in a mint.',
+    escrow_tokens: 'The Call\'s associated token account for the mint, created here. Only for a price in a mint.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -484,6 +537,9 @@ const EVENTS = {
   GrantQuoteUpdated: ['set_quote', 'An enclave operator set or cleared a quoted operator share on a Grant.'],
   ModelVersionStarted: ['begin_version', 'A new ModelVersion PDA was created in `Uploading` while the model stayed live.'],
   ModelVersionPublished: ['publish_version', 'A ModelVersion was finalized and atomically flipped live on the Model, carrying the prior version snapshot.'],
+  SessionOpened: ['open_session', 'A funded Session PDA was created authorizing a delegate until `expires_at_slot`.'],
+  SessionDebited: ['open_session_call, open_session_metered_call', 'Escrow was debited from a Session PDA to open a delegated call.'],
+  SessionClosed: ['close_session', 'A Session PDA was closed and its unspent budget returned to `caller`.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -530,6 +586,7 @@ const RAISED = {
   PolicyRequired: 'In `open_call`, `open_metered_call`, `grant_by_owner` or `grant_by_enclave`: `model.has_policy` is true, but the canonical Policy PDA (`["policy", model]`, owned by the Voynich program) was omitted from remaining accounts.',
   InvalidQuote: 'In `set_quote`: `operator_share_bps` exceeds `model.operator_share_bps`.',
   InvalidVersion: 'In `begin_version`: `version` is not `model.effective_version() + 1` or the model is not `Live`. In `write_version_weights`, `seal_version_range` or `publish_version`: `model_version.status` is not `Uploading` or `version` does not match.',
+  InvalidSession: 'In `open_session`: `budget == 0`, `ttl_slots == 0`, or `delegate` is the default address. In `open_session_call` / `open_session_metered_call`: the session is closed, expired, mismatched on `mint` or `model`, or lacks remaining `budget - spent`. In `close_session`: the session is already closed, or a non-caller tried to close it before `expires_at_slot`.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -589,6 +646,8 @@ const API_ERRORS = {
   POLICY_REQUIRED: 'This model has an active policy; pass its Policy account in remaining accounts.',
   INVALID_QUOTE: 'The quoted operator share exceeds the model\'s maximum operator share.',
   INVALID_VERSION: 'The requested model version number or upload state is invalid.',
+  SESSION_NOT_FOUND: 'No session has this address.',
+  INVALID_SESSION: 'The session parameters, budget, expiry, model scope, or status are invalid.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

@@ -1,0 +1,38 @@
+[
+  {
+    "field": "session",
+    "type": "pubkey"
+  },
+  {
+    "field": "caller",
+    "type": "pubkey"
+  },
+  {
+    "field": "delegate",
+    "type": "pubkey"
+  },
+  {
+    "field": "nonce",
+    "type": "u64"
+  },
+  {
+    "field": "mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "budget",
+    "type": "u64"
+  },
+  {
+    "field": "opened_slot",
+    "type": "u64"
+  },
+  {
+    "field": "expires_at_slot",
+    "type": "u64"
+  }
+]

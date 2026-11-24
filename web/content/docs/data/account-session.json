@@ -1,0 +1,74 @@
+[
+  {
+    "field": "caller",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The wallet that opened and funded the session. Recorded as `call.caller` on every delegated call and receives remaining budget on close."
+  },
+  {
+    "field": "delegate",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The ephemeral keypair authorized to sign `open_session_call` and `open_session_metered_call` without further caller signatures."
+  },
+  {
+    "field": "nonce",
+    "type": "u64",
+    "offset": "72",
+    "meaning": "Caller-chosen u64 nonce deriving the Session PDA `[\"session\", caller, delegate, nonce_le]`."
+  },
+  {
+    "field": "mint",
+    "type": "pubkey",
+    "offset": "80",
+    "meaning": "The mint of the session budget. The default (all-zero) address means native SOL."
+  },
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "112",
+    "meaning": "Optional model restriction. The default (all-zero) address allows any live model priced in `mint`."
+  },
+  {
+    "field": "budget",
+    "type": "u64",
+    "offset": "144",
+    "meaning": "Total escrow deposited into the session in base units of `mint`."
+  },
+  {
+    "field": "spent",
+    "type": "u64",
+    "offset": "152",
+    "meaning": "Cumulative escrow debited from the session across opened calls."
+  },
+  {
+    "field": "calls_opened",
+    "type": "u64",
+    "offset": "160",
+    "meaning": "Number of calls opened under this session."
+  },
+  {
+    "field": "opened_slot",
+    "type": "u64",
+    "offset": "168",
+    "meaning": "The slot the session was opened in."
+  },
+  {
+    "field": "expires_at_slot",
+    "type": "u64",
+    "offset": "176",
+    "meaning": "The last slot the delegate may open new calls. After it, anyone may call `close_session` to return unspent budget to `caller`."
+  },
+  {
+    "field": "status",
+    "type": "SessionStatus",
+    "offset": "184",
+    "meaning": "`Open` (`0`) or `Closed` (`1`)."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "185",
+    "meaning": "The PDA bump."
+  }
+]

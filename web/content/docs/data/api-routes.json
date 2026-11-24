@@ -250,6 +250,31 @@
     "does": "Build cancel to refund an open bounty to its creator"
   },
   {
+    "route": "GET /v1/accounts/{wallet}/sessions",
+    "operation": "accountSessions",
+    "does": "List caller sessions for a wallet"
+  },
+  {
+    "route": "GET /v1/sessions/{address}",
+    "operation": "session",
+    "does": "One caller session with budget, spent, remaining, and expiry"
+  },
+  {
+    "route": "POST /v1/sessions/build",
+    "operation": "openSession",
+    "does": "Build open_session to fund a delegated caller session in one signature"
+  },
+  {
+    "route": "POST /v1/sessions/{address}/close/build",
+    "operation": "closeSession",
+    "does": "Build close_session to return unspent session budget to the caller"
+  },
+  {
+    "route": "POST /v1/sessions/{address}/call/build",
+    "operation": "openSessionCall",
+    "does": "Build open_session_call or open_session_metered_call signed by the session delegate"
+  },
+  {
     "route": "POST /v1/transactions/submit",
     "operation": "submitTransaction",
     "does": "Submit signed bytes or follow a wallet-sent signature"

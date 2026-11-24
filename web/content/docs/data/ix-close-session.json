@@ -1,0 +1,74 @@
+[
+  {
+    "account": "closer",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Either `session.caller` (at any slot) or any wallet once `clock.slot > session.expires_at_slot`."
+  },
+  {
+    "account": "session",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"session\", session.caller, session.delegate, session.nonce]`",
+    "is": "The open Session PDA being closed."
+  },
+  {
+    "account": "caller",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The session's `caller`. Receives remaining `budget - spent` and closed SPL escrow rent."
+  },
+  {
+    "account": "session_escrow",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The Session PDA's associated token account. Only for an SPL mint."
+  },
+  {
+    "account": "caller_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The caller's token account for `mint`. Only for an SPL mint."
+  },
+  {
+    "account": "token_program",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`",
+    "is": "The SPL Token program. Only for a price in a mint."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

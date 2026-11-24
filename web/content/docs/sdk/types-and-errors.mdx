@@ -7,7 +7,7 @@ description: Every export of the voynich package and every error it raises.
 
 | Export | Kind | What it is |
 | --- | --- | --- |
-| `default` | client | In Node: `call`, `stream`, `openStream`, `streamPieces`, `settle`, `verify`, `seal`, `models`, `model`, `listVersions`, `publishVersion`, `policy`, `setPolicy`, `clearPolicy`, `enclaves`, `enclave`, `measurements`, `measurement`, `publishMeasurement`, `deprecateMeasurement`, `grant`, `revoke`, `setQuote`, `setPrice`, `retire`, `refund` and `account`, configured from `VOYNICH_API_URL` and `VOYNICH_KEYPAIR` on first use. The functions that sign read `VOYNICH_KEYPAIR`; the reads do not. |
+| `default` | client | In Node: `call`, `stream`, `openStream`, `streamPieces`, `settle`, `verify`, `seal`, `openSession`, `closeSession`, `listSessions`, `session`, `models`, `model`, `listVersions`, `publishVersion`, `policy`, `setPolicy`, `clearPolicy`, `enclaves`, `enclave`, `measurements`, `measurement`, `publishMeasurement`, `deprecateMeasurement`, `grant`, `revoke`, `setQuote`, `setPrice`, `retire`, `refund` and `account`, configured from `VOYNICH_API_URL` and `VOYNICH_KEYPAIR` on first use. The functions that sign read `VOYNICH_KEYPAIR`; the reads do not. |
 | `createVoynich(options)` | function | Creates a client. See [Install](/docs/sdk/install#options). |
 | `VoynichError` | class | The error the client throws. See [Errors](#errors). |
 | `selectEnclave(enclaves, options?)` | function | Deterministic enclave router choosing a live, reachable granted enclave by `strategy` (`'cheapest'`, `'fastest'`, or `'balanced'`) using effective share (`quotedOperatorShareBps ?? modelOperatorShareBps`), rolling `medianAnswerMs`, and `signingKey` tie-break. |
@@ -28,12 +28,13 @@ description: Every export of the voynich package and every error it raises.
 | `Verification` | type | The result of [verify](/docs/sdk/verify#what-comes-back). |
 | `SealOptions`, `SealResume`, `SealMetrics`, `SealProgress`, `SealResult` | types | The options, saved state, metrics, progress and result of [seal](/docs/sdk/seal). |
 | `PublishVersionOptions`, `PublishVersionResult` | types | The options and result (`{ model, version, ciphertextSha256, noncePrefix, transactionsSent }`) of [`publishVersion`](/docs/sdk/models-and-enclaves#listversions-and-publishversion). |
+| `SessionAuth`, `OpenSessionOptions`, `CloseSessionResult`, `VoynichSession` | types | Options, result, and delegated session handle (`call`, `openStream`, `stream`, `refresh`, `close`) for [`openSession`](/docs/sdk/call#caller-sessions). |
 | `SketchInput` | type | `readonly number[] \| readonly (readonly number[])[] \| Float32Array \| Float64Array \| { strokes: readonly Stroke[]; width: number; height: number }` |
 | `Stroke` | type | `readonly (readonly [number, number])[]` |
 
 Everything in `voynich/crypto` and `voynich/adapter` is exported from `voynich` as well.
 
-The types of what the API returns (`Model`, `ModelBase`, `VersionStatus`, `ModelVersion`, `ModelVersions`, `BeginVersionRequest`, `WriteVersionWeightsRequest`, `SealVersionRangeRequest`, `PublishVersionRequest`, `ModelPolicy`, `PolicyRegion`, `SetPolicyRequest`, `SetQuoteRequest`, `PriceUnit`, `TokenizerRef`, `TokenizerFormat`, `Enclave`, `MeasurementStatus`, `MeasurementRecord`, `MeasurementsPage`, `MeasurementQuery`, `PublishMeasurementRequest`, `Grant`, `Call`, `CallAnswer`, `StreamFinishReason`, `StreamPiece`, `CallStreamDone`, `CallPieces`, `StopCallRequest`, `StopCallAccepted`, `SettleCallRequest`, `Receipt`, `ReceiptView`, `Money`, `Manifest`, `Build`, `TxStatus` and the rest), the contract limits (`MODEL_BASE_FORMATS`, `TOKENIZER_FORMATS`, `MAX_BASE_FORMAT`, `MAX_BASE_SOURCE`, `PROGRAM_LIMITS`), and `ApiClientError` come from `@voynich/contract`. Their fields are on the [HTTP API](/docs/api/overview) pages.
+The types of what the API returns (`Model`, `ModelBase`, `VersionStatus`, `ModelVersion`, `ModelVersions`, `BeginVersionRequest`, `WriteVersionWeightsRequest`, `SealVersionRangeRequest`, `PublishVersionRequest`, `SessionStatus`, `Session`, `AccountSessions`, `OpenSessionRequest`, `OpenSessionCallRequest`, `ModelPolicy`, `PolicyRegion`, `SetPolicyRequest`, `SetQuoteRequest`, `PriceUnit`, `TokenizerRef`, `TokenizerFormat`, `Enclave`, `MeasurementStatus`, `MeasurementRecord`, `MeasurementsPage`, `MeasurementQuery`, `PublishMeasurementRequest`, `Grant`, `Call`, `CallAnswer`, `StreamFinishReason`, `StreamPiece`, `CallStreamDone`, `CallPieces`, `StopCallRequest`, `StopCallAccepted`, `SettleCallRequest`, `Receipt`, `ReceiptView`, `Money`, `Manifest`, `Build`, `TxStatus` and the rest), the contract limits (`MODEL_BASE_FORMATS`, `TOKENIZER_FORMATS`, `MAX_BASE_FORMAT`, `MAX_BASE_SOURCE`, `PROGRAM_LIMITS`), and `ApiClientError` come from `@voynich/contract`. Their fields are on the [HTTP API](/docs/api/overview) pages.
 
 ## voynich/crypto
 
@@ -117,6 +118,9 @@ Browser and Node compatible, zero Node-only imports.
 | `modelVersionPda(model, version, programId?)` | Derives the `ModelVersion` PDA (`["version", model, u32_le(version)]`). `MODEL_VERSION_SPACE` is `8192` bytes. |
 | `decodeModelVersionAccount(data)` | Decodes an on-chain `ModelVersion` account into `{ model, version, status, weights, sizeBytes, noncePrefix, ciphertextSha256, manifest, base, hashVersion, sealedChunks, merkleFrontier, merkleFrontierMask, publishedSlot, bump }`. |
 | `buildBeginVersionTx`, `buildPublishVersionTx` | Build unsigned `begin_version` and `publish_version` transactions against `programId`. |
+| `sessionPda(caller, delegate, nonce, programId?)` | Derives the `Session` PDA (`["session", caller, delegate, u64_le(nonce)]`). `SESSION_SPACE` is `186` bytes. |
+| `decodeSessionAccount(data)` | Decodes a 186-byte on-chain `Session` account into `{ caller, delegate, nonce, mint, model, budget, spent, callsOpened, openedSlot, expiresAtSlot, status, bump }`. |
+| `buildOpenSessionTx`, `buildCloseSessionTx` | Build unsigned `open_session` and `close_session` transactions against `programId`. |
 | `pda(programId, ...seeds)` | A PDA from raw seeds. |
 | `eventAccounts(programId)` | `{ eventAuthority, program }`, the two accounts every instruction ends with. |
 | `chainPrograms(connection, ids?)` | Typed Anchor program clients, `{ voynich, attest }`, for reading accounts and decoding events. |

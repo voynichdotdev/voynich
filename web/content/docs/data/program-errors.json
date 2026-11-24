@@ -229,5 +229,12 @@
     "hex": "`0x1790`",
     "message": "The model version is invalid or not in the required state.",
     "raisedWhen": "In `begin_version`: `version` is not `model.effective_version() + 1` or the model is not `Live`. In `write_version_weights`, `seal_version_range` or `publish_version`: `model_version.status` is not `Uploading` or `version` does not match."
+  },
+  {
+    "name": "InvalidSession",
+    "code": "6033",
+    "hex": "`0x1791`",
+    "message": "The caller session is closed, expired, out of budget, or does not match this call.",
+    "raisedWhen": "In `open_session`: `budget == 0`, `ttl_slots == 0`, or `delegate` is the default address. In `open_session_call` / `open_session_metered_call`: the session is closed, expired, mismatched on `mint` or `model`, or lacks remaining `budget - spent`. In `close_session`: the session is already closed, or a non-caller tried to close it before `expires_at_slot`."
   }
 ]

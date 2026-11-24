@@ -1,9 +1,9 @@
 ---
 title: Accounts and stats
-description: A wallet's models, enclaves, earnings and calls, the protocol's counts, and the home summary of sketch-32.
+description: A wallet's models, enclaves, earnings, calls and caller sessions, the protocol's counts, and the home summary of sketch-32.
 ---
 
-Three routes read summaries: everything one wallet has on the protocol, the protocol's counts, and the first model with a piece of its ciphertext. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
+Eight routes cover account summaries, caller sessions, protocol counts, and the home summary. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
 
 ## `GET /v1/accounts/{wallet}`
 
@@ -37,6 +37,30 @@ Every list is whole, without pages. A wallet with nothing on the protocol return
 | `VALIDATION_ERROR` | `{wallet}` is not an address. |
 
 Next: a call whose `status` is `refundable` is refunded with [`POST /v1/calls/{id}/refund/build`](/docs/api/calls-and-receipts#post-v1callsidrefundbuild). An owned model is changed with the builds on [Models](/docs/api/models#builds). How earnings come about is in [Fees and the token](/docs/concepts/fees-and-the-token#the-split).
+
+## Caller sessions
+
+A `Session` PDA (`["session", caller, delegate, nonce_le]`) lets a caller deposit a capped budget once and authorize an ephemeral `delegate` keypair to open multiple calls without further wallet prompts. Each session object carries `address`, `caller`, `delegate`, `nonce`, `mint`, `model` (`null` for any model), `budget`, `spent`, `remaining`, `callsOpened`, `openedSlot`, `expiresAtSlot`, and `status` (`open` or `closed`).
+
+### `GET /v1/accounts/{wallet}/sessions`
+
+Lists every session opened by `{wallet}` (`{ wallet, items, asOf }`).
+
+### `GET /v1/sessions/{address}`
+
+Reads one `Session` by its PDA address. Answers `SESSION_NOT_FOUND` (`404`) when none exists.
+
+### `POST /v1/sessions/build`
+
+Builds [`open_session`](/docs/program/instructions#opensession): `{ wallet, delegate, budget, ttlSlots, mint?, model?, nonce?, delegateGasLamports? }`. Returns a Build with `action: "open_session"` and `addresses: { session }`.
+
+### `POST /v1/sessions/{address}/close/build`
+
+Builds [`close_session`](/docs/program/instructions#closesession): `{ wallet }`. Sweeps unspent `budget - spent` back to `session.caller` (callable by `caller` anytime, or by anyone after `expiresAtSlot`). Returns a Build with `action: "close_session"` and `addresses: { session }`.
+
+### `POST /v1/sessions/{address}/call/build`
+
+Builds [`open_session_call`](/docs/program/instructions#opensessioncall) (or [`open_session_metered_call`](/docs/program/instructions#opensessionmeteredcall) when `ceiling` is supplied for a per-token model), signed by `session.delegate` alone: `{ delegate, model, enclave, inputHash, answerMode?, nonce?, ceiling? }`. Returns a Build with `action: "open_session_call"` and `addresses: { model, session, call }`. Answers `SESSION_NOT_FOUND` (`404`) or `INVALID_SESSION` (`422`) if the session is closed, expired, mismatched, or out of budget.
 
 ## `GET /v1/stats`
 

@@ -184,5 +184,29 @@
     "arguments": "`ciphertext_sha256: [u8; 32]`",
     "signers": "`owner`",
     "does": "Finalizes an uploading ModelVersion's Merkle root and atomically flips the Model's active weights, hash, manifest, base, nonce prefix and `current_version`."
+  },
+  {
+    "instruction": "open_session",
+    "arguments": "`args: OpenSessionArgs`",
+    "signers": "`caller`",
+    "does": "Creates a 186-byte Session PDA funded with `budget` (SOL or SPL) and authorizes `delegate` to open calls until `expires_at_slot`."
+  },
+  {
+    "instruction": "close_session",
+    "arguments": "",
+    "signers": "`closer`",
+    "does": "Sweeps remaining `budget - spent` from a Session PDA back to `caller` and marks it `Closed`. Callable by `caller` anytime or by anyone after `expires_at_slot`."
+  },
+  {
+    "instruction": "open_session_call",
+    "arguments": "`nonce: u64`, `input_hash: [u8; 32]`, `answer_mode: AnswerMode`, `callback: Option<CallbackSpec>`",
+    "signers": "`delegate`",
+    "does": "Opens a per-call Call signed by `delegate` alone, debiting `model.price` from the Session PDA and recording `call.caller = session.caller`."
+  },
+  {
+    "instruction": "open_session_metered_call",
+    "arguments": "`nonce: u64`, `input_hash: [u8; 32]`, `answer_mode: AnswerMode`, `callback: Option<CallbackSpec>`, `ceiling: u64`",
+    "signers": "`delegate`",
+    "does": "Opens a per-token metered Call signed by `delegate` alone, debiting `ceiling` from the Session PDA and recording `call.caller = session.caller`."
   }
 ]
