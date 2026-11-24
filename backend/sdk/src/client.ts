@@ -9,7 +9,7 @@ import { historicalAttestation, transactionSettledReceipt } from './history.js'
 
 export type WalletSigner = { publicKey: PublicKey; signTransaction(transaction: VersionedTransaction): Promise<VersionedTransaction>; signMessage?(message: Uint8Array): Promise<Uint8Array> }
 export type VoynichSigner = WalletSigner | Keypair
-export type VoynichOptions = { apiUrl: string; signer?: VoynichSigner; connection?: Connection; headers?: Record<string, string>; fixture?: string; fetch?: typeof fetch; pollMs?: number }
+export type VoynichOptions = { apiUrl: string; rpcUrl?: string; signer?: VoynichSigner; connection?: Connection; headers?: Record<string, string>; fixture?: string; fetch?: typeof fetch; pollMs?: number }
 export type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced'
 export type SelectEnclaveOptions = {
   strategy?: RoutingStrategy
@@ -477,7 +477,26 @@ export function createVoynich(options: VoynichOptions) {
   const api = createClient(options.apiUrl, { headers: options.headers, fixture: options.fixture, fetch: options.fetch })
   const pollMs = options.pollMs ?? 500
   const configured = () => api.config()
-  const rpc = async () => options.connection ?? new Connection((await configured()).rpcUrl, 'confirmed')
+  const rpc = async () => options.connection ?? new Connection(options.rpcUrl ?? (await configured()).rpcUrl, 'confirmed')
+  async function confirmSignatureHttp(conn: Connection, signature: string, lastValidBlockHeight: number, signal?: AbortSignal): Promise<void> {
+    for (;;) {
+      const { value } = await conn.getSignatureStatuses([signature])
+      const status = value[0]
+      if (status) {
+        if (status.err) {
+          throw new VoynichError('TRANSACTION_FAILED', `Transaction ${signature} failed: ${JSON.stringify(status.err)}`)
+        }
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          return
+        }
+      }
+      const blockHeight = await conn.getBlockHeight('confirmed')
+      if (blockHeight > lastValidBlockHeight) {
+        throw new VoynichError('TRANSACTION_EXPIRED', `Transaction ${signature} expired before confirmation.`)
+      }
+      await wait(pollMs, signal)
+    }
+  }
   function signer(): VoynichSigner { if (!options.signer) throw new VoynichError('WALLET_REQUIRED', 'Connect a wallet or configure a signing keypair.'); return options.signer }
   async function follow(status: TxStatus, signal?: AbortSignal, intervalMs = pollMs): Promise<TxStatus> {
     if (status.status === 'built') throw new VoynichError('TRANSACTION_NOT_SUBMITTED', 'This transaction has been built but has not been submitted.')
@@ -1582,7 +1601,7 @@ export function createVoynich(options: VoynichOptions) {
         else tx = await wallet.signTransaction(tx)
         tx.sign([weightKeys[i]!])
         const sig = await conn.sendRawTransaction(tx.serialize(), { preflightCommitment: 'confirmed' })
-        await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
+        await confirmSignatureHttp(conn, sig, lastValidBlockHeight, opts.signal)
         transactionsSent++
       }
     }

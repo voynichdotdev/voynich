@@ -178,7 +178,11 @@ async function main(): Promise<unknown> {
       const sourceRepo = required(values.repo, '--repo')
       const commitSha = required(values.commit, '--commit')
       const signer = await loadCliKeypair()
-      const client = createVoynich({ apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702', signer })
+      const client = createVoynich({
+        apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+        rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+        signer,
+      })
       const build = await client.api.publishMeasurement({
         wallet: signer.publicKey.toBase58(),
         digest,
@@ -204,7 +208,7 @@ async function main(): Promise<unknown> {
       if (!config.fixture && config.programId) {
         onChainMatch = false
         try {
-          const connection = new Connection(config.rpcUrl, 'confirmed')
+          const connection = new Connection(process.env.SOLANA_RPC_URL || config.rpcUrl, 'confirmed')
           const pda = measurementPda(digest, config.programId)
           const info = await connection.getAccountInfo(pda, 'confirmed')
           if (info) {
@@ -413,7 +417,11 @@ async function main(): Promise<unknown> {
         operatorShareBps = parsed
       }
       const signer = await loadCliKeypair()
-      const client = createVoynich({ apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702', signer })
+      const client = createVoynich({
+        apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+        rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+        signer,
+      })
       let enclaveKey = values.enclave
       if (!enclaveKey) {
         const page = await client.enclaves({ limit: 100 })
@@ -455,7 +463,11 @@ async function main(): Promise<unknown> {
           throw new Error('--window-slots must be a non-negative integer.')
         }
         const signer = await loadCliKeypair()
-        const client = createVoynich({ apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702', signer })
+        const client = createVoynich({
+        apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+        rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+        signer,
+      })
         const build = await client.api.setPolicy(modelId, {
           wallet: signer.publicKey.toBase58(),
           allowListEnabled: Boolean(values['allow-list']),

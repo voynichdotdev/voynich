@@ -15,7 +15,11 @@ async function fromEnvironment(requiresSigner: boolean): Promise<Voynich> {
     if (!Array.isArray(decoded) || decoded.length !== 64 || !decoded.every(value => Number.isInteger(value) && value >= 0 && value <= 255)) throw new Error('VOYNICH_KEYPAIR must name a Solana JSON keypair file')
     signer = Keypair.fromSecretKey(Uint8Array.from(decoded))
   }
-  return createVoynich({ apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702', signer })
+  return createVoynich({
+    apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+    rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+    signer,
+  })
 }
 const load = (requiresSigner = false) => requiresSigner ? signing ??= fromEnvironment(true) : readOnly ??= fromEnvironment(false)
 const voynich = {

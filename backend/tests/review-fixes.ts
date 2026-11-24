@@ -5045,3 +5045,169 @@ test('Build 10 Step 2: enclave hot-reload on version bump, /health versions, and
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 10 Step 3: publishVersion confirms via HTTP getSignatureStatuses (no WS confirmTransaction) and CLI honors --rpc', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { Hono } = await import('hono')
+  const { serve } = await import('@hono/node-server')
+  const { createVoynich, VoynichError } = await import('voynich')
+  const { PROGRAM_ID } = await import('voynich/program')
+  const { fixtureConfig, fixtureModel, fixtureSignature } = await import('@voynich/contract/fixtures')
+  const execFileAsync = promisify(execFile)
+
+  const owner = Keypair.generate()
+  const modelAddr = Keypair.generate().publicKey.toBase58()
+  const baseModel = { ...fixtureModel, address: modelAddr, owner: owner.publicKey.toBase58(), currentVersion: 1 }
+
+  // 1. Mock non-fixture API whose /v1/config returns an unreachable rpcUrl so any test must use connection or --rpc.
+  let versionNow = 1
+  const fakeBlockhash = Keypair.generate().publicKey.toBase58()
+  const mockBuild = (id: string, action: string) => ({
+    id,
+    action,
+    transactionBase64: 'AA==',
+    blockhash: fakeBlockhash,
+    lastValidBlockHeight: 200,
+    cosigned: false,
+    addresses: {},
+    requiredSigners: [owner.publicKey.toBase58()],
+    fixture: true,
+  })
+  const apiApp = new Hono()
+  apiApp.get('/v1/config', c => c.json({
+    ...fixtureConfig,
+    mode: 'chain',
+    cluster: 'mainnet-beta',
+    fixture: false,
+    programId: PROGRAM_ID.toBase58(),
+    rpcUrl: 'http://127.0.0.1:1/never-use',
+  }))
+  apiApp.get('/v1/models/:id', c => c.json({ ...baseModel, currentVersion: versionNow }))
+  apiApp.post('/v1/models/:id/versions/build', c => c.json(mockBuild('build-begin', 'begin_version')))
+  apiApp.post('/v1/models/:id/versions/write/build', c => c.json(mockBuild('build-write', 'write_version_weights')))
+  apiApp.post('/v1/models/:id/versions/seal-range/build', c => c.json(mockBuild('build-seal', 'seal_version_range')))
+  apiApp.post('/v1/models/:id/versions/publish/build', c => {
+    versionNow = 2
+    return c.json(mockBuild('build-pub', 'publish_version'))
+  })
+  apiApp.post('/v1/transactions/submit', async c => {
+    const body = await c.req.json() as { buildId?: string }
+    return c.json({
+      id: body.buildId ?? 'tx-1',
+      status: 'confirmed',
+      signature: fixtureSignature('b10s3'),
+      error: null,
+    })
+  })
+
+  // 2. Mock HTTP-only JSON-RPC endpoint (no WebSocket upgrade) recording every RPC method called.
+  const rpcMethods: string[] = []
+  let statusCalls = 0
+  const fakeSig = fixtureSignature('create-weights')
+  const rpcApp = new Hono()
+  rpcApp.post('/', async c => {
+    const req = await c.req.json() as { id: number; method: string }
+    rpcMethods.push(req.method)
+    if (req.method === 'getLatestBlockhash') {
+      return c.json({ jsonrpc: '2.0', id: req.id, result: { context: { slot: 100 }, value: { blockhash: fakeBlockhash, lastValidBlockHeight: 200 } } })
+    }
+    if (req.method === 'getMinimumBalanceForRentExemption') {
+      return c.json({ jsonrpc: '2.0', id: req.id, result: 2_000_000 })
+    }
+    if (req.method === 'sendTransaction') {
+      return c.json({ jsonrpc: '2.0', id: req.id, result: fakeSig })
+    }
+    if (req.method === 'getSignatureStatuses') {
+      statusCalls++
+      const val = statusCalls >= 2 ? { slot: 101, confirmations: 1, err: null, confirmationStatus: 'confirmed' } : null
+      return c.json({ jsonrpc: '2.0', id: req.id, result: { context: { slot: 101 }, value: [val] } })
+    }
+    if (req.method === 'getBlockHeight') {
+      return c.json({ jsonrpc: '2.0', id: req.id, result: 150 })
+    }
+    return c.json({ jsonrpc: '2.0', id: req.id, error: { code: -32601, message: `Unexpected RPC method ${req.method}` } }, 400)
+  })
+
+  const apiServer = serve({ fetch: apiApp.fetch, hostname: '127.0.0.1', port: 0 })
+  const rpcServer = serve({ fetch: rpcApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await Promise.all([
+    new Promise<void>(r => apiServer.once('listening', () => r())),
+    new Promise<void>(r => rpcServer.once('listening', () => r())),
+  ])
+  const apiUrl = `http://127.0.0.1:${(apiServer.address() as { port: number }).port}`
+  const rpcUrl = `http://127.0.0.1:${(rpcServer.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b10s3-rpc-'))
+  const ownerKeyPath = join(scratch, 'owner.json')
+  writeFileSync(ownerKeyPath, JSON.stringify([...owner.secretKey]))
+  const modelKeyPath = join(scratch, 'model.key')
+  writeFileSync(modelKeyPath, '07'.repeat(32))
+  const weightsPath = join(scratch, 'v2.onnx')
+  writeFileSync(weightsPath, Buffer.alloc(128, 0x33))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  try {
+    // Direct SDK test with a stub Connection whose confirmTransaction MUST NOT be called.
+    let directPolls = 0
+    const stubConn = {
+      getLatestBlockhash: async () => ({ blockhash: fakeBlockhash, lastValidBlockHeight: 200 }),
+      getMinimumBalanceForRentExemption: async () => 2_000_000,
+      sendRawTransaction: async () => fakeSig,
+      getSignatureStatuses: async () => {
+        directPolls++
+        return { context: { slot: 101 }, value: [directPolls >= 2 ? { slot: 101, confirmations: 1, err: null, confirmationStatus: 'confirmed' } : null] }
+      },
+      getBlockHeight: async () => 150,
+      confirmTransaction: async () => { throw new Error('FAIL_WS_CALLED') },
+    }
+    const sdk = createVoynich({ apiUrl, signer: owner, connection: stubConn as never, pollMs: 5 })
+    const res = await sdk.publishVersion(modelAddr, { weights: new Uint8Array(128).fill(7), modelKey: new Uint8Array(32).fill(7) })
+    assert.equal(res.version, 2)
+    assert.equal(directPolls, 2)
+
+    // Verify TRANSACTION_FAILED and TRANSACTION_EXPIRED from HTTP polling.
+    versionNow = 1
+    const failConn = {
+      ...stubConn,
+      getSignatureStatuses: async () => ({ context: { slot: 101 }, value: [{ slot: 101, confirmations: 1, err: { InstructionError: [0, 'Custom'] }, confirmationStatus: 'confirmed' }] }),
+    }
+    await assert.rejects(
+      () => createVoynich({ apiUrl, signer: owner, connection: failConn as never, pollMs: 5 }).publishVersion(modelAddr, { weights: new Uint8Array(64).fill(1), modelKey: new Uint8Array(32).fill(7) }),
+      (err: unknown) => err instanceof VoynichError && err.code === 'TRANSACTION_FAILED',
+    )
+    const expConn = {
+      ...stubConn,
+      getSignatureStatuses: async () => ({ context: { slot: 101 }, value: [null] }),
+      getBlockHeight: async () => 201,
+    }
+    await assert.rejects(
+      () => createVoynich({ apiUrl, signer: owner, connection: expConn as never, pollMs: 5 }).publishVersion(modelAddr, { weights: new Uint8Array(64).fill(1), modelKey: new Uint8Array(32).fill(7) }),
+      (err: unknown) => err instanceof VoynichError && err.code === 'TRANSACTION_EXPIRED',
+    )
+
+    // Compiled CLI test: --rpc overrides unreachable config.rpcUrl and confirms via HTTP getSignatureStatuses.
+    versionNow = 1
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [cliPath, '--api', apiUrl, '--rpc', rpcUrl, '--keypair', ownerKeyPath, 'model', 'upgrade', modelAddr, weightsPath, '--owner-key', modelKeyPath, '--json'],
+      { cwd: resolve('.'), encoding: 'utf8' },
+    )
+    const cliOut = JSON.parse(stdout) as Record<string, unknown>
+    assert.equal(cliOut.version, 2)
+    assert.ok(rpcMethods.includes('sendTransaction'))
+    assert.ok(rpcMethods.includes('getSignatureStatuses'))
+    assert.equal(statusCalls, 2)
+  } finally {
+    ;(apiServer as { closeAllConnections?: () => void }).closeAllConnections?.()
+    ;(rpcServer as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await Promise.all([
+      new Promise<void>(r => apiServer.close(() => r())),
+      new Promise<void>(r => rpcServer.close(() => r())),
+    ])
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})
