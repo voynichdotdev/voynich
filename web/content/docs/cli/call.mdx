@@ -41,6 +41,12 @@ Routing strategy used when `--enclave` is omitted (works for both unary calls an
 <Field name="--open" type="flag">
 Opens the call in `open` answer mode so the enclave writes the verified plaintext answer bytes into the Receipt on chain instead of encrypting the output envelope.
 </Field>
+<Field name="--session" type="session address">
+Opens the call through an active `Session` PDA (`open_session_call` or `open_session_metered_call`) instead of signing with the caller's wallet. Requires `--delegate`. Works for both unary calls and `--stream`, with no caller `--keypair` required.
+</Field>
+<Field name="--delegate" type="file path">
+Path to the 64-byte Solana JSON keypair file of the session's `delegate` (saved via `voynich session open --delegate-out`). Required with `--session`.
+</Field>
 </Fields>
 
 The caller is the signing wallet, chosen as told in [Install](/docs/cli/install#the-signing-wallet). It signs one transaction (`open_call` or `open_metered_call`) and deposits the model's price (or `--ceiling` for a per-token model) into the call's escrow.
@@ -239,3 +245,27 @@ The transaction's signature.
 | `CALL_NOT_OPEN` | The API's message | The call is settled or refunded. |
 | `TRANSACTION_FAILED` | The failure's own message, or `The transaction did not land.` | `refund_call` was refused. |
 | `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `refund_call` did not land before its blockhash expired. |
+
+## voynich session
+
+Opens, lists, or closes a delegated caller `Session` PDA (`["session", caller, delegate, nonce_le]`) so multiple calls can run under one upfront wallet signature. The same from code is [Caller sessions](/docs/sdk/call#caller-sessions).
+
+```bash
+voynich session open --budget <base units> [--model <name|address>] [--ttl-slots <slots>] [--delegate-gas <lamports>] [--delegate-out <file>] [--mint <SOL|mint>]
+voynich session list [--wallet <address>]
+voynich session close <session-address>
+```
+
+<Fields>
+<Field name="open" type="caller write">
+Signs `open_session` once with the caller's keypair, funding `--budget` (and optional `--delegate-gas` for the ephemeral delegate's tx fees and Call rent). `--delegate-out <file>` writes the generated 64-byte delegate keypair (`0600`) for use with `voynich call --session <address> --delegate <file>`. Prints `{ "address", "delegate", "delegateKeypair"?, "session" }`.
+</Field>
+<Field name="list" type="read">
+Reads `GET /v1/accounts/{wallet}/sessions` for `--wallet` (or the signing keypair's public key when omitted). Prints `{ "wallet", "items", "asOf" }`.
+</Field>
+<Field name="close <session-address>" type="write">
+Signs `close_session` to return unspent `budget - spent` to `session.caller` (callable by `caller` anytime, or by anyone after `expiresAtSlot`). Prints `{ "session", "transaction" }`.
+</Field>
+</Fields>
+
+After `expiresAtSlot`, the protocol's `crank` service also automatically sweeps expired open sessions back to `session.caller`.

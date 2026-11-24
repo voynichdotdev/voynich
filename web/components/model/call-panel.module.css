@@ -97,6 +97,13 @@
 .routingBox { display: flex; flex-direction: column; gap: 8px; }
 .pinRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .pinSelect { flex: 1; min-width: 0; max-width: 280px; height: 32px; padding: 0 8px; font-size: 12px; }
+.sessionBox { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.sessionActive { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-tile); }
+.sessionMeta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; }
+.sessionMeta > div { display: flex; flex-direction: column; gap: 2px; }
+.sessionMeta dt { font-size: 11px; color: var(--text-3); }
+.sessionOpen { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.sessionBudgetField { flex: 1; min-width: 160px; }
 
 @container (max-width: 760px) {
   .closed { grid-template-columns: minmax(0, 1fr); padding: var(--s4) var(--s4) var(--s4) calc(var(--s4) + 12px); }

@@ -6,10 +6,12 @@
 
 import { ProgramEvent, StreamPiece as StreamPieceSchema, fromBase58, type AnswerMode, type Call, type Config, type GrantedEnclaves, type Model, type RefundState, type StreamFinishReason, type StreamPiece, type VoynichClient } from '@voynich/contract'
 import { FIXTURE } from '@voynich/contract/fixtures'
+import type { Keypair } from '@solana/web3.js'
 import { selectEnclave, type RoutingStrategy } from 'voynich'
 import { decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, sha256, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece } from 'voynich/crypto'
 import { indexed } from './api'
 import { money } from './format'
+import { submitDelegateBuild } from './sessions'
 import { errorMessage, send } from './tx'
 import { verifyAll, type CheckResult } from './verify'
 
@@ -829,7 +831,7 @@ export function pickEnclave(
   })
 }
 
-export async function runCall(o: {
+export type RunCallOptions = {
   client: VoynichClient
   model: Model
   wallet: string
@@ -839,10 +841,13 @@ export async function runCall(o: {
   answerMode?: AnswerMode
   strategy?: RoutingStrategy
   enclave?: string
+  session?: { address: string; delegate: Keypair } | null
   onStopReady?: (stop: (() => Promise<void>) | null) => void
   update: Update
   signal?: AbortSignal
-}) {
+}
+
+export async function runCall(o: RunCallOptions) {
   const { client, model, update, signal } = o
   const metered = model.priceUnit === 'token'
   const answerMode: AnswerMode = metered ? 'sealed' : (o.answerMode ?? 'sealed')
@@ -866,21 +871,34 @@ export async function runCall(o: {
     const inputHash = toHex(sha256(envelope))
     update({ stage: 'encrypting', reached: 'encrypting', envelope, inputHash })
     const [build] = await Promise.all([
-      client
-        .openCall({
-          wallet: o.wallet,
-          model: model.address,
-          enclave: pick.enclave.address,
-          inputHash,
-          answerMode,
-          ...(o.ceiling !== undefined ? { ceiling: o.ceiling } : {}),
-        })
-        .catch(async (e) => { throw await shortOf(e, client, model, o.wallet, o.ceiling) }),
+      o.session
+        ? client.openSessionCall(o.session.address, {
+            delegate: o.session.delegate.publicKey.toBase58(),
+            model: model.address,
+            enclave: pick.enclave.address,
+            inputHash,
+            answerMode,
+            ...(o.ceiling !== undefined ? { ceiling: o.ceiling } : {}),
+          })
+        : client
+            .openCall({
+              wallet: o.wallet,
+              model: model.address,
+              enclave: pick.enclave.address,
+              inputHash,
+              answerMode,
+              ...(o.ceiling !== undefined ? { ceiling: o.ceiling } : {}),
+            })
+            .catch(async (e) => { throw await shortOf(e, client, model, o.wallet, o.ceiling) }),
       sleep(ENCRYPT_MS),
     ])
     if (signal?.aborted) return
     update({ stage: 'signing', reached: 'signing' })
-    await send(client, build, (s) => update({ confirming: s === 'confirming' }))
+    if (o.session) {
+      await submitDelegateBuild(client, build, o.session.delegate, (s) => update({ confirming: s === 'confirming' }))
+    } else {
+      await send(client, build, (s) => update({ confirming: s === 'confirming' }))
+    }
     const address = build.addresses.call
     if (!address) throw new Error('The call was opened without an address.')
     call = await indexed(() => client.call(address), 'CALL_NOT_FOUND')
@@ -921,6 +939,10 @@ export async function runCall(o: {
   } finally {
     o.onStopReady?.(null)
   }
+}
+
+export async function runSessionCall(o: Omit<RunCallOptions, 'session'> & { session: { address: string; delegate: Keypair } }) {
+  return runCall(o)
 }
 
 // Take the escrow of an expired call back. Throws with the reason when it does not go through.

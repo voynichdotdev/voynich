@@ -7,12 +7,13 @@ import Link from 'next/link'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { AnswerMode, GrantedEnclaves, Model, ModelPolicy } from '@voynich/contract'
 import { api } from '@/lib/api'
-import { IDLE, effectiveShareBps, eligibleEnclaves, formatLatency, hasOpenCall, heldStage, parseCeiling, parseTensor, pickEnclave, refundCall, resumeCall, runCall, settleMeteredStream, type CallState, type FlightStage, type RoutingStrategy, type Stage } from '@/lib/call'
+import { IDLE, effectiveShareBps, eligibleEnclaves, formatLatency, hasOpenCall, heldStage, parseCeiling, parseTensor, pickEnclave, refundCall, resumeCall, runCall, runSessionCall, settleMeteredStream, type CallState, type FlightStage, type RoutingStrategy, type Stage } from '@/lib/call'
 import { CALL_STAGES, RECEIPT_CHECKS } from '@/lib/facts'
 import { bps, group, money, short, units } from '@/lib/format'
 import { formatRateCeiling, isCallerAllowedByPolicy } from '@/lib/policy'
+import { closeBrowserSession, findActiveBrowserSession, loadAccountSessions, openBrowserSession, type ActiveBrowserSession } from '@/lib/sessions'
 import { play, stop } from '@/lib/sound'
-import { errorMessage } from '@/lib/tx'
+import { errorMessage, type TxStageName } from '@/lib/tx'
 import { wallet } from '@/lib/wallet'
 import { useWallet } from '@/src/engines/wallet/react'
 import { sampleBytes } from '@/components/field/ramp'
@@ -120,6 +121,16 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   const [answerMode, setAnswerMode] = useState<AnswerMode>('sealed')
   const [strategy, setStrategy] = useState<RoutingStrategy>('balanced')
   const [pinnedEnclave, setPinnedEnclave] = useState<string | null>(null)
+  const [useSession, setUseSession] = useState(false)
+  const [activeSession, setActiveSession] = useState<ActiveBrowserSession | null>(null)
+  const [sessionBudget, setSessionBudget] = useState(() => {
+    const unitRaw = BigInt(model.price.amount)
+    const defaultTotal = metered ? unitRaw * BigInt(Math.min(tokenizer?.maxOutputTokens ?? 64, 64)) * 5n : unitRaw * 5n
+    return units(defaultTotal.toString(), model.price.decimals, model.price.decimals).replaceAll(',', '')
+  })
+  const [sessionBusy, setSessionBusy] = useState<'opening' | 'closing' | null>(null)
+  const [sessionStage, setSessionStage] = useState<TxStageName | null>(null)
+  const [sessionErr, setSessionErr] = useState('')
   const [st, setSt] = useState<CallState>(IDLE)
   const [stopping, setStopping] = useState(false)
   const [stopErr, setStopErr] = useState('')
@@ -130,6 +141,8 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   const modeId = useId()
   const routingId = useId()
   const pinId = useId()
+  const sessionId = useId()
+  const sessionBudgetId = useId()
   const promptId = useId()
   const maxTokensId = useId()
   const ceilingId = useId()
@@ -158,6 +171,19 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   }, [fixture, model.address, live])
   useEffect(() => () => { abort.current?.abort(); stop('answering') }, [])
 
+  // Load any open browser session for the connected wallet on this model.
+  useEffect(() => {
+    if (!connected || !w.address || !live) { setActiveSession(null); return }
+    let mounted = true
+    void loadAccountSessions(api(fixture), w.address).then((list) => {
+      if (!mounted) return
+      const found = findActiveBrowserSession(w.address!, list, model.address, model.price.mint)
+      setActiveSession(found)
+      if (found) setUseSession(true)
+    })
+    return () => { mounted = false }
+  }, [connected, w.address, live, fixture, model.address, model.price.mint])
+
   // The cues, at their moments.
   const stage = st.stage
   useEffect(() => {
@@ -168,9 +194,16 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
     else if (stage === 'verified') play('verified')
     else if (stage === 'failed') play('failed')
     else if (stage === 'refunded') play('refund')
-    if (stage === 'verified' || stage === 'refunded') settled.current?.()
+    if (stage === 'verified' || stage === 'refunded') {
+      settled.current?.()
+      if (connected && w.address) {
+        void loadAccountSessions(api(fixture), w.address).then((list) => {
+          setActiveSession(findActiveBrowserSession(w.address!, list, model.address, model.price.mint))
+        })
+      }
+    }
     return () => { if (stage === 'answering' || stage === 'streaming') stop('answering') }
-  }, [stage])
+  }, [stage]) // eslint-disable-line react-hooks/exhaustive-deps
   const passed = st.checks.filter((c) => c.passed).length
   useEffect(() => { if (passed) play('check') }, [passed])
 
@@ -186,6 +219,57 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   const eligible = useMemo(() => (Array.isArray(enclaves) ? eligibleEnclaves(model, enclaves) : []), [model, enclaves])
   const routed = useMemo(() => pickEnclave(model, eligible, { strategy, enclaveAddress: pinnedEnclave }), [model, eligible, strategy, pinnedEnclave])
   const empty = sketch ? !hasInk(strokes) : isText ? !prompt.trim() : !tensor.trim()
+
+  const sessionBudgetCheck = useMemo(() => parseCeiling(sessionBudget, model), [sessionBudget, model])
+
+  const openSession = async () => {
+    if (!w.address || sessionBusy || !sessionBudgetCheck.ok) return
+    setSessionBusy('opening')
+    setSessionStage(null)
+    setSessionErr('')
+    try {
+      const opened = await openBrowserSession({
+        client: api(fixture),
+        wallet: w.address,
+        model,
+        budget: sessionBudgetCheck.amount,
+        onStage: setSessionStage,
+      })
+      setActiveSession(opened)
+      setUseSession(true)
+      play('escrow')
+    } catch (e) {
+      play('failed')
+      setSessionErr(errorMessage(e))
+    } finally {
+      setSessionBusy(null)
+      setSessionStage(null)
+    }
+  }
+
+  const closeSession = async () => {
+    if (!w.address || !activeSession || sessionBusy) return
+    setSessionBusy('closing')
+    setSessionStage(null)
+    setSessionErr('')
+    try {
+      await closeBrowserSession({
+        client: api(fixture),
+        wallet: w.address,
+        sessionAddress: activeSession.session.address,
+        onStage: setSessionStage,
+      })
+      setActiveSession(null)
+      setUseSession(false)
+      play('refund')
+    } catch (e) {
+      play('failed')
+      setSessionErr(errorMessage(e))
+    } finally {
+      setSessionBusy(null)
+      setSessionStage(null)
+    }
+  }
 
   const start = () => {
     if (inFlight || !w.address) return
@@ -228,7 +312,7 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
     setMaxTokensErr('')
     setCeilingErr('')
     setSt({ ...IDLE, stage: 'encrypting', reached: 'encrypting' })
-    void runCall({
+    const callParams = {
       client: api(fixture),
       model,
       wallet: w.address,
@@ -238,10 +322,18 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
       answerMode,
       strategy,
       enclave: pinnedEnclave ?? undefined,
-      onStopReady: (fn) => { stopStreamRef.current = fn },
+      onStopReady: (fn: (() => Promise<void>) | null) => { stopStreamRef.current = fn },
       update,
       signal: ac.signal,
-    })
+    }
+    if (useSession && activeSession) {
+      void runSessionCall({
+        ...callParams,
+        session: { address: activeSession.session.address, delegate: activeSession.delegate },
+      })
+    } else {
+      void runCall(callParams)
+    }
   }
   const stopStream = async () => {
     const fn = stopStreamRef.current
@@ -709,6 +801,94 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
             </div>
           ) : null}
 
+          {connected ? (
+            <div className={s.sessionBox}>
+              <div className={s.modeRow}>
+                <div className={s.modeLabel}>
+                  <span className="t-label" id={sessionId}>Session</span>
+                  <span className="t-small dim">
+                    {activeSession
+                      ? '0 wallet prompts per call'
+                      : useSession
+                        ? 'Sign once, run consecutive calls'
+                        : 'Sign each call with wallet'}
+                  </span>
+                </div>
+                <div className="seg" role="group" aria-labelledby={sessionId}>
+                  <button type="button" aria-pressed={!useSession} disabled={inFlight || !!sessionBusy} onClick={() => { play('toggle'); setUseSession(false) }}>Single call</button>
+                  <button type="button" aria-pressed={useSession} disabled={inFlight || !!sessionBusy} onClick={() => { play('toggle'); setUseSession(true) }}>Session</button>
+                </div>
+              </div>
+              {useSession ? (
+                activeSession ? (
+                  <div className={s.sessionActive}>
+                    <dl className={s.sessionMeta}>
+                      <div>
+                        <dt>Remaining</dt>
+                        <dd><Amount value={{ ...activeSession.session.budget, amount: activeSession.session.remaining }} /></dd>
+                      </div>
+                      <div>
+                        <dt>Calls</dt>
+                        <dd className="mono">{group(activeSession.session.callsOpened)}</dd>
+                      </div>
+                      <div>
+                        <dt>Expires slot</dt>
+                        <dd className="mono">{group(activeSession.session.expiresAtSlot)}</dd>
+                      </div>
+                    </dl>
+                    <button
+                      type="button"
+                      className="btn"
+                      data-size="s"
+                      disabled={inFlight || !!sessionBusy}
+                      data-pending={sessionBusy === 'closing' || undefined}
+                      onClick={() => void closeSession()}
+                    >
+                      {sessionBusy === 'closing'
+                        ? <><StateTile state="pending" size={14} />{sessionStage === 'confirming' ? 'Confirming' : 'Awaiting signature'}</>
+                        : 'Close & reclaim'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className={s.sessionOpen}>
+                    <div className={`field ${s.sessionBudgetField}`}>
+                      <label htmlFor={sessionBudgetId}>Session budget</label>
+                      <div className="input-row">
+                        <input
+                          id={sessionBudgetId}
+                          type="text"
+                          inputMode="decimal"
+                          className="input mono"
+                          value={sessionBudget}
+                          readOnly={!!sessionBusy}
+                          autoComplete="off"
+                          onChange={(e) => { setSessionBudget(e.target.value); setSessionErr('') }}
+                          aria-invalid={!sessionBudgetCheck.ok ? true : undefined}
+                        />
+                        <span className="suffix">{model.price.symbol}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn"
+                      data-size="s"
+                      data-kind="primary"
+                      disabled={inFlight || !!sessionBusy || !sessionBudgetCheck.ok}
+                      data-pending={sessionBusy === 'opening' || undefined}
+                      onClick={() => void openSession()}
+                    >
+                      {sessionBusy === 'opening'
+                        ? <><StateTile state="pending" size={14} />{sessionStage === 'confirming' ? 'Confirming' : 'Awaiting signature'}</>
+                        : 'Open session'}
+                    </button>
+                  </div>
+                )
+              ) : null}
+              {useSession && !activeSession && !sessionBudgetCheck.ok ? <span className="err" role="alert">{sessionBudgetCheck.error}</span> : null}
+              {sessionErr ? <span className="err" role="alert">{sessionErr}</span> : null}
+            </div>
+          ) : null}
+
           {metered ? (
             <div className={s.ceilingBox}>
               <div className="field">
@@ -753,10 +933,20 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
             {stage === 'idle' ? (
               connected || held === 'ready' ? (
                 <>
-                  <button type="button" className="btn" data-kind="primary" disabled={empty || (metered && !!ceilingCheck && !ceilingCheck.ok)} onClick={start}>
-                    {metered ? `Open metered call (${ceilingLabel})` : `Call for ${price}`}
+                  <button
+                    type="button"
+                    className="btn"
+                    data-kind="primary"
+                    disabled={empty || (metered && !!ceilingCheck && !ceilingCheck.ok) || (useSession && !activeSession)}
+                    onClick={start}
+                  >
+                    {useSession && activeSession
+                      ? (metered ? `Stream from session (${ceilingLabel})` : `Call from session (${price})`)
+                      : (metered ? `Open metered call (${ceilingLabel})` : `Call for ${price}`)}
                   </button>
-                  {empty ? <span className="t-small dim">{sketch ? 'Draw something first.' : isText ? 'Enter a prompt first.' : 'Enter the input first.'}</span> : null}
+                  {useSession && !activeSession
+                    ? <span className="t-small dim">Open a session above, or switch to Single call.</span>
+                    : empty ? <span className="t-small dim">{sketch ? 'Draw something first.' : isText ? 'Enter a prompt first.' : 'Enter the input first.'}</span> : null}
                 </>
               ) : (
                 <>

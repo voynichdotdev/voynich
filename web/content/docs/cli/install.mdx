@@ -53,6 +53,7 @@ voynich models --api-url https://api.voynich.dev
 | [`voynich grant <model> <enclave>`](/docs/cli/grant) | Wrap a model's key to an enclave, as the model's owner. |
 | [`voynich model revoke <model> <enclave>`](/docs/cli/grant#voynich-model-revoke) | Revoke an enclave's grant, as the model's owner. |
 | [`voynich call <model> <input.json>`](/docs/cli/call) | Call a model and print the output, the receipt and the checks. |
+| [`voynich session open\|list\|close`](/docs/cli/call#voynich-session) | Open, list, or close a funded one-signature caller Session PDA. |
 | [`voynich settle <call>`](/docs/cli/call#voynich-settle) | Self-settle an open per-token metered stream before its deadline using the last signed piece. |
 | [`voynich refund <call>`](/docs/cli/call#voynich-refund) | Return the escrow of a call that passed its deadline without a receipt. |
 | [`voynich verify <id>`](/docs/cli/verify) | Check a receipt by its address, its call's address or its settling transaction's signature. |

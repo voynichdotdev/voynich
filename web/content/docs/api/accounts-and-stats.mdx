@@ -56,7 +56,7 @@ Builds [`open_session`](/docs/program/instructions#opensession): `{ wallet, dele
 
 ### `POST /v1/sessions/{address}/close/build`
 
-Builds [`close_session`](/docs/program/instructions#closesession): `{ wallet }`. Sweeps unspent `budget - spent` back to `session.caller` (callable by `caller` anytime, or by anyone after `expiresAtSlot`). Returns a Build with `action: "close_session"` and `addresses: { session }`.
+Builds [`close_session`](/docs/program/instructions#closesession): `{ wallet }`. Sweeps unspent `budget - spent` back to `session.caller` (callable by `caller` anytime, or by anyone after `expiresAtSlot`). Returns a Build with `action: "close_session"` and `addresses: { session }`. After `expiresAtSlot`, the protocol's `crank` service automatically sweeps expired open sessions every 5 seconds (creating the caller's SPL ATA idempotently when needed). On the site, `/account` lists open and closed sessions under **Active sessions** with one-press **Close & reclaim**.
 
 ### `POST /v1/sessions/{address}/call/build`
 

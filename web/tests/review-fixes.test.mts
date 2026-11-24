@@ -15,6 +15,7 @@ import { explorerUrl, siteUrl } from '@/lib/env'
 import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
 import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
+import { SESSION_DELEGATES_KEY, findActiveBrowserSession, loadAccountSessions, loadSessionDelegate, removeSessionDelegate, saveSessionDelegate, submitDelegateBuild } from '@/lib/sessions'
 import { effectiveModelVersion, fallbackModelVersions, loadModelVersions, matchReceiptVersion, upgradeCliCommand } from '@/lib/versions'
 import {
   ATTACH_WEIGHTS_BATCH, CIPHER_CHUNK_BYTES, INITIAL_CREATE_WEIGHTS, MAX_WEIGHTS, SEAL_RANGE_CHUNKS, WEIGHTS_CAPACITY, WRITE_BYTES, WRITE_PARALLEL,
@@ -2752,4 +2753,105 @@ test('Build 10 Step 2: model version helpers, receipt revision matching, upgrade
 
   const receiptViewSrc = fs.readFileSync(path.join(ROOT, 'components/receipt/ReceiptView.tsx'), 'utf8')
   assert.ok(receiptViewSrc.includes('<dt>Model version</dt>') && receiptViewSrc.includes('v{version.version}'))
+})
+
+test('Build 11 Step 2: browser session delegate storage, active session matching, delegate signing, and CallPanel/AccountView UI wiring', async () => {
+  const store = new Map<string, string>()
+  const prevSessionStorage = (globalThis as { sessionStorage?: unknown }).sessionStorage
+  ;(globalThis as { sessionStorage?: unknown }).sessionStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v) },
+    removeItem: (k: string) => { store.delete(k) },
+  }
+  try {
+    const caller = Keypair.generate().publicKey.toBase58()
+    const delegate = Keypair.generate()
+    const modelAddr = Keypair.generate().publicKey.toBase58()
+    const otherModel = Keypair.generate().publicKey.toBase58()
+    const sessAddr = Keypair.generate().publicKey.toBase58()
+
+    saveSessionDelegate(caller, sessAddr, delegate.secretKey)
+    assert.ok(store.has(SESSION_DELEGATES_KEY))
+    assert.equal(loadSessionDelegate(caller, sessAddr)?.publicKey.toBase58(), delegate.publicKey.toBase58())
+
+    const openSess = {
+      address: sessAddr,
+      caller,
+      delegate: delegate.publicKey.toBase58(),
+      nonce: '1',
+      mint: null,
+      model: modelAddr,
+      budget: { amount: '50000000', mint: null, decimals: 9, symbol: 'SOL' },
+      spent: '10000000',
+      remaining: '40000000',
+      callsOpened: '1',
+      openedSlot: '100',
+      expiresAtSlot: '1900',
+      status: 'open' as const,
+    }
+    const found = findActiveBrowserSession(caller, [openSess], modelAddr, null)
+    assert.equal(found?.session.address, sessAddr)
+    assert.equal(found?.delegate.publicKey.toBase58(), delegate.publicKey.toBase58())
+    assert.equal(findActiveBrowserSession(caller, [openSess], otherModel, null), null)
+    assert.equal(findActiveBrowserSession(caller, [{ ...openSess, status: 'closed' as const }], modelAddr, null), null)
+    assert.equal(findActiveBrowserSession(caller, [{ ...openSess, remaining: '0' }], modelAddr, null), null)
+
+    // submitDelegateBuild signs locally with delegate keypair and relays without wallet prompt
+    const blockhash = Keypair.generate().publicKey.toBase58()
+    const unsigned = new VersionedTransaction(
+      new TransactionMessage({
+        payerKey: delegate.publicKey,
+        recentBlockhash: blockhash,
+        instructions: [SystemProgram.transfer({ fromPubkey: delegate.publicKey, toPubkey: Keypair.generate().publicKey, lamports: 1 })],
+      }).compileToV0Message(),
+    )
+    let submittedSigValid = false
+    const mockClient = {
+      submitTransaction: async (input: { buildId: string; signedTransactionBase64: string }) => {
+        const decoded = VersionedTransaction.deserialize(Buffer.from(input.signedTransactionBase64, 'base64'))
+        submittedSigValid = decoded.signatures[0]!.some((b) => b !== 0)
+        return { id: input.buildId, status: 'confirmed' as const }
+      },
+      transaction: async (id: string) => ({ id, status: 'confirmed' as const }),
+      accountSessions: async () => { throw new Error('offline') },
+    } as unknown as Parameters<typeof submitDelegateBuild>[0]
+
+    const status = await submitDelegateBuild(
+      mockClient,
+      {
+        id: 'sess-build-1',
+        action: 'open_session_call',
+        transactionBase64: Buffer.from(unsigned.serialize()).toString('base64'),
+        blockhash,
+        lastValidBlockHeight: 100,
+        cosigned: false,
+        requiredSigners: [delegate.publicKey.toBase58()],
+        fixture: false,
+        addresses: {},
+      },
+      delegate,
+    )
+    assert.equal(status.status, 'confirmed')
+    assert.equal(submittedSigValid, true)
+    assert.deepEqual(await loadAccountSessions(mockClient, caller), [])
+
+    removeSessionDelegate(caller, sessAddr)
+    assert.equal(loadSessionDelegate(caller, sessAddr), null)
+  } finally {
+    if (prevSessionStorage === undefined) delete (globalThis as { sessionStorage?: unknown }).sessionStorage
+    else (globalThis as { sessionStorage?: unknown }).sessionStorage = prevSessionStorage
+  }
+
+  const callSrc = fs.readFileSync(path.join(ROOT, 'lib/call.ts'), 'utf8')
+  assert.ok(callSrc.includes('export async function runSessionCall') && callSrc.includes('client.openSessionCall'))
+
+  const callPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/CallPanel.tsx'), 'utf8')
+  for (const sym of ['Single call', 'Open session', 'Close & reclaim', 'Call from session', 'runSessionCall', 'findActiveBrowserSession']) {
+    assert.ok(callPanelSrc.includes(sym), `CallPanel must include ${sym}`)
+  }
+
+  const accountViewSrc = fs.readFileSync(path.join(ROOT, 'components/account/AccountView.tsx'), 'utf8')
+  for (const sym of ['Active sessions', 'Close & reclaim', 'loadAccountSessions', 'closeBrowserSession']) {
+    assert.ok(accountViewSrc.includes(sym), `AccountView must include ${sym}`)
+  }
 })

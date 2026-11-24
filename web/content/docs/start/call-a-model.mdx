@@ -40,6 +40,8 @@ The enclave answers ("Enclave answering"). The browser decrypts the answer and r
 </Step>
 </Steps>
 
+For multiple calls in a row without signing each one, turn on the **Session** toggle on the call panel: approve one `open_session` transaction to fund a bounded budget for an ephemeral delegate key held in `sessionStorage`, watch the remaining budget and call count update across consecutive calls with zero extra wallet prompts, and press **Close & reclaim** on the call panel or under **Active sessions** on [/account](/account) to return any unspent balance.
+
 ## From code
 
 <Ways>

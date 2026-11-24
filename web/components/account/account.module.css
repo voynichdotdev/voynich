@@ -2,34 +2,34 @@
 
 .who { margin-top: 10px; color: var(--text-2); }
 .layout { row-gap: var(--gutter); align-items: start; }
-.main { grid-column: span 8; min-width: 0; }
+.main { grid-column: span 8; min-width: 0; display: flex; flex-direction: column; gap: var(--gutter); }
 .side { grid-column: span 4; min-width: 0; display: flex; flex-direction: column; gap: var(--gutter); }
 @media (max-width: 1023px) { .main, .side { grid-column: 1 / -1; } }
 
 .now { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; color: var(--text); border-bottom: 1px solid var(--line); }
 
 /* calls */
-.call {
+.call, .sessionRow {
   display: grid; grid-template-columns: 120px minmax(0, 1fr) 116px 112px 112px 164px;
   column-gap: 16px; align-items: center; min-height: 52px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid var(--line);
 }
 .calls > li:last-child { border-bottom: 0; }
 .callHead { min-height: 36px; font-size: 12px; font-weight: 500; color: var(--text-3); }
 .num { text-align: right; min-width: 0; }
-.call :global(.t-label) { display: none; }
+.call :global(.t-label), .sessionRow :global(.t-label) { display: none; }
 .act { display: flex; justify-content: flex-end; align-items: center; min-width: 0; }
 .why { grid-column: 2 / -1; margin-top: -6px; padding-bottom: 12px; }
 
 @media (max-width: 639px) {
   .callHead { display: none; }
-  .call { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'state act' 'model price' 'opened deadline'; row-gap: 10px; padding: 14px 16px; align-items: baseline; }
+  .call, .sessionRow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'state act' 'model price' 'opened deadline'; row-gap: 10px; padding: 14px 16px; align-items: baseline; }
   .state { grid-area: state; align-self: center; }
   .act { grid-area: act; align-self: center; }
   .model { grid-area: model; }
-  .call > :nth-child(3) { grid-area: price; }
-  .call > :nth-child(4) { grid-area: opened; text-align: left; }
-  .call > :nth-child(5) { grid-area: deadline; }
-  .call :global(.t-label) { display: inline; margin-right: 8px; }
+  .call > :nth-child(3), .sessionRow > :nth-child(3) { grid-area: price; }
+  .call > :nth-child(4), .sessionRow > :nth-child(4) { grid-area: opened; text-align: left; }
+  .call > :nth-child(5), .sessionRow > :nth-child(5) { grid-area: deadline; }
+  .call :global(.t-label), .sessionRow :global(.t-label) { display: inline; margin-right: 8px; }
   .why { grid-column: 1 / -1; margin-top: 0; padding-bottom: 0; }
 }
 

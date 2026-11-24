@@ -5,12 +5,13 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import type { Account, Call, Earnings } from '@voynich/contract'
+import type { Account, Call, Earnings, Session } from '@voynich/contract'
 import { FIXTURE } from '@voynich/contract/fixtures'
 import { api, read, type Read } from '@/lib/api'
 import { loadLastPieceFromApi, loadSavedStreamPieces, removeSavedStreamPiece, type SavedStreamPiece } from '@/lib/call'
 import { LINKS, SKETCH32 } from '@/lib/facts'
 import { group, hardware, money, short } from '@/lib/format'
+import { closeBrowserSession, loadAccountSessions } from '@/lib/sessions'
 import { play } from '@/lib/sound'
 import { errorMessage, send, type TxStageName } from '@/lib/tx'
 import { wallet } from '@/lib/wallet'
@@ -32,6 +33,7 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
   // the account of the wallet that owns sketch-32, and a named scenario on a sample API shows its caller's account.
   const [sample, setSample] = useState<string | null | undefined>(!walletAddress && (fixture || as) ? undefined : null)
   const [r, setR] = useState<Read<Account> | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
   const [names, setNames] = useState<Names>({})
   const address = walletAddress ?? w.address ?? sample ?? null
   const canSign = !!address && w.address === address
@@ -55,8 +57,13 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
 
   const load = useCallback(async (who: string) => {
     const client = api(fixture)
-    const [account, list] = await Promise.all([read(client.account(who)), read(client.models({ limit: 100 }))])
+    const [account, list, sess] = await Promise.all([
+      read(client.account(who)),
+      read(client.models({ limit: 100 })),
+      loadAccountSessions(client, who),
+    ])
     if (list.ok) setNames(Object.fromEntries(list.data.items.map((m) => [m.address, m.name])))
+    setSessions(sess)
     return account
   }, [fixture])
 
@@ -82,13 +89,24 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
           {address ? <p className={s.who}><Hash value={address} chars={8} label="wallet address" /></p> : <p className="t-small">Your calls, the models you own and the enclaves you operate.</p>}
         </div>
       </div>
-      <Regions fixture={fixture} held={held} names={names} wallet={address} canSign={canSign} onChange={(calls) => { if (r?.ok) setR({ ok: true, data: { ...r.data, calls } }) }} />
+      <Regions
+        fixture={fixture}
+        held={held}
+        names={names}
+        sessions={sessions}
+        wallet={address}
+        canSign={canSign}
+        onChange={(calls) => { if (r?.ok) setR({ ok: true, data: { ...r.data, calls } }) }}
+        onSessionsChange={setSessions}
+      />
     </div>
   )
 }
 
-function Regions({ fixture, held, names, wallet: who, canSign, onChange }: { fixture: string | null; held: Held; names: Names; wallet: string | null; canSign: boolean; onChange: (calls: Call[]) => void }) {
+function Regions({ fixture, held, names, sessions, wallet: who, canSign, onChange, onSessionsChange }: { fixture: string | null; held: Held; names: Names; sessions: Session[]; wallet: string | null; canSign: boolean; onChange: (calls: Call[]) => void; onSessionsChange: (sessions: Session[]) => void }) {
   const [pending, setPending] = useState<{ call: string; kind: 'refund' | 'settle'; stage: 'building' | TxStageName } | null>(null)
+  const [closingSession, setClosingSession] = useState<{ address: string; stage: 'building' | TxStageName } | null>(null)
+  const [sessionErrors, setSessionErrors] = useState<Record<string, string>>({})
   const [loadingPiece, setLoadingPiece] = useState<string | null>(null)
   const [savedPieces, setSavedPieces] = useState<Record<string, SavedStreamPiece>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -183,6 +201,31 @@ function Regions({ fixture, held, names, wallet: who, canSign, onChange }: { fix
     }
   }
 
+  const closeSession = async (sess: Session) => {
+    if (closingSession || !who) return
+    const client = api(fixture)
+    setSessionErrors((e) => ({ ...e, [sess.address]: '' }))
+    setClosingSession({ address: sess.address, stage: 'building' })
+    try {
+      const updated = await closeBrowserSession({
+        client,
+        wallet: who,
+        sessionAddress: sess.address,
+        onStage: (stage) => setClosingSession({ address: sess.address, stage }),
+      })
+      play('refund')
+      onSessionsChange(
+        sessions.map((x) => (x.address === sess.address ? (updated ?? { ...x, status: 'closed' as const, remaining: '0' }) : x)),
+      )
+      toast({ state: 'refunded', text: `${money({ ...sess.budget, amount: sess.remaining })} ${sess.budget.symbol} reclaimed from session` })
+    } catch (e) {
+      play('failed')
+      setSessionErrors((x) => ({ ...x, [sess.address]: errorMessage(e) }))
+    } finally {
+      setClosingSession(null)
+    }
+  }
+
   const quiet = held.is === 'connect' ? 'No wallet connected' : held.is === 'failed' ? 'Not read' : held.is === 'loading' ? null : 'None yet'
   // What a side region says when it has no rows of its own to show.
   const aside = (none: React.ReactNode, about: React.ReactNode) =>
@@ -191,7 +234,68 @@ function Regions({ fixture, held, names, wallet: who, canSign, onChange }: { fix
 
   return (
     <div className={`grid ${s.layout}`}>
-      <section className={s.main} aria-labelledby="calls">
+      <div className={s.main}>
+        {held.is === 'data' ? (
+          <section className="panel" aria-labelledby="sessions">
+            <div className="panel-head">
+              <h2 id="sessions">Active sessions</h2>
+              <span className="mono dim">{group(sessions.filter((x) => x.status === 'open').length)} open</span>
+            </div>
+            {sessions.length === 0 ? (
+              <div className="panel-body">
+                <p className="t-small dim">No caller sessions yet. Open a one-signature session from any model page to run consecutive calls without wallet prompts.</p>
+              </div>
+            ) : (
+              <ul className={s.calls}>
+                <li className={`${s.sessionRow} ${s.callHead}`} aria-hidden="true"><span>State</span><span>Model</span><span className={s.num}>Budget</span><span className={s.num}>Remaining</span><span className={s.num}>Expires</span><span /></li>
+                {sessions.map((sess) => {
+                  const busy = closingSession?.address === sess.address
+                  const modelName = sess.model ? names[sess.model] : null
+                  return (
+                    <li key={sess.address} className={s.sessionRow} data-state={sess.status}>
+                      <span className={s.state}><State state={sess.status === 'open' ? 'live' : 'sealed'} label={sess.status === 'open' ? 'Open' : 'Closed'} /></span>
+                      <span className={s.model}>
+                        {sess.model ? (
+                          <Link className="link mono" href={`/models/${modelName ?? sess.model}${q(fixture)}`}>{modelName ?? short(sess.model, 4)}</Link>
+                        ) : (
+                          <span className="t-small">Any model</span>
+                        )}
+                        <span className="t-small dim" style={{ marginLeft: 8 }}>{group(sess.callsOpened)} {sess.callsOpened === '1' ? 'call' : 'calls'}</span>
+                      </span>
+                      <span className={s.num}><span className="t-label">Budget</span><Amount value={sess.budget} /></span>
+                      <span className={s.num}><span className="t-label">Remaining</span><Amount value={{ ...sess.budget, amount: sess.remaining }} /></span>
+                      <span className={s.num}><span className="t-label">Expires</span><span className="mono">{group(sess.expiresAtSlot)}</span></span>
+                      <span className={s.act} aria-live="polite">
+                        {sess.status === 'open' && canSign ? (
+                          <button
+                            type="button"
+                            className="btn"
+                            data-size="s"
+                            data-kind="primary"
+                            data-pending={busy || undefined}
+                            disabled={!!closingSession}
+                            onClick={() => void closeSession(sess)}
+                          >
+                            {busy
+                              ? <><StateTile state="pending" size={14} />{closingSession.stage === 'signing' ? 'Awaiting signature' : closingSession.stage === 'confirming' ? 'Confirming' : 'Building'}</>
+                              : 'Close & reclaim'}
+                          </button>
+                        ) : sess.status === 'open' ? (
+                          <span className="t-small dim">Open</span>
+                        ) : (
+                          <span className="t-small dim">Reclaimed</span>
+                        )}
+                      </span>
+                      {sessionErrors[sess.address] ? <p className={`t-small bad ${s.why}`} role="alert">{sessionErrors[sess.address]}</p> : null}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+        ) : null}
+
+        <section aria-labelledby="calls">
         <div className="panel">
           <div className="panel-head"><h2 id="calls">Calls</h2>{account ? <span className="mono dim">{group(calls.length)}</span> : null}</div>
           {held.is === 'connect' ? (
@@ -258,7 +362,8 @@ function Regions({ fixture, held, names, wallet: who, canSign, onChange }: { fix
             </>
           )}
         </div>
-      </section>
+        </section>
+      </div>
 
       <aside className={s.side}>
         <section className="panel" aria-labelledby="owned">
