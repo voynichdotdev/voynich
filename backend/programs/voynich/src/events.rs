@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PriceUnit};
+use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PriceUnit, SessionStatus};
 
 #[event]
 pub struct ConfigChanged { pub admin: Pubkey, pub config: ConfigArgs }
@@ -51,4 +51,19 @@ pub struct ModelVersionPublished {
     pub model: Pubkey, pub model_version: Pubkey, pub version: u32,
     pub previous_version: u32, pub previous_ciphertext_sha256: [u8; 32], pub previous_size_bytes: u64, pub previous_sealed_slot: u64, pub previous_base: Option<ModelBase>,
     pub weights: Vec<Pubkey>, pub size_bytes: u64, pub nonce_prefix: [u8; 16], pub ciphertext_sha256: [u8; 32], pub manifest: Vec<u8>, pub base: Option<ModelBase>, pub published_slot: u64,
+}
+#[event]
+pub struct SessionOpened {
+    pub session: Pubkey, pub caller: Pubkey, pub delegate: Pubkey, pub nonce: u64,
+    pub mint: Pubkey, pub model: Pubkey, pub budget: u64, pub opened_slot: u64, pub expires_at_slot: u64,
+}
+#[event]
+pub struct SessionDebited {
+    pub session: Pubkey, pub caller: Pubkey, pub delegate: Pubkey, pub call: Pubkey, pub model: Pubkey,
+    pub amount: u64, pub spent: u64, pub calls_opened: u64, pub slot: u64,
+}
+#[event]
+pub struct SessionClosed {
+    pub session: Pubkey, pub caller: Pubkey, pub delegate: Pubkey, pub closer: Pubkey,
+    pub returned_amount: u64, pub spent: u64, pub calls_opened: u64, pub slot: u64, pub status: SessionStatus,
 }

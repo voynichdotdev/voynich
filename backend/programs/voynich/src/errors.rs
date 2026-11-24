@@ -35,4 +35,5 @@ pub enum VoynichError {
     #[msg("This model has an active policy; pass its Policy account in remaining accounts.")] PolicyRequired,
     #[msg("The quoted operator share exceeds the model's maximum operator share.")] InvalidQuote,
     #[msg("The model version is invalid or not in the required state.")] InvalidVersion,
+    #[msg("The caller session is closed, expired, out of budget, or does not match this call.")] InvalidSession,
 }

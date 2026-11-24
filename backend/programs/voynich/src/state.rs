@@ -351,6 +351,39 @@ pub struct CreateModelArgs {
     pub price_unit: PriceUnit,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SessionStatus { Open, Closed }
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct OpenSessionArgs {
+    pub delegate: Pubkey,
+    pub nonce: u64,
+    pub mint: Pubkey,
+    pub model: Pubkey,
+    pub budget: u64,
+    pub expires_at_slot: u64,
+    pub delegate_gas_lamports: u64,
+}
+
+#[account]
+pub struct Session {
+    pub caller: Pubkey,
+    pub delegate: Pubkey,
+    pub nonce: u64,
+    pub mint: Pubkey,
+    pub model: Pubkey,
+    pub budget: u64,
+    pub spent: u64,
+    pub calls_opened: u64,
+    pub opened_slot: u64,
+    pub expires_at_slot: u64,
+    pub status: SessionStatus,
+    pub bump: u8,
+}
+impl Session {
+    pub const SPACE: usize = 8 + 32 * 4 + 8 * 6 + 1 + 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,5 +656,27 @@ mod tests {
         let mut buf = Vec::new();
         mv.try_serialize(&mut buf).unwrap();
         assert!(buf.len() <= ModelVersion::SPACE, "ModelVersion serialized {} > {}", buf.len(), ModelVersion::SPACE);
+    }
+
+    #[test]
+    fn worst_case_session_fits_within_space() {
+        let s = Session {
+            caller: Pubkey::new_unique(),
+            delegate: Pubkey::new_unique(),
+            nonce: u64::MAX,
+            mint: Pubkey::new_unique(),
+            model: Pubkey::new_unique(),
+            budget: u64::MAX,
+            spent: u64::MAX,
+            calls_opened: u64::MAX,
+            opened_slot: u64::MAX,
+            expires_at_slot: u64::MAX,
+            status: SessionStatus::Closed,
+            bump: 255,
+        };
+        let mut buf = Vec::new();
+        s.try_serialize(&mut buf).unwrap();
+        assert_eq!(Session::SPACE, 186);
+        assert_eq!(buf.len(), Session::SPACE);
     }
 }

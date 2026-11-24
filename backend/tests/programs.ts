@@ -2099,4 +2099,188 @@ test('Voynich program flows on the supplied local validator', { timeout: 180_000
     await execute((await settleInstructions(call2)).instructions)
     assert.deepEqual((await voynich.account.call.fetch(call2.address)).status, { settled: {} })
   })
+
+  await t.test('caller session opens once, settles 2 consecutive delegate-signed calls, enforces budget and expiry, and returns remaining SOL on close', async () => {
+    const { decodeSessionAccount, sessionPda } = await import('voynich/program')
+    const sessionModel = await createModel('session-sol')
+    await uploadAndSeal(sessionModel)
+    await refresh(first)
+    await execute([await ownerGrant(sessionModel, first)], [owner])
+    const sessionNonce = ++nonce
+    const delegate = Keypair.generate()
+    const stranger = Keypair.generate()
+    await execute([SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: stranger.publicKey, lamports: 200_000_000 })], [admin])
+    const sessionAddr = sessionPda(caller.publicKey, delegate.publicKey, sessionNonce, voynich.programId)
+    const slotNow = await connection.getSlot('confirmed')
+    const budget = PRICE * 2n + PRICE / 2n // 2.5 calls -> allows 2 calls, blocks 3rd
+    const delegateGas = 20_000_000n
+
+    // 1. Caller opens session in one signature (funding both budget and ephemeral delegate gas)
+    await execute([await voynich.methods.openSession({
+      delegate: delegate.publicKey,
+      nonce: bn(sessionNonce),
+      mint: PublicKey.default,
+      model: sessionModel.address,
+      budget: bn(budget),
+      expiresAtSlot: bn(BigInt(slotNow + 500)),
+      delegateGasLamports: bn(delegateGas),
+    }).accountsStrict({
+      caller: caller.publicKey,
+      delegate: delegate.publicKey,
+      session: sessionAddr,
+      mint: null,
+      callerTokens: null,
+      sessionEscrow: null,
+      tokenProgram: null,
+      associatedTokenProgram: null,
+      systemProgram: SystemProgram.programId,
+      ...events(voynich.programId),
+    }).instruction()], [caller])
+
+    const sessionInfo = await connection.getAccountInfo(sessionAddr, 'confirmed')
+    assert.ok(sessionInfo)
+    const decoded = decodeSessionAccount(sessionInfo.data)
+    assert(decoded.caller.equals(caller.publicKey))
+    assert(decoded.delegate.equals(delegate.publicKey))
+    assert.equal(decoded.budget.toString(), budget.toString())
+    assert.equal(decoded.spent.toString(), '0')
+    assert.equal(decoded.callsOpened.toString(), '0')
+    assert.equal(decoded.status, 'open')
+    assert.equal(BigInt(await connection.getBalance(delegate.publicKey, 'confirmed')), delegateGas)
+
+    // 2. Non-delegate cannot open a call on this session
+    const badNonce = ++nonce
+    const badCall = pda(voynich.programId, utf8('call'), caller.publicKey.toBytes(), u64le(badNonce))
+    await assert.rejects(
+      execute([await voynich.methods.openSessionCall(bn(badNonce), [...sha256(utf8('bad-session-call'))], { sealed: {} }, null).accountsStrict({
+        delegate: stranger.publicKey,
+        session: sessionAddr,
+        config,
+        model: sessionModel.address,
+        enclave: first.address,
+        attestationRecord: first.record,
+        grant: grantAddress(sessionModel, first),
+        call: badCall,
+        mint: null,
+        sessionEscrow: null,
+        escrowTokens: null,
+        tokenProgram: null,
+        associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId,
+        ...events(voynich.programId),
+      }).instruction()], [stranger]),
+      /Unauthorized/,
+    )
+
+    // 3. Delegate opens and settles 2 consecutive calls with ZERO caller signature
+    for (let i = 0; i < 2; i++) {
+      const cNonce = ++nonce
+      const cHash = sha256(utf8(`session-call-${i}-${cNonce}`))
+      const cAddr = pda(voynich.programId, utf8('call'), caller.publicKey.toBytes(), u64le(cNonce))
+      await execute([await voynich.methods.openSessionCall(bn(cNonce), [...cHash], { sealed: {} }, null).accountsStrict({
+        delegate: delegate.publicKey,
+        session: sessionAddr,
+        config,
+        model: sessionModel.address,
+        enclave: first.address,
+        attestationRecord: first.record,
+        grant: grantAddress(sessionModel, first),
+        call: cAddr,
+        mint: null,
+        sessionEscrow: null,
+        escrowTokens: null,
+        tokenProgram: null,
+        associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId,
+        ...events(voynich.programId),
+      }).instruction()], [delegate])
+      const onChainCall = await voynich.account.call.fetch(cAddr)
+      assert(onChainCall.caller.equals(caller.publicKey), 'Call.caller must remain session.caller')
+      await execute((await settleInstructions({ address: cAddr, nonce: cNonce, model: sessionModel, inputHash: cHash })).instructions)
+      assert.deepEqual((await voynich.account.call.fetch(cAddr)).status, { settled: {} })
+    }
+
+    const afterTwo = decodeSessionAccount((await connection.getAccountInfo(sessionAddr, 'confirmed'))!.data)
+    assert.equal(afterTwo.spent.toString(), (PRICE * 2n).toString())
+    assert.equal(afterTwo.callsOpened.toString(), '2')
+
+    // 4. 3rd call exceeds remaining budget (0.5 * PRICE < PRICE) -> InvalidSession
+    const overNonce = ++nonce
+    const overCall = pda(voynich.programId, utf8('call'), caller.publicKey.toBytes(), u64le(overNonce))
+    await assert.rejects(
+      execute([await voynich.methods.openSessionCall(bn(overNonce), [...sha256(utf8('over-budget'))], { sealed: {} }, null).accountsStrict({
+        delegate: delegate.publicKey,
+        session: sessionAddr,
+        config,
+        model: sessionModel.address,
+        enclave: first.address,
+        attestationRecord: first.record,
+        grant: grantAddress(sessionModel, first),
+        call: overCall,
+        mint: null,
+        sessionEscrow: null,
+        escrowTokens: null,
+        tokenProgram: null,
+        associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId,
+        ...events(voynich.programId),
+      }).instruction()], [delegate]),
+      /InvalidSession/,
+    )
+
+    // 5. Stranger cannot close an active session before expiry -> Unauthorized
+    await assert.rejects(
+      execute([await voynich.methods.closeSession().accountsStrict({
+        closer: stranger.publicKey,
+        session: sessionAddr,
+        caller: caller.publicKey,
+        sessionEscrow: null,
+        callerTokens: null,
+        tokenProgram: null,
+        systemProgram: SystemProgram.programId,
+        ...events(voynich.programId),
+      }).instruction()], [stranger]),
+      /Unauthorized/,
+    )
+
+    // 6. Caller closes session -> remaining 0.5 * PRICE returns to caller, status becomes closed
+    const closeTx = await transaction(await execute([await voynich.methods.closeSession().accountsStrict({
+      closer: caller.publicKey,
+      session: sessionAddr,
+      caller: caller.publicKey,
+      sessionEscrow: null,
+      callerTokens: null,
+      tokenProgram: null,
+      systemProgram: SystemProgram.programId,
+      ...events(voynich.programId),
+    }).instruction()], [caller]))
+    const expectedReturned = budget - PRICE * 2n
+    assert.equal(solChange(closeTx, caller.publicKey), expectedReturned)
+    const closedInfo = decodeSessionAccount((await connection.getAccountInfo(sessionAddr, 'confirmed'))!.data)
+    assert.equal(closedInfo.status, 'closed')
+
+    // 7. Closed session rejects further calls -> InvalidSession
+    const closedNonce = ++nonce
+    const closedCall = pda(voynich.programId, utf8('call'), caller.publicKey.toBytes(), u64le(closedNonce))
+    await assert.rejects(
+      execute([await voynich.methods.openSessionCall(bn(closedNonce), [...sha256(utf8('after-close'))], { sealed: {} }, null).accountsStrict({
+        delegate: delegate.publicKey,
+        session: sessionAddr,
+        config,
+        model: sessionModel.address,
+        enclave: first.address,
+        attestationRecord: first.record,
+        grant: grantAddress(sessionModel, first),
+        call: closedCall,
+        mint: null,
+        sessionEscrow: null,
+        escrowTokens: null,
+        tokenProgram: null,
+        associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId,
+        ...events(voynich.programId),
+      }).instruction()], [delegate]),
+      /InvalidSession/,
+    )
+  })
 })

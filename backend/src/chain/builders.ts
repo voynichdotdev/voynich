@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BN, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BN, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeSessionAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -661,6 +661,183 @@ export function builders(runtime: ChainRuntime) {
         .remainingAccounts(mv.weights.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
         .instruction()
       return ledger.build('publish_version', owner, [instruction], { model: row.key.toBase58(), modelVersion: modelVersion.toBase58() })
+    },
+    async openSession(body: c.OpenSessionRequest) {
+      const caller = publicKey(body.wallet)
+      const delegate = publicKey(body.delegate)
+      if (delegate.equals(PublicKey.default)) fail('INVALID_SESSION', 'Delegate key must be non-zero.', { stage: 'validation' })
+      const nonce = body.nonce === undefined ? randomBytes(8).readBigUInt64LE() : BigInt(body.nonce)
+      const budget = BigInt(body.budget)
+      if (budget <= 0n) fail('INVALID_SESSION', 'Session budget must be positive.', { stage: 'validation' })
+      const delegateGasLamports = body.delegateGasLamports === undefined ? 0n : BigInt(body.delegateGasLamports)
+      const currentSlot = BigInt(await runtime.rpc.connection.getSlot('confirmed'))
+      const expiresAtSlot = body.expiresAtSlot !== undefined
+        ? BigInt(body.expiresAtSlot)
+        : currentSlot + BigInt(body.durationSlots ?? '18000')
+      if (expiresAtSlot <= currentSlot) fail('INVALID_SESSION', 'expiresAtSlot must be in the future.', { stage: 'validation' })
+      const modelKey = body.model ? (await model(body.model)).key : PublicKey.default
+      const mintKey = body.mint ? publicKey(body.mint) : PublicKey.default
+      const token = !mintKey.equals(PublicKey.default)
+      const session = a.session(caller, delegate, nonce)
+      let requiredLamports = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(SESSION_SPACE)) + delegateGasLamports
+      const callerTokens = token ? getAssociatedTokenAddressSync(mintKey, caller) : null
+      const sessionEscrow = token ? getAssociatedTokenAddressSync(mintKey, session, true) : null
+      if (token) {
+        if (!await runtime.rpc.connection.getAccountInfo(sessionEscrow!, 'confirmed')) {
+          requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+        }
+      } else {
+        requiredLamports += budget
+      }
+      const instruction = await voynich.methods
+        .openSession({
+          delegate,
+          nonce: bn(nonce),
+          mint: mintKey,
+          model: modelKey,
+          budget: bn(budget),
+          expiresAtSlot: bn(expiresAtSlot),
+          delegateGasLamports: bn(delegateGasLamports),
+        })
+        .accountsStrict({
+          caller,
+          delegate,
+          session,
+          mint: token ? mintKey : null,
+          callerTokens: token ? getAssociatedTokenAddressSync(mintKey, caller, true) : null,
+          sessionEscrow,
+          tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+          associatedTokenProgram: token ? ASSOCIATED_TOKEN_PROGRAM_ID : null,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .instruction()
+      return ledger.build(
+        'open_session',
+        caller,
+        [instruction],
+        { session: session.toBase58(), ...(modelKey.equals(PublicKey.default) ? {} : { model: modelKey.toBase58() }) },
+        requiredLamports,
+        token ? { mint: mintKey, account: callerTokens!, amount: budget } : undefined,
+      )
+    },
+    async closeSession(address: string, body: c.WalletRequest) {
+      const sessionKey = publicKey(address)
+      const closer = publicKey(body.wallet)
+      const info = await runtime.rpc.connection.getAccountInfo(sessionKey, 'confirmed')
+      const chainSession = info && info.owner.equals(runtime.programId) ? decodeSessionAccount(info.data) : null
+      if (!chainSession) fail('SESSION_NOT_FOUND', 'This session was not found.')
+      if (chainSession.status !== 'open') fail('INVALID_SESSION', 'This session is already closed.', { stage: 'build' })
+      const slot = BigInt(await runtime.rpc.connection.getSlot('confirmed'))
+      if (!closer.equals(chainSession.caller) && slot <= BigInt(chainSession.expiresAtSlot.toString())) {
+        fail('UNAUTHORIZED', 'Only the caller can close an active session before expiry.', { stage: 'build' })
+      }
+      const token = !chainSession.mint.equals(PublicKey.default)
+      const callerTokens = token ? getAssociatedTokenAddressSync(chainSession.mint, chainSession.caller, true) : null
+      const instructions: TransactionInstruction[] = []
+      let requiredLamports = 0n
+      if (token && callerTokens) {
+        if (!await runtime.rpc.connection.getAccountInfo(callerTokens, 'confirmed')) {
+          requiredLamports = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+        }
+        instructions.push(createAssociatedTokenAccountIdempotentInstruction(closer, callerTokens, chainSession.caller, chainSession.mint))
+      }
+      instructions.push(
+        await voynich.methods
+          .closeSession()
+          .accountsStrict({
+            closer,
+            session: sessionKey,
+            caller: chainSession.caller,
+            sessionEscrow: token ? getAssociatedTokenAddressSync(chainSession.mint, sessionKey, true) : null,
+            callerTokens,
+            tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+            systemProgram: SystemProgram.programId,
+            ...events,
+          })
+          .instruction(),
+      )
+      return ledger.build('close_session', closer, instructions, { session: address }, requiredLamports)
+    },
+    async openSessionCall(address: string, body: c.OpenSessionCallRequest) {
+      const sessionKey = publicKey(address)
+      const delegate = publicKey(body.delegate)
+      const info = await runtime.rpc.connection.getAccountInfo(sessionKey, 'confirmed')
+      const chainSession = info && info.owner.equals(runtime.programId) ? decodeSessionAccount(info.data) : null
+      if (!chainSession) fail('SESSION_NOT_FOUND', 'This session was not found.')
+      if (chainSession.status !== 'open') fail('INVALID_SESSION', 'This session is closed.', { stage: 'build' })
+      if (!chainSession.delegate.equals(delegate)) fail('UNAUTHORIZED', 'Only the session delegate can open calls on this session.', { stage: 'build' })
+      const slot = BigInt(await runtime.rpc.connection.getSlot('confirmed'))
+      if (slot > BigInt(chainSession.expiresAtSlot.toString())) fail('INVALID_SESSION', 'This session has expired.', { stage: 'build' })
+      const row = await model(body.model)
+      const target = publicKey(body.enclave)
+      const entry = await enclave(target)
+      await requireEligibleEnclave(row.value, entry)
+      if (!chainSession.model.equals(PublicKey.default) && !chainSession.model.equals(row.key)) {
+        fail('INVALID_SESSION', 'This session is scoped to a different model.', { stage: 'build' })
+      }
+      if (!chainSession.mint.equals(row.value.priceMint)) {
+        fail('INVALID_SESSION', 'This session mint does not match the model price mint.', { stage: 'build' })
+      }
+      const priceUnit = 'token' in row.value.priceUnit ? 'token' : 'call'
+      const unitPrice = BigInt(row.value.price.toString())
+      let escrowAmount: bigint
+      if (priceUnit === 'token') {
+        if (body.ceiling === undefined) fail('VALIDATION_ERROR', 'Supply a ceiling for per-token models.', { stage: 'validation', fieldErrors: { ceiling: ['Required for per-token models.'] } })
+        escrowAmount = BigInt(body.ceiling)
+        if (escrowAmount < unitPrice || (unitPrice > 0n && escrowAmount === 0n)) {
+          fail('VALIDATION_ERROR', 'Ceiling must be at least the per-token price.', { stage: 'validation', fieldErrors: { ceiling: ['Must be at least the per-token price.'] } })
+        }
+      } else {
+        if (body.ceiling !== undefined) fail('VALIDATION_ERROR', 'Ceiling is only used for per-token models.', { stage: 'validation', fieldErrors: { ceiling: ['Not used for per-call models.'] } })
+        escrowAmount = unitPrice
+      }
+      const remaining = BigInt(chainSession.budget.toString()) - BigInt(chainSession.spent.toString())
+      if (remaining < escrowAmount) fail('INVALID_SESSION', 'Session budget remaining is less than the call escrow.', { stage: 'build' })
+      const nonce = body.nonce === undefined ? randomBytes(8).readBigUInt64LE() : BigInt(body.nonce)
+      const call = a.call(chainSession.caller, nonce)
+      const token = !row.value.priceMint.equals(PublicKey.default)
+      let requiredLamports = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(CALL_SPACE))
+      if (token) {
+        const escrow = getAssociatedTokenAddressSync(row.value.priceMint, call, true)
+        if (!await runtime.rpc.connection.getAccountInfo(escrow, 'confirmed')) {
+          requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+        }
+      }
+      const answerMode = body.answerMode === 'open' ? { open: {} } : { sealed: {} }
+      const accounts = {
+        delegate,
+        session: sessionKey,
+        config: a.config,
+        model: row.key,
+        enclave: target,
+        attestationRecord: entry.attestationRecord,
+        grant: a.grant(row.key, target),
+        call,
+        mint: token ? row.value.priceMint : null,
+        sessionEscrow: token ? getAssociatedTokenAddressSync(row.value.priceMint, sessionKey, true) : null,
+        escrowTokens: token ? getAssociatedTokenAddressSync(row.value.priceMint, call, true) : null,
+        tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+        associatedTokenProgram: token ? ASSOCIATED_TOKEN_PROGRAM_ID : null,
+        systemProgram: SystemProgram.programId,
+        ...events,
+      }
+      const policyRemaining: { pubkey: PublicKey; isWritable: boolean; isSigner: boolean }[] = []
+      if ((row.value as { hasPolicy?: boolean }).hasPolicy) {
+        const policyKey = a.policy(row.key)
+        const policyInfo = await runtime.rpc.connection.getAccountInfo(policyKey, 'confirmed')
+        if (policyInfo) {
+          const policy = decodePolicyAccount(policyInfo.data)
+          if (policy.allowListEnabled && !policy.allowedCallers.some(c => c.equals(chainSession.caller))) {
+            fail('POLICY_CALLER_DENIED', 'The session caller is not on the model allow list.', { stage: 'build' })
+          }
+        }
+        policyRemaining.push({ pubkey: policyKey, isWritable: false, isSigner: false })
+      }
+      const instruction = priceUnit === 'token'
+        ? await voynich.methods.openSessionMeteredCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null, bn(escrowAmount)).accountsStrict(accounts).remainingAccounts(policyRemaining).instruction()
+        : await voynich.methods.openSessionCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null).accountsStrict(accounts).remainingAccounts(policyRemaining).instruction()
+      return ledger.build('open_session_call', delegate, [instruction], { session: address, model: row.key.toBase58(), call: call.toBase58() }, requiredLamports)
     },
   }
 }

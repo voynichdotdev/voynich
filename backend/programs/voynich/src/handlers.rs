@@ -673,6 +673,222 @@ pub fn open_metered_call(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32]
     require!(model.price == 0 || ceiling > 0, VoynichError::InvalidCall);
     open_call_inner(ctx, nonce, input_hash, answer_mode, callback, PriceUnit::Token, ceiling)
 }
+
+pub fn open_session(ctx: Context<OpenSession>, args: OpenSessionArgs) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    require!(args.delegate != Pubkey::default(), VoynichError::InvalidSession);
+    require_keys_eq!(ctx.accounts.delegate.key(), args.delegate, VoynichError::InvalidSession);
+    require!(args.budget > 0, VoynichError::InvalidSession);
+    require!(args.expires_at_slot > slot, VoynichError::InvalidSession);
+    let session = &mut ctx.accounts.session;
+    session.caller = ctx.accounts.caller.key();
+    session.delegate = args.delegate;
+    session.nonce = args.nonce;
+    session.mint = args.mint;
+    session.model = args.model;
+    session.budget = args.budget;
+    session.spent = 0;
+    session.calls_opened = 0;
+    session.opened_slot = slot;
+    session.expires_at_slot = args.expires_at_slot;
+    session.status = SessionStatus::Open;
+    session.bump = ctx.bumps.session;
+    money::deposit_session(&ctx, args.budget, args.delegate_gas_lamports)?;
+    let session = &ctx.accounts.session;
+    emit_cpi!(SessionOpened {
+        session: session.key(),
+        caller: session.caller,
+        delegate: session.delegate,
+        nonce: session.nonce,
+        mint: session.mint,
+        model: session.model,
+        budget: session.budget,
+        opened_slot: session.opened_slot,
+        expires_at_slot: session.expires_at_slot,
+    });
+    Ok(())
+}
+
+pub fn close_session(ctx: Context<CloseSession>) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let caller_key = ctx.accounts.session.caller;
+    let delegate_key = ctx.accounts.session.delegate;
+    let expires_at_slot = ctx.accounts.session.expires_at_slot;
+    require!(ctx.accounts.session.status == SessionStatus::Open, VoynichError::InvalidSession);
+    require!(
+        ctx.accounts.closer.key() == caller_key || slot > expires_at_slot,
+        VoynichError::Unauthorized
+    );
+    let remaining = ctx.accounts.session.budget.saturating_sub(ctx.accounts.session.spent);
+    let returned_amount = money::close_session_escrow(&ctx, remaining)?;
+    let session = &mut ctx.accounts.session;
+    session.status = SessionStatus::Closed;
+    let spent = session.spent;
+    let calls_opened = session.calls_opened;
+    let session_key = session.key();
+    emit_cpi!(SessionClosed {
+        session: session_key,
+        caller: caller_key,
+        delegate: delegate_key,
+        closer: ctx.accounts.closer.key(),
+        returned_amount,
+        spent,
+        calls_opened,
+        slot,
+        status: SessionStatus::Closed,
+    });
+    Ok(())
+}
+
+fn open_session_call_inner(
+    ctx: Context<OpenSessionCall>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    answer_mode: AnswerMode,
+    callback: Option<CallbackSpec>,
+    price_unit: PriceUnit,
+    ceiling: u64,
+) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let model = &ctx.accounts.model;
+    require!(model.status == ModelStatus::Live, VoynichError::ModelNotLive);
+    let session_caller = ctx.accounts.session.caller;
+    let session_delegate = ctx.accounts.session.delegate;
+    require!(ctx.accounts.session.status == SessionStatus::Open, VoynichError::InvalidSession);
+    require!(slot <= ctx.accounts.session.expires_at_slot, VoynichError::InvalidSession);
+    require_keys_eq!(ctx.accounts.session.mint, model.price_mint, VoynichError::InvalidSession);
+    require!(
+        ctx.accounts.session.model == Pubkey::default() || ctx.accounts.session.model == model.key(),
+        VoynichError::InvalidSession
+    );
+    let escrow_amount = match price_unit {
+        PriceUnit::Call => model.price,
+        PriceUnit::Token => ceiling,
+    };
+    let remaining = ctx.accounts.session.budget.saturating_sub(ctx.accounts.session.spent);
+    require!(remaining >= escrow_amount, VoynichError::InvalidSession);
+
+    let grant = load_grant(&ctx.accounts.grant, model.key(), Some(ctx.accounts.enclave.key()), Some(ctx.bumps.grant))?;
+    require!(!grant.revoked, VoynichError::GrantRequired);
+    let value = current_record(&ctx.accounts.config, &ctx.accounts.enclave, &ctx.accounts.attestation_record)?;
+    allowed(model, &value.measurement)?;
+    if let Some(policy) = load_model_policy(model.key(), model.has_policy, ctx.remaining_accounts)? {
+        if policy.allow_list_enabled {
+            require!(policy.allowed_callers.contains(&session_caller), VoynichError::PolicyCallerDenied);
+        }
+    }
+    let effective_operator_share_bps = grant
+        .quoted_operator_share_bps
+        .map(|q| q.min(model.operator_share_bps))
+        .unwrap_or(model.operator_share_bps);
+    require!(u32::from(effective_operator_share_bps) + u32::from(ctx.accounts.config.protocol_share_bps) <= 10000, VoynichError::InvalidConfig);
+    let (callback_program, callback_accounts) = match callback {
+        Some(spec) => {
+            require!(spec.program != Pubkey::default() && spec.program != crate::ID, VoynichError::InvalidCallback);
+            require!(spec.accounts.len() <= MAX_CALLBACK_ACCOUNTS, VoynichError::InvalidCallback);
+            (spec.program, spec.accounts)
+        }
+        None => (Pubkey::default(), Vec::new()),
+    };
+
+    let session = &mut ctx.accounts.session;
+    session.spent = session.spent.checked_add(escrow_amount).ok_or(VoynichError::ArithmeticOverflow)?;
+    session.calls_opened = session.calls_opened.checked_add(1).ok_or(VoynichError::ArithmeticOverflow)?;
+    let spent_after = session.spent;
+    let calls_opened_after = session.calls_opened;
+    let session_key = session.key();
+
+    let call = &mut ctx.accounts.call;
+    call.caller = session_caller;
+    call.model = model.key();
+    call.enclave = ctx.accounts.enclave.key();
+    call.nonce = nonce;
+    call.input_hash = input_hash;
+    call.price = model.price;
+    call.price_mint = model.price_mint;
+    call.owner = model.owner;
+    call.operator = ctx.accounts.enclave.operator;
+    call.fee_recipient = ctx.accounts.config.fee_recipient;
+    call.operator_share_bps = effective_operator_share_bps;
+    call.protocol_share_bps = ctx.accounts.config.protocol_share_bps;
+    call.opened_slot = slot;
+    call.deadline_slot = slot.checked_add(ctx.accounts.config.call_deadline_slots).ok_or(VoynichError::ArithmeticOverflow)?;
+    call.status = CallStatus::Open;
+    call.bump = ctx.bumps.call;
+    call.answer_mode = answer_mode;
+    call.caller_is_program = anchor_lang::solana_program::instruction::get_stack_height()
+        > anchor_lang::solana_program::instruction::TRANSACTION_LEVEL_STACK_HEIGHT;
+    call.callback_program = callback_program;
+    call.callback_accounts = callback_accounts;
+    call.price_unit = price_unit;
+    call.ceiling = ceiling;
+
+    money::deposit_from_session(&ctx, escrow_amount)?;
+
+    let call = &ctx.accounts.call;
+    emit_cpi!(CallOpened {
+        call: call.key(),
+        caller: call.caller,
+        model: call.model,
+        enclave: call.enclave,
+        nonce: call.nonce,
+        input_hash: call.input_hash,
+        price: call.price,
+        price_mint: call.price_mint,
+        owner: call.owner,
+        operator: call.operator,
+        fee_recipient: call.fee_recipient,
+        operator_share_bps: call.operator_share_bps,
+        protocol_share_bps: call.protocol_share_bps,
+        opened_slot: call.opened_slot,
+        deadline_slot: call.deadline_slot,
+        answer_mode: call.answer_mode,
+        caller_is_program: call.caller_is_program,
+        callback_program: call.callback_program,
+        callback_accounts: call.callback_accounts.clone(),
+        price_unit: call.price_unit,
+        ceiling: call.ceiling,
+    });
+    emit_cpi!(SessionDebited {
+        session: session_key,
+        caller: session_caller,
+        delegate: session_delegate,
+        call: call.key(),
+        model: call.model,
+        amount: escrow_amount,
+        spent: spent_after,
+        calls_opened: calls_opened_after,
+        slot,
+    });
+    Ok(())
+}
+
+pub fn open_session_call(
+    ctx: Context<OpenSessionCall>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    answer_mode: AnswerMode,
+    callback: Option<CallbackSpec>,
+) -> Result<()> {
+    let price = ctx.accounts.model.price;
+    require!(ctx.accounts.model.price_unit == PriceUnit::Call, VoynichError::InvalidCall);
+    open_session_call_inner(ctx, nonce, input_hash, answer_mode, callback, PriceUnit::Call, price)
+}
+
+pub fn open_session_metered_call(
+    ctx: Context<OpenSessionCall>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    answer_mode: AnswerMode,
+    callback: Option<CallbackSpec>,
+    ceiling: u64,
+) -> Result<()> {
+    let model = &ctx.accounts.model;
+    require!(model.price_unit == PriceUnit::Token, VoynichError::InvalidCall);
+    require!(ceiling >= model.price, VoynichError::InvalidCall);
+    require!(model.price == 0 || ceiling > 0, VoynichError::InvalidCall);
+    open_session_call_inner(ctx, nonce, input_hash, answer_mode, callback, PriceUnit::Token, ceiling)
+}
 pub fn build_receipt_message(call: &Pubkey, input_hash: &[u8; 32], output_hash: &[u8; 32], base_sha256: Option<&[u8; 32]>) -> Vec<u8> {
     match base_sha256 {
         Some(base) => {

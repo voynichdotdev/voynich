@@ -328,3 +328,56 @@ pub struct PublishVersion<'info> {
     #[account(mut, seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
     #[account(mut, seeds = [b"version", model.key().as_ref(), &model_version.version.to_le_bytes()], bump = model_version.bump, has_one = model)] pub model_version: Box<Account<'info, ModelVersion>>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(args: OpenSessionArgs)]
+pub struct OpenSession<'info> {
+    #[account(mut)] pub caller: Signer<'info>,
+    /// CHECK: delegate key receives optional gas lamports; no account data is read.
+    #[account(mut)] pub delegate: UncheckedAccount<'info>,
+    #[account(init, payer = caller, space = Session::SPACE, seeds = [b"session", caller.key().as_ref(), delegate.key().as_ref(), &args.nonce.to_le_bytes()], bump)] pub session: Box<Account<'info, Session>>,
+    pub mint: Option<Account<'info, Mint>>,
+    #[account(mut)] pub caller_tokens: Option<Account<'info, TokenAccount>>,
+    /// CHECK: session-owned ATA for SPL budgets; created and verified in money.rs.
+    #[account(mut)] pub session_escrow: Option<UncheckedAccount<'info>>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub associated_token_program: Option<Program<'info, AssociatedToken>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct CloseSession<'info> {
+    #[account(mut)] pub closer: Signer<'info>,
+    #[account(mut, seeds = [b"session", session.caller.as_ref(), session.delegate.as_ref(), &session.nonce.to_le_bytes()], bump = session.bump)] pub session: Box<Account<'info, Session>>,
+    /// CHECK: exact caller recipient verified against session.caller.
+    #[account(mut)] pub caller: UncheckedAccount<'info>,
+    #[account(mut)] pub session_escrow: Option<Account<'info, TokenAccount>>,
+    #[account(mut)] pub caller_tokens: Option<Account<'info, TokenAccount>>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>)]
+pub struct OpenSessionCall<'info> {
+    #[account(mut)] pub delegate: Signer<'info>,
+    #[account(mut, seeds = [b"session", session.caller.as_ref(), session.delegate.as_ref(), &session.nonce.to_le_bytes()], bump = session.bump, has_one = delegate @ VoynichError::Unauthorized)] pub session: Box<Account<'info, Session>>,
+    #[account(seeds = [b"config"], bump = config.bump)] pub config: Account<'info, Config>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
+    #[account(seeds = [b"enclave", enclave.signing_key.as_ref()], bump = enclave.bump)] pub enclave: Box<Account<'info, Enclave>>,
+    /// CHECK: verified against enclave and configured verifier.
+    pub attestation_record: UncheckedAccount<'info>,
+    /// CHECK: verified in handler (owner, PDA ["grant", model, enclave], discriminator, legacy 223B or 226B layout).
+    #[account(seeds = [b"grant", model.key().as_ref(), enclave.key().as_ref()], bump)] pub grant: UncheckedAccount<'info>,
+    #[account(init, payer = delegate, space = Call::space(callback.as_ref().map(|c| c.accounts.len()).unwrap_or(0)), seeds = [b"call", session.caller.as_ref(), &nonce.to_le_bytes()], bump)] pub call: Box<Account<'info, Call>>,
+    pub mint: Option<Account<'info, Mint>>,
+    #[account(mut)] pub session_escrow: Option<Account<'info, TokenAccount>>,
+    /// CHECK: must be the call-owned associated token account; created and checked in money.rs.
+    #[account(mut)] pub escrow_tokens: Option<UncheckedAccount<'info>>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub associated_token_program: Option<Program<'info, AssociatedToken>>,
+    pub system_program: Program<'info, System>,
+}

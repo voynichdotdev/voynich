@@ -103,6 +103,40 @@ export class ReadModel {
         }]
     return { items, currentVersion: model.currentVersion ?? 1 }
   }
+  private async sessionRow(row: { address: string; caller: string; delegate: string; nonce: bigint; mint: string | null; modelAddress: string | null; budget: Prisma.Decimal; spent: Prisma.Decimal; callsOpened: bigint; openedSlot: bigint; expiresAtSlot: bigint; closedSlot: bigint | null; returnedAmount: Prisma.Decimal | null; status: 'open' | 'closed' }) {
+    const budgetBig = BigInt(row.budget.toFixed(0))
+    const spentBig = BigInt(row.spent.toFixed(0))
+    const remainingBig = budgetBig > spentBig ? budgetBig - spentBig : 0n
+    return {
+      address: row.address,
+      caller: row.caller,
+      delegate: row.delegate,
+      nonce: String(row.nonce),
+      mint: row.mint,
+      model: row.modelAddress,
+      budget: await this.money(row.budget.toFixed(0), row.mint),
+      spent: String(spentBig),
+      remaining: String(remainingBig),
+      callsOpened: String(row.callsOpened),
+      openedSlot: String(row.openedSlot),
+      expiresAtSlot: String(row.expiresAtSlot),
+      closedSlot: row.closedSlot === null ? null : String(row.closedSlot),
+      returnedAmount: row.returnedAmount === null ? null : row.returnedAmount.toFixed(0),
+      status: row.status,
+    }
+  }
+  async session(address: string) {
+    const row = await this.db.session.findUnique({ where: { address } })
+    if (!row) fail('SESSION_NOT_FOUND', 'This session was not found.')
+    return this.sessionRow(row)
+  }
+  async accountSessions(wallet: string) {
+    const rows = await this.db.session.findMany({
+      where: { caller: wallet },
+      orderBy: [{ openedSlot: 'desc' }, { address: 'asc' }],
+    })
+    return { items: await Promise.all(rows.map(row => this.sessionRow(row))), asOf: new Date().toISOString() }
+  }
   async model(id: string) {
     const row = await this.db.model.findFirst({ where: { OR: [{ address: id }, { name: id }] }, include: { weights: true } })
     if (!row) fail('MODEL_NOT_FOUND', 'This model was not found.')

@@ -47,4 +47,8 @@ pub mod voynich {
     pub fn write_version_weights(ctx: Context<WriteVersionWeights>, offset: u32, bytes: Vec<u8>) -> Result<()> { handlers::write_version_weights(ctx, offset, bytes) }
     pub fn seal_version_range<'info>(ctx: Context<'_, '_, '_, 'info, SealVersionRange<'info>>, chunk_count: u32) -> Result<()> { handlers::seal_version_range(ctx, chunk_count) }
     pub fn publish_version<'info>(ctx: Context<'_, '_, '_, 'info, PublishVersion<'info>>, ciphertext_sha256: [u8; 32]) -> Result<()> { handlers::publish_version(ctx, ciphertext_sha256) }
+    pub fn open_session(ctx: Context<OpenSession>, args: OpenSessionArgs) -> Result<()> { handlers::open_session(ctx, args) }
+    pub fn close_session(ctx: Context<CloseSession>) -> Result<()> { handlers::close_session(ctx) }
+    pub fn open_session_call(ctx: Context<OpenSessionCall>, nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>) -> Result<()> { handlers::open_session_call(ctx, nonce, input_hash, answer_mode, callback) }
+    pub fn open_session_metered_call(ctx: Context<OpenSessionCall>, nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>, ceiling: u64) -> Result<()> { handlers::open_session_metered_call(ctx, nonce, input_hash, answer_mode, callback, ceiling) }
 }

@@ -5544,3 +5544,92 @@ test('Build 10 Step 3 (voynich@0.2.39): encryptionDestination accepts legacy 223
     await new Promise<void>(r => apiServer.close(() => r()))
   }
 })
+
+test('Build 11 Step 1: Session PDA, decodeSessionAccount, tx builders, fixture session routes, and SDK openSession/session.call/closeSession', async () => {
+  const { Connection } = await import('@solana/web3.js')
+  const { serve } = await import('@hono/node-server')
+  const { createVoynich } = await import('voynich')
+  const { buildCloseSessionTx, buildOpenSessionTx, decodeSessionAccount, PROGRAM_ID, SESSION_SPACE, sessionPda } = await import('voynich/program')
+  const { utf8 } = await import('voynich/crypto')
+  const { buildApp } = await import('../src/app.js')
+
+  // 1. PDA + decodeSessionAccount + tx builders
+  assert.equal(SESSION_SPACE, 186)
+  const caller = Keypair.generate()
+  const delegate = Keypair.generate()
+  const modelKey = Keypair.generate().publicKey
+  const pda = sessionPda(caller.publicKey, delegate.publicKey, 7n, PROGRAM_ID)
+  assert.equal(pda.toBase58(), sessionPda(caller.publicKey, delegate.publicKey, 7, PROGRAM_ID).toBase58())
+
+  const buf = Buffer.alloc(SESSION_SPACE)
+  Buffer.from(sha256(utf8('account:Session')).subarray(0, 8)).copy(buf, 0)
+  caller.publicKey.toBuffer().copy(buf, 8)
+  delegate.publicKey.toBuffer().copy(buf, 40)
+  buf.writeBigUInt64LE(7n, 72)
+  PublicKey.default.toBuffer().copy(buf, 80)
+  modelKey.toBuffer().copy(buf, 112)
+  buf.writeBigUInt64LE(500_000n, 144)
+  buf.writeBigUInt64LE(100_000n, 152)
+  buf.writeBigUInt64LE(1n, 160)
+  buf.writeBigUInt64LE(1000n, 168)
+  buf.writeBigUInt64LE(2000n, 176)
+  buf[184] = 0 // open
+  buf[185] = 250 // bump
+  const decoded = decodeSessionAccount(buf)
+  assert(decoded.caller.equals(caller.publicKey))
+  assert(decoded.delegate.equals(delegate.publicKey))
+  assert.equal(decoded.nonce.toString(), '7')
+  assert.equal(decoded.budget.toString(), '500000')
+  assert.equal(decoded.spent.toString(), '100000')
+  assert.equal(decoded.callsOpened.toString(), '1')
+  assert.equal(decoded.status, 'open')
+
+  const conn = new Connection('http://127.0.0.1:8899')
+  const recentBlockhash = Keypair.generate().publicKey.toBase58()
+  const openTx = await buildOpenSessionTx({
+    connection: conn, caller: caller.publicKey, delegate: delegate.publicKey,
+    nonce: 7n, budget: 500_000n, expiresAtSlot: 2000n, model: modelKey, delegateGasLamports: 10_000_000n, recentBlockhash,
+  })
+  assert.ok(openTx.serialize().length > 0)
+  const closeTx = await buildCloseSessionTx({
+    connection: conn, closer: caller.publicKey, caller: caller.publicKey, session: pda, recentBlockhash,
+  })
+  assert.ok(closeTx.serialize().length > 0)
+
+  // 2. Fixture API + SDK end-to-end: openSession -> session.call -> refresh -> listSessions -> closeSession
+  const app = buildApp()
+  const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  try {
+    const sdk = createVoynich({ apiUrl, signer: caller, pollMs: 5 })
+    const sess = await sdk.openSession({ budget: '250000', model: 'sketch-32', durationSlots: '1000' })
+    assert.equal(sess.session.caller, caller.publicKey.toBase58())
+    assert.equal(sess.session.delegate, sess.delegate.publicKey.toBase58())
+    assert.equal(sess.session.status, 'open')
+    assert.equal(sess.session.remaining, '250000')
+
+    const callRes = await sess.call('sketch-32', new Float32Array(784))
+    assert.equal(callRes.checks.signature, true)
+    assert.equal(callRes.fixture, true)
+    assert.equal(callRes.receipt.caller, caller.publicKey.toBase58())
+
+    const afterCall = await sess.refresh()
+    assert.equal(afterCall.callsOpened, '1')
+    assert.equal(afterCall.spent, '100000')
+    assert.equal(afterCall.remaining, '150000')
+
+    const listed = await sdk.listSessions()
+    assert.equal(listed.items.length, 1)
+    assert.equal(listed.items[0]!.address, sess.address)
+
+    const closed = await sess.close()
+    assert.equal(closed.session.status, 'closed')
+    assert.equal(closed.session.returnedAmount, '150000')
+    assert.equal(closed.session.remaining, '0')
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+  }
+})

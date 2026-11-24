@@ -1,6 +1,6 @@
 import { Connection, Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { IdlAccounts } from '@coral-xyz/anchor'
-import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelVersion, type ModelVersions, type Money, type PriceUnit, type Receipt, type ReceiptView, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
+import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AccountSessions, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelVersion, type ModelVersions, type Money, type PriceUnit, type Receipt, type ReceiptView, type Session, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
 import { decodeAdapter } from './adapter.js'
 import { CIPHER_CHUNK_BYTES, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER, ciphertextHash, decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, openWeightsChunk, sealWeights, sha256, signSealDerivation, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, verifyReceipt, wrapKey, type SealDerivationSigner, type WeightsCipherHeader } from './crypto.js'
 import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeGrantAccount, decodeModelBaseBytes, decodeModelVersionAccount, decodeReceiptAccount, decodeWeightsHeader, modelVersionPda, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
@@ -19,7 +19,8 @@ export type SelectEnclaveOptions = {
   modelOperatorShareBps?: number
 }
 export type CallStep = 'encrypting' | 'awaiting-signature' | 'escrowed' | 'answering' | 'verified'
-export type CallOptions = { signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; strategy?: RoutingStrategy; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string }
+export type SessionAuth = { address: string; delegate: Keypair }
+export type CallOptions = { signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; strategy?: RoutingStrategy; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string; session?: SessionAuth }
 export type ClassificationScore = { label: string; probability: number }
 export type ClassificationOutput = { label: string; probability?: number; scores?: ClassificationScore[] }
 export type TextGenerationOutput = { text: string; tokens: number; finishReason: 'eos' | 'length' }
@@ -61,6 +62,7 @@ export type OpenStreamOptions = {
   maxTokens?: number
   onStep?: (step: 'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming') => void
   signal?: AbortSignal
+  session?: SessionAuth
 }
 export type StreamOptions = {
   ceiling?: string
@@ -69,6 +71,7 @@ export type StreamOptions = {
   maxTokens?: number
   onStep?: (step: 'encrypting' | 'awaiting-signature' | 'escrowed' | 'streaming' | 'verified') => void
   signal?: AbortSignal
+  session?: SessionAuth
 }
 export type StreamResult = {
   text: string
@@ -115,6 +118,31 @@ export type PublishVersionResult = {
   ciphertextSha256: string
   noncePrefix: string
   transactionsSent: number
+}
+export type OpenSessionOptions = {
+  budget: string | bigint | number
+  delegate?: Keypair
+  mint?: string | null
+  model?: string | null
+  expiresAtSlot?: string | bigint | number
+  durationSlots?: string | bigint | number
+  delegateGasLamports?: string | bigint | number
+  nonce?: string | bigint | number
+  signal?: AbortSignal
+}
+export type CloseSessionResult = {
+  session: Session
+  transaction: TxStatus
+}
+export type VoynichSession = {
+  readonly address: string
+  readonly delegate: Keypair
+  readonly session: Session
+  call(modelId: string, input: SketchInput | number[] | string, opts?: Omit<CallOptions, 'session'>): Promise<Awaited<ReturnType<Voynich['call']>>>
+  openStream(modelId: string, input: string, opts: Omit<OpenStreamOptions, 'session'>): ReturnType<Voynich['openStream']>
+  stream(modelId: string, input: string, opts?: Omit<StreamOptions, 'session'>): Promise<VoynichStream>
+  refresh(signal?: AbortSignal): Promise<Session>
+  close(opts?: { signal?: AbortSignal }): Promise<CloseSessionResult>
 }
 export class VoynichError extends Error {
   constructor(readonly code: string, message: string, readonly call?: Call, readonly refundState?: string) { super(message); this.name = 'VoynichError' }
@@ -694,7 +722,7 @@ export function createVoynich(options: VoynichOptions) {
     const destination = await encryptionDestination(modelId, model, selected.enclave, true)
     if (opts.enclave && opts.enclave !== selected.enclave.address && opts.enclave !== destination.signingKey) throw new VoynichError('ENCLAVE_MISMATCH', 'The enclave does not match the requested call destination.')
     opts.onStep?.('encrypting')
-    const caller = signer(), reply = generateEncryptionKeyPair()
+    const reply = generateEncryptionKeyPair()
     let callPayload: Record<string, unknown>
     if (destination.manifest.inputKind === 'text') {
       if (typeof input !== 'string') throw new VoynichError('INVALID_INPUT', 'Text models require a string prompt input.')
@@ -710,8 +738,10 @@ export function createVoynich(options: VoynichOptions) {
     const encrypted = encryptCallInput(utf8(JSON.stringify(callPayload)), destination.encryptionKey)
     const inputHash = toHex(sha256(encrypted))
     opts.onStep?.('awaiting-signature')
-    const build = await api.openCall({ wallet: caller.publicKey.toBase58(), model: model.address, enclave: selected.enclave.address, inputHash, answerMode, ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}) }, { signal: opts.signal })
-    await send(build, [], undefined, opts.signal)
+    const build = opts.session
+      ? await api.openSessionCall(opts.session.address, { delegate: opts.session.delegate.publicKey.toBase58(), model: model.address, enclave: selected.enclave.address, inputHash, answerMode, ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}) }, { signal: opts.signal })
+      : await api.openCall({ wallet: signer().publicKey.toBase58(), model: model.address, enclave: selected.enclave.address, inputHash, answerMode, ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}) }, { signal: opts.signal })
+    await send(build, [], opts.session?.delegate, opts.signal)
     const callAddress = build.addresses.call!
     const opened = await indexed(() => api.call(callAddress, { signal: opts.signal }), 'CALL_NOT_FOUND', undefined, opts.signal)
     opts.onStep?.('escrowed')
@@ -861,7 +891,7 @@ export function createVoynich(options: VoynichOptions) {
     if (opts.enclave && opts.enclave !== selected.enclave.address && opts.enclave !== destination.signingKey) throw new VoynichError('ENCLAVE_MISMATCH', 'The enclave does not match the requested call destination.')
     if (destination.manifest.inputKind !== 'text') throw new VoynichError('INVALID_INPUT', 'Streaming calls require a text model.')
     opts.onStep?.('encrypting')
-    const caller = signer(), reply = generateEncryptionKeyPair()
+    const reply = generateEncryptionKeyPair()
     const stopTokenBytes = new Uint8Array(16)
     globalThis.crypto.getRandomValues(stopTokenBytes)
     const stopToken = toBase64(stopTokenBytes)
@@ -874,15 +904,24 @@ export function createVoynich(options: VoynichOptions) {
     const encrypted = encryptCallInput(utf8(JSON.stringify(callPayload)), destination.encryptionKey)
     const inputHash = toHex(sha256(encrypted))
     opts.onStep?.('awaiting-signature')
-    const build = await api.openCall({
-      wallet: caller.publicKey.toBase58(),
-      model: model.address,
-      enclave: selected.enclave.address,
-      inputHash,
-      answerMode: 'sealed',
-      ceiling: opts.ceiling,
-    }, { signal: opts.signal })
-    await send(build, [], undefined, opts.signal)
+    const build = opts.session
+      ? await api.openSessionCall(opts.session.address, {
+          delegate: opts.session.delegate.publicKey.toBase58(),
+          model: model.address,
+          enclave: selected.enclave.address,
+          inputHash,
+          answerMode: 'sealed',
+          ceiling: opts.ceiling,
+        }, { signal: opts.signal })
+      : await api.openCall({
+          wallet: signer().publicKey.toBase58(),
+          model: model.address,
+          enclave: selected.enclave.address,
+          inputHash,
+          answerMode: 'sealed',
+          ceiling: opts.ceiling,
+        }, { signal: opts.signal })
+    await send(build, [], opts.session?.delegate, opts.signal)
     const callAddress = build.addresses.call!
     const opened = await indexed(() => api.call(callAddress, { signal: opts.signal }), 'CALL_NOT_FOUND', undefined, opts.signal)
     opts.onStep?.('escrowed')
@@ -920,6 +959,7 @@ export function createVoynich(options: VoynichOptions) {
       maxTokens: opts.maxTokens,
       onStep: opts.onStep,
       signal: opts.signal,
+      session: opts.session,
     })
     const unitPrice = BigInt(opened.call.unitPrice.amount)
     const ceilingBig = BigInt(opened.call.ceiling?.amount ?? ceiling)
@@ -1738,6 +1778,46 @@ export function createVoynich(options: VoynichOptions) {
     )
     return { model: updated, version, ciphertextSha256, noncePrefix, transactionsSent }
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  async function listSessions(wallet?: string, signal?: AbortSignal): Promise<AccountSessions> {
+    return api.accountSessions(wallet ?? signer().publicKey.toBase58(), { signal })
+  }
+  async function session(address: string, signal?: AbortSignal): Promise<Session> {
+    return api.session(address, { signal })
+  }
+  async function closeSession(address: string, opts: { signal?: AbortSignal } = {}): Promise<CloseSessionResult> {
+    const build = await api.closeSession(address, { wallet: signer().publicKey.toBase58() }, { signal: opts.signal })
+    const transaction = await send(build, [], undefined, opts.signal)
+    const closed = await indexed(() => api.session(address, { signal: opts.signal }), 'SESSION_NOT_FOUND', value => value.status === 'closed', opts.signal)
+    return { session: closed, transaction }
+  }
+  async function openSession(opts: OpenSessionOptions): Promise<VoynichSession> {
+    const wallet = signer()
+    const delegate = opts.delegate ?? Keypair.generate()
+    const build = await api.openSession({
+      wallet: wallet.publicKey.toBase58(),
+      delegate: delegate.publicKey.toBase58(),
+      budget: String(opts.budget),
+      ...(opts.mint !== undefined ? { mint: opts.mint } : {}),
+      ...(opts.model !== undefined ? { model: opts.model } : {}),
+      ...(opts.expiresAtSlot !== undefined ? { expiresAtSlot: String(opts.expiresAtSlot) } : {}),
+      ...(opts.durationSlots !== undefined ? { durationSlots: String(opts.durationSlots) } : {}),
+      ...(opts.delegateGasLamports !== undefined ? { delegateGasLamports: String(opts.delegateGasLamports) } : {}),
+      ...(opts.nonce !== undefined ? { nonce: String(opts.nonce) } : {}),
+    }, { signal: opts.signal })
+    await send(build, [], undefined, opts.signal)
+    const address = build.addresses.session!
+    const opened = await indexed(() => api.session(address, { signal: opts.signal }), 'SESSION_NOT_FOUND', undefined, opts.signal)
+    return {
+      address,
+      delegate,
+      session: opened,
+      call: (modelId, input, callOpts = {}) => call(modelId, input, { ...callOpts, session: { address, delegate } }),
+      openStream: (modelId, input, streamOpts) => openStream(modelId, input, { ...streamOpts, session: { address, delegate } }),
+      stream: (modelId, input, streamOpts = {}) => stream(modelId, input, { ...streamOpts, session: { address, delegate } }),
+      refresh: (signal?: AbortSignal) => api.session(address, { signal }),
+      close: (closeOpts?: { signal?: AbortSignal }) => closeSession(address, closeOpts),
+    }
+  }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>

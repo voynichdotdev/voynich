@@ -125,6 +125,8 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/measurements/:digest', async c => c.json(await read.measurement(readParam(c, 'digest', s.HardwareMeasurement))))
   app.get('/v1/receipts/:id', async c => c.json(await read.receipt(readParam(c, 'id', s.ReceiptId))))
   app.get('/v1/accounts/:wallet', async c => c.json(await read.account(readParam(c, 'wallet', s.Address))))
+  app.get('/v1/accounts/:wallet/sessions', async c => c.json(await read.accountSessions(readParam(c, 'wallet', s.Address))))
+  app.get('/v1/sessions/:address', async c => c.json(await read.session(readParam(c, 'address', s.Address))))
   app.get('/v1/calls/:id', async c => c.json(await read.call(readParam(c, 'id', s.Address))))
   app.get('/v1/bounties', async c => c.json(await read.bounties(readQuery(c, s.BountyQuery))))
   app.get('/v1/bounties/:address', async c => c.json(await read.bounty(readParam(c, 'address', s.Address))))
@@ -336,6 +338,9 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/bounties/:address/cancel/build', async c => c.json(await build.cancelBounty(readParam(c, 'address', s.Address), await readJson(c, s.WalletRequest))))
   app.post('/v1/measurements/build', async c => c.json(await build.publishMeasurement(await readJson(c, s.PublishMeasurementRequest))))
   app.post('/v1/measurements/:digest/deprecate/build', async c => c.json(await build.deprecateMeasurement(readParam(c, 'digest', s.HardwareMeasurement), await readJson(c, s.WalletRequest))))
+  app.post('/v1/sessions/build', async c => c.json(await build.openSession(await readJson(c, s.OpenSessionRequest))))
+  app.post('/v1/sessions/:address/close/build', async c => c.json(await build.closeSession(readParam(c, 'address', s.Address), await readJson(c, s.WalletRequest))))
+  app.post('/v1/sessions/:address/call/build', async c => c.json(await build.openSessionCall(readParam(c, 'address', s.Address), await readJson(c, s.OpenSessionCallRequest))))
   app.post('/v1/transactions/submit', async c => {
     const status = await build.ledger.submit(await readJson(c, s.TxSubmission))
     runtime.hub.publish(streamEvent('transaction.updated', status))

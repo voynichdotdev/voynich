@@ -477,3 +477,31 @@ model ModelPolicy {
 
   @@map("model_policies")
 }
+
+enum SessionStatus {
+  open
+  closed
+}
+
+model Session {
+  address        String        @id @db.VarChar(44)
+  caller         String        @db.VarChar(44)
+  delegate       String        @db.VarChar(44)
+  nonce          BigInt
+  mint           String?       @db.VarChar(44)
+  modelAddress   String?       @db.VarChar(44)
+  budget         Decimal       @db.Decimal(20, 0)
+  spent          Decimal       @default(0) @db.Decimal(20, 0)
+  callsOpened    BigInt        @default(0)
+  openedSlot     BigInt
+  expiresAtSlot  BigInt
+  closedSlot     BigInt?
+  returnedAmount Decimal?      @db.Decimal(20, 0)
+  status         SessionStatus @default(open)
+  updatedSlot    BigInt
+
+  @@index([caller, openedSlot])
+  @@index([delegate, status])
+  @@index([status, expiresAtSlot])
+  @@map("sessions")
+}

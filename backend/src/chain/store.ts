@@ -457,6 +457,67 @@ export function createApply(attestationProgramId: string) {
           await notify(tx, 'version.published', `${modelAddress}:${version}`)
           break
         }
+        case 'sessionopened': {
+          const address = text(data, 'session')
+          const rawMint = text(data, 'mint')
+          const rawModel = text(data, 'model')
+          const ZERO_KEY = '11111111111111111111111111111111'
+          const value = {
+            address,
+            caller: text(data, 'caller'),
+            delegate: text(data, 'delegate'),
+            nonce: BigInt(text(data, 'nonce')),
+            mint: rawMint === ZERO_KEY ? null : rawMint,
+            modelAddress: rawModel === ZERO_KEY ? null : rawModel,
+            budget: new Prisma.Decimal(text(data, 'budget')),
+            spent: new Prisma.Decimal('0'),
+            callsOpened: 0n,
+            openedSlot: BigInt(text(data, 'openedSlot')),
+            expiresAtSlot: BigInt(text(data, 'expiresAtSlot')),
+            closedSlot: null,
+            returnedAmount: null,
+            status: 'open' as const,
+            updatedSlot: currentSlot,
+          }
+          await tx.session.upsert({ where: { address }, create: value, update: value })
+          await notify(tx, 'session.updated', address)
+          break
+        }
+        case 'sessiondebited': {
+          const address = text(data, 'session')
+          const existing = await tx.session.findUnique({ where: { address } })
+          if (existing) {
+            await tx.session.update({
+              where: { address },
+              data: {
+                spent: new Prisma.Decimal(text(data, 'spent')),
+                callsOpened: BigInt(text(data, 'callsOpened')),
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'session.updated', address)
+          }
+          break
+        }
+        case 'sessionclosed': {
+          const address = text(data, 'session')
+          const existing = await tx.session.findUnique({ where: { address } })
+          if (existing) {
+            await tx.session.update({
+              where: { address },
+              data: {
+                spent: new Prisma.Decimal(text(data, 'spent')),
+                callsOpened: BigInt(text(data, 'callsOpened')),
+                closedSlot: BigInt(text(data, 'slot')),
+                returnedAmount: new Prisma.Decimal(text(data, 'returnedAmount')),
+                status: 'closed',
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'session.updated', address)
+          }
+          break
+        }
       }
     }
   }

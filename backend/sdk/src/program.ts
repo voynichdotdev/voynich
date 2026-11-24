@@ -50,6 +50,11 @@ export function modelVersionPda(model: Key, version: number, programId: Key = PR
   new DataView(bytes.buffer).setUint32(0, version, true)
   return pda(key(programId), utf8('version'), key(model).toBytes(), bytes)
 }
+export function sessionPda(caller: Key, delegate: Key, nonce: bigint | number | string, programId: Key = PROGRAM_ID): PublicKey {
+  const bytes = new Uint8Array(8)
+  new DataView(bytes.buffer).setBigUint64(0, BigInt(nonce), true)
+  return pda(key(programId), utf8('session'), key(caller).toBytes(), key(delegate).toBytes(), bytes)
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -62,6 +67,7 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     measurement: (digest: Uint8Array | string) => measurementPda(digest, programId),
     policy: (model: Key) => policyPda(model, programId),
     modelVersion: (model: Key, version: number) => modelVersionPda(model, version, programId),
+    session: (caller: Key, delegate: Key, nonce: bigint | number | string) => sessionPda(caller, delegate, nonce, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -106,6 +112,7 @@ export const POLICY_SPACE = 1770
 export const GRANT_BASE_SPACE = 223
 export const GRANT_SPACE = 226
 export const MODEL_VERSION_SPACE = 8192
+export const SESSION_SPACE = 186
 export const DEFAULT_MAX_OPEN_ANSWER_BYTES = 1024
 
 const matchesDisc = (data: Uint8Array, label: string) => {
@@ -905,5 +912,125 @@ export async function buildPublishVersionTx(params: {
   const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
   return new VersionedTransaction(
     new TransactionMessage({ payerKey: owner, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export type DecodedSessionAccount = {
+  caller: PublicKey
+  delegate: PublicKey
+  nonce: BN
+  mint: PublicKey
+  model: PublicKey
+  budget: BN
+  spent: BN
+  callsOpened: BN
+  openedSlot: BN
+  expiresAtSlot: BN
+  status: 'open' | 'closed'
+  bump: number
+}
+
+export function decodeSessionAccount(data: Uint8Array): DecodedSessionAccount {
+  if (!matchesDisc(data, 'account:Session') || data.length < SESSION_SPACE) {
+    throw new Error('Invalid Session account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const caller = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const delegate = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const nonce = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const mint = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const budget = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const spent = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const callsOpened = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const openedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const expiresAtSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const statusTag = data[offset++]!
+  if (statusTag > 1) throw new Error(`Invalid SessionStatus tag: ${statusTag}`)
+  const status = (['open', 'closed'] as const)[statusTag]!
+  const bump = data[offset++]!
+  return { caller, delegate, nonce, mint, model, budget, spent, callsOpened, openedSlot, expiresAtSlot, status, bump }
+}
+
+export async function buildOpenSessionTx(params: {
+  connection: Connection
+  caller: Key
+  delegate: Key
+  nonce: bigint | number | string
+  budget: bigint | number | string
+  expiresAtSlot: bigint | number | string
+  mint?: Key | null
+  model?: Key | null
+  delegateGasLamports?: bigint | number | string
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const caller = key(params.caller)
+  const delegate = key(params.delegate)
+  const nonceBig = BigInt(params.nonce)
+  const session = sessionPda(caller, delegate, nonceBig, programId)
+  const mintKey = params.mint ? key(params.mint) : PublicKey.default
+  const modelKey = params.model ? key(params.model) : PublicKey.default
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .openSession({
+      delegate,
+      nonce: new BN(nonceBig.toString()),
+      mint: mintKey,
+      model: modelKey,
+      budget: new BN(BigInt(params.budget).toString()),
+      expiresAtSlot: new BN(BigInt(params.expiresAtSlot).toString()),
+      delegateGasLamports: new BN(BigInt(params.delegateGasLamports ?? 0).toString()),
+    })
+    .accountsStrict({
+      caller,
+      delegate,
+      session,
+      mint: null,
+      callerTokens: null,
+      sessionEscrow: null,
+      tokenProgram: null,
+      associatedTokenProgram: null,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: caller, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildCloseSessionTx(params: {
+  connection: Connection
+  closer: Key
+  caller: Key
+  session: Key
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const closer = key(params.closer)
+  const caller = key(params.caller)
+  const session = key(params.session)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .closeSession()
+    .accountsStrict({
+      closer,
+      session,
+      caller,
+      sessionEscrow: null,
+      callerTokens: null,
+      tokenProgram: null,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: closer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
   )
 }

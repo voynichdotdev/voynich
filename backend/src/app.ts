@@ -454,6 +454,113 @@ export function buildApp() {
     const row: s.Call = { address: call, caller: body.wallet, callerIsProgram: false, model: model.address, modelName: model.name, enclave: enclave.address, inputHash: body.inputHash, answerMode: body.answerMode, price: escrowed, priceUnit: model.priceUnit, unitPrice: structuredClone(model.price), ceiling: model.priceUnit === 'token' ? structuredClone(escrowed) : null, openedSlot: String(state.slot), deadlineSlot: String(state.slot + BigInt(fixtureConfig.callDeadlineSlots!)), status: 'open', receipt: null, failure: null }
     return c.json(state.build('open_call', [body.wallet], { model: model.address, call }, () => { state.calls.unshift(row); state.emit('call.updated', row) }))
   })
+  app.get('/v1/accounts/:wallet/sessions', c => {
+    const state = c.get('fixture')
+    const wallet = readParam(c, 'wallet', s.Address)
+    const items = [...state.sessions.values()].filter(item => item.caller === wallet).sort((a, b) => Number(BigInt(b.openedSlot) - BigInt(a.openedSlot)))
+    return c.json({ items, asOf: new Date().toISOString() })
+  })
+  app.get('/v1/sessions/:address', c => {
+    const state = c.get('fixture')
+    const address = readParam(c, 'address', s.Address)
+    const session = state.sessions.get(address)
+    if (!session) fail('SESSION_NOT_FOUND', 'This session was not found.')
+    return c.json(session)
+  })
+  app.post('/v1/sessions/build', async c => {
+    const state = c.get('fixture')
+    const body = await readJson(c, s.OpenSessionRequest)
+    const budgetBig = BigInt(body.budget)
+    if (budgetBig <= 0n) fail('INVALID_SESSION', 'Session budget must be positive.', { stage: 'validation' })
+    const nonce = body.nonce ?? String(BigInt(Math.floor(Math.random() * 1e12)))
+    const expiresAtSlot = body.expiresAtSlot ?? String(state.slot + BigInt(body.durationSlots ?? '18000'))
+    if (BigInt(expiresAtSlot) <= state.slot) fail('INVALID_SESSION', 'expiresAtSlot must be in the future.', { stage: 'validation' })
+    const model = body.model ? state.model(body.model).address : null
+    const mint = body.mint ?? null
+    const address = fixtureAddress(`session:${body.wallet}:${body.delegate}:${nonce}`)
+    const row: s.Session = {
+      address,
+      caller: body.wallet,
+      delegate: body.delegate,
+      nonce,
+      mint,
+      model,
+      budget: { amount: body.budget, mint, decimals: mint ? 6 : 9, symbol: mint ? 'TOKEN' : 'SOL' },
+      spent: '0',
+      remaining: body.budget,
+      callsOpened: '0',
+      openedSlot: String(state.slot),
+      expiresAtSlot,
+      closedSlot: null,
+      returnedAmount: null,
+      status: 'open',
+    }
+    return c.json(state.build('open_session', [body.wallet], { session: address, ...(model ? { model } : {}) }, () => {
+      state.sessions.set(address, row)
+      state.emit('session.updated', row)
+    }))
+  })
+  app.post('/v1/sessions/:address/close/build', async c => {
+    const state = c.get('fixture')
+    const address = readParam(c, 'address', s.Address)
+    const body = await readJson(c, s.WalletRequest)
+    const session = state.sessions.get(address)
+    if (!session) fail('SESSION_NOT_FOUND', 'This session was not found.')
+    if (session.status !== 'open') fail('INVALID_SESSION', 'This session is already closed.', { stage: 'build' })
+    if (body.wallet !== session.caller && state.slot <= BigInt(session.expiresAtSlot)) {
+      fail('UNAUTHORIZED', 'Only the caller can close an active session before expiry.', { stage: 'build' })
+    }
+    return c.json(state.build('close_session', [body.wallet], { session: address }, () => {
+      session.returnedAmount = session.remaining
+      session.remaining = '0'
+      session.closedSlot = String(state.slot)
+      session.status = 'closed'
+      state.emit('session.updated', session)
+    }))
+  })
+  app.post('/v1/sessions/:address/call/build', async c => {
+    const state = c.get('fixture')
+    const address = readParam(c, 'address', s.Address)
+    const body = await readJson(c, s.OpenSessionCallRequest)
+    const session = state.sessions.get(address)
+    if (!session) fail('SESSION_NOT_FOUND', 'This session was not found.')
+    if (session.status !== 'open') fail('INVALID_SESSION', 'This session is closed.', { stage: 'build' })
+    if (body.delegate !== session.delegate) fail('UNAUTHORIZED', 'Only the session delegate can open calls on this session.', { stage: 'build' })
+    if (state.slot > BigInt(session.expiresAtSlot)) fail('INVALID_SESSION', 'This session has expired.', { stage: 'build' })
+    const model = state.model(body.model)
+    const enclave = state.liveEnclave(body.enclave)
+    state.requireGrant(model, enclave)
+    if (session.model && session.model !== model.address) fail('INVALID_SESSION', 'This session is scoped to a different model.', { stage: 'build' })
+    if (session.mint !== model.price.mint) fail('INVALID_SESSION', 'This session mint does not match the model price mint.', { stage: 'build' })
+    const policy = state.policies.get(model.address)
+    if (policy && policy.allowListEnabled && !policy.allowedCallers.includes(session.caller)) {
+      fail('POLICY_CALLER_DENIED', 'The session caller is not on the model allow list.', { stage: 'build' })
+    }
+    const unitPrice = BigInt(model.price.amount)
+    let escrowed: s.Money
+    if (model.priceUnit === 'token') {
+      if (body.ceiling === undefined) fail('VALIDATION_ERROR', 'Supply a ceiling for per-token models.', { stage: 'validation', fieldErrors: { ceiling: ['Required for per-token models.'] } })
+      const ceiling = BigInt(body.ceiling)
+      if (ceiling < unitPrice || (unitPrice > 0n && ceiling === 0n)) fail('VALIDATION_ERROR', 'Ceiling must be at least the per-token price.', { stage: 'validation', fieldErrors: { ceiling: ['Must be at least the per-token price.'] } })
+      escrowed = { ...structuredClone(model.price), amount: body.ceiling }
+    } else {
+      if (body.ceiling !== undefined) fail('VALIDATION_ERROR', 'Ceiling is only used for per-token models.', { stage: 'validation', fieldErrors: { ceiling: ['Not used for per-call models.'] } })
+      escrowed = structuredClone(model.price)
+    }
+    const escrowAmount = BigInt(escrowed.amount)
+    const remaining = BigInt(session.remaining)
+    if (remaining < escrowAmount) fail('INVALID_SESSION', 'Session budget remaining is less than the call escrow.', { stage: 'build' })
+    const call = fixtureAddress(`call:${crypto.randomUUID()}`)
+    const row: s.Call = { address: call, caller: session.caller, callerIsProgram: false, model: model.address, modelName: model.name, enclave: enclave.address, inputHash: body.inputHash, answerMode: body.answerMode, price: escrowed, priceUnit: model.priceUnit, unitPrice: structuredClone(model.price), ceiling: model.priceUnit === 'token' ? structuredClone(escrowed) : null, openedSlot: String(state.slot), deadlineSlot: String(state.slot + BigInt(fixtureConfig.callDeadlineSlots!)), status: 'open', receipt: null, failure: null }
+    return c.json(state.build('open_session_call', [body.delegate], { session: address, model: model.address, call }, () => {
+      session.spent = String(BigInt(session.spent) + escrowAmount)
+      session.remaining = String(remaining - escrowAmount)
+      session.callsOpened = String(BigInt(session.callsOpened) + 1n)
+      state.calls.unshift(row)
+      state.emit('call.updated', row)
+      state.emit('session.updated', session)
+    }))
+  })
   app.post('/v1/calls/:id/settle/build', async c => {
     const state = c.get('fixture'); const call = state.call(readParam(c, 'id', s.Address)); const body = await readJson(c, s.SettleCallRequest)
     return c.json(state.settleMetered(call, body))

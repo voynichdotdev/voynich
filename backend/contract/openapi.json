@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Voynich API",
-    "version": "0.1.29",
+    "version": "0.1.30",
     "description": "Public reads and unsigned transaction builds. No sessions or login. MODE=fixture serves isolated in-memory fixture sessions selected by X-Fixture-Session. Amounts and slots are decimal strings. Null mint means native SOL. Example fixture monetary values are not launch configuration."
   },
   "servers": [
@@ -86,6 +86,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -310,6 +312,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -534,6 +538,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -758,6 +764,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1017,6 +1025,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1249,6 +1259,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1503,6 +1515,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1735,6 +1749,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -1988,6 +2004,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -2213,6 +2231,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -2448,6 +2468,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -2691,6 +2713,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -2934,6 +2958,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -3177,6 +3203,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -3419,6 +3447,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -3662,6 +3692,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -3904,6 +3936,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -4147,6 +4181,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -4389,6 +4425,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -4631,6 +4669,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -4863,6 +4903,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -5105,6 +5147,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -5347,6 +5391,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -5579,6 +5625,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -5821,6 +5869,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6063,6 +6113,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6305,6 +6357,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6560,6 +6614,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -6792,6 +6848,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7024,6 +7082,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7291,6 +7351,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7523,6 +7585,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7747,6 +7811,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -7989,6 +8055,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -8232,6 +8300,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -8464,6 +8534,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -8689,6 +8761,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -8931,6 +9005,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -9164,6 +9240,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -9406,6 +9484,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -9638,6 +9718,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -9871,6 +9953,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -10114,6 +10198,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -10356,6 +10442,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -10644,6 +10732,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -10876,6 +10966,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -11100,6 +11192,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -11342,6 +11436,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -11584,6 +11680,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -11826,6 +11924,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -11859,6 +11959,1198 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/WalletRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Build"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/accounts/{wallet}/sessions": {
+      "get": {
+        "operationId": "accountSessions",
+        "summary": "List caller sessions for a wallet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wallet",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSessions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{address}": {
+      "get": {
+        "operationId": "session",
+        "summary": "One caller session with budget, spent, remaining, and expiry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/build": {
+      "post": {
+        "operationId": "openSession",
+        "summary": "Build open_session to fund a delegated caller session in one signature",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Build"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{address}/close/build": {
+      "post": {
+        "operationId": "closeSession",
+        "summary": "Build close_session to return unspent session budget to the caller",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Build"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{address}/call/build": {
+      "post": {
+        "operationId": "openSessionCall",
+        "summary": "Build open_session_call or open_session_metered_call signed by the session delegate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenSessionCallRequest"
               }
             }
           }
@@ -12061,6 +13353,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -12304,6 +13598,8 @@
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
                 "CALL_NOT_FOUND",
                 "CALL_NOT_OPEN",
                 "CALL_NOT_REFUNDABLE",
@@ -13702,6 +14998,8 @@
                             "GRANT_REQUIRED",
                             "INVALID_QUOTE",
                             "INVALID_VERSION",
+                            "SESSION_NOT_FOUND",
+                            "INVALID_SESSION",
                             "CALL_NOT_FOUND",
                             "CALL_NOT_OPEN",
                             "CALL_NOT_REFUNDABLE",
@@ -13776,6 +15074,193 @@
         ],
         "additionalProperties": false
       },
+      "AccountSessions": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 44
+                },
+                "caller": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 44
+                },
+                "delegate": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 44
+                },
+                "nonce": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "mint": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 32,
+                      "maxLength": 44
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "model": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 32,
+                      "maxLength": 44
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "budget": {
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                      "minLength": 1
+                    },
+                    "mint": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 32,
+                          "maxLength": 44
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decimals": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 255
+                    },
+                    "symbol": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "mint",
+                    "decimals",
+                    "symbol"
+                  ],
+                  "additionalProperties": false
+                },
+                "spent": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "remaining": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "callsOpened": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "openedSlot": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "expiresAtSlot": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "closedSlot": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "returnedAmount": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "closed"
+                  ]
+                }
+              },
+              "required": [
+                "address",
+                "caller",
+                "delegate",
+                "nonce",
+                "mint",
+                "model",
+                "budget",
+                "spent",
+                "remaining",
+                "callsOpened",
+                "openedSlot",
+                "expiresAtSlot",
+                "closedSlot",
+                "returnedAmount",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "items",
+          "asOf"
+        ],
+        "additionalProperties": false
+      },
       "Action": {
         "type": "string",
         "enum": [
@@ -13803,7 +15288,10 @@
           "begin_version",
           "write_version_weights",
           "seal_version_range",
-          "publish_version"
+          "publish_version",
+          "open_session",
+          "close_session",
+          "open_session_call"
         ]
       },
       "AnswerMode": {
@@ -13855,6 +15343,8 @@
                   "GRANT_REQUIRED",
                   "INVALID_QUOTE",
                   "INVALID_VERSION",
+                  "SESSION_NOT_FOUND",
+                  "INVALID_SESSION",
                   "CALL_NOT_FOUND",
                   "CALL_NOT_OPEN",
                   "CALL_NOT_REFUNDABLE",
@@ -15001,7 +16491,10 @@
               "begin_version",
               "write_version_weights",
               "seal_version_range",
-              "publish_version"
+              "publish_version",
+              "open_session",
+              "close_session",
+              "open_session_call"
             ]
           },
           "requiredSigners": {
@@ -15072,6 +16565,11 @@
                 "maxLength": 44
               },
               "modelVersion": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              "session": {
                 "type": "string",
                 "minLength": 32,
                 "maxLength": 44
@@ -15358,6 +16856,8 @@
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
+                      "SESSION_NOT_FOUND",
+                      "INVALID_SESSION",
                       "CALL_NOT_FOUND",
                       "CALL_NOT_OPEN",
                       "CALL_NOT_REFUNDABLE",
@@ -15676,6 +17176,8 @@
                           "GRANT_REQUIRED",
                           "INVALID_QUOTE",
                           "INVALID_VERSION",
+                          "SESSION_NOT_FOUND",
+                          "INVALID_SESSION",
                           "CALL_NOT_FOUND",
                           "CALL_NOT_OPEN",
                           "CALL_NOT_REFUNDABLE",
@@ -15847,6 +17349,8 @@
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
+                      "SESSION_NOT_FOUND",
+                      "INVALID_SESSION",
                       "CALL_NOT_FOUND",
                       "CALL_NOT_OPEN",
                       "CALL_NOT_REFUNDABLE",
@@ -15940,6 +17444,8 @@
               "GRANT_REQUIRED",
               "INVALID_QUOTE",
               "INVALID_VERSION",
+              "SESSION_NOT_FOUND",
+              "INVALID_SESSION",
               "CALL_NOT_FOUND",
               "CALL_NOT_OPEN",
               "CALL_NOT_REFUNDABLE",
@@ -16105,6 +17611,8 @@
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
+                      "SESSION_NOT_FOUND",
+                      "INVALID_SESSION",
                       "CALL_NOT_FOUND",
                       "CALL_NOT_OPEN",
                       "CALL_NOT_REFUNDABLE",
@@ -16291,6 +17799,8 @@
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
+                      "SESSION_NOT_FOUND",
+                      "INVALID_SESSION",
                       "CALL_NOT_FOUND",
                       "CALL_NOT_OPEN",
                       "CALL_NOT_REFUNDABLE",
@@ -17829,6 +19339,8 @@
           "GRANT_REQUIRED",
           "INVALID_QUOTE",
           "INVALID_VERSION",
+          "SESSION_NOT_FOUND",
+          "INVALID_SESSION",
           "CALL_NOT_FOUND",
           "CALL_NOT_OPEN",
           "CALL_NOT_REFUNDABLE",
@@ -22475,6 +23987,152 @@
         ],
         "additionalProperties": false
       },
+      "OpenSessionCallRequest": {
+        "type": "object",
+        "properties": {
+          "delegate": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              }
+            ]
+          },
+          "enclave": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "inputHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "nonce": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "answerMode": {
+            "default": "sealed",
+            "type": "string",
+            "enum": [
+              "sealed",
+              "open"
+            ]
+          },
+          "ceiling": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "delegate",
+          "model",
+          "enclave",
+          "inputHash"
+        ],
+        "additionalProperties": false
+      },
+      "OpenSessionRequest": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "delegate": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "nonce": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "mint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "budget": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "expiresAtSlot": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "durationSlots": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "delegateGasLamports": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "wallet",
+          "delegate",
+          "budget"
+        ],
+        "additionalProperties": false
+      },
       "Payment": {
         "type": "object",
         "properties": {
@@ -22976,6 +24634,8 @@
                                       "GRANT_REQUIRED",
                                       "INVALID_QUOTE",
                                       "INVALID_VERSION",
+                                      "SESSION_NOT_FOUND",
+                                      "INVALID_SESSION",
                                       "CALL_NOT_FOUND",
                                       "CALL_NOT_OPEN",
                                       "CALL_NOT_REFUNDABLE",
@@ -23147,6 +24807,8 @@
                                   "GRANT_REQUIRED",
                                   "INVALID_QUOTE",
                                   "INVALID_VERSION",
+                                  "SESSION_NOT_FOUND",
+                                  "INVALID_SESSION",
                                   "CALL_NOT_FOUND",
                                   "CALL_NOT_OPEN",
                                   "CALL_NOT_REFUNDABLE",
@@ -24220,6 +25882,8 @@
                               "GRANT_REQUIRED",
                               "INVALID_QUOTE",
                               "INVALID_VERSION",
+                              "SESSION_NOT_FOUND",
+                              "INVALID_SESSION",
                               "CALL_NOT_FOUND",
                               "CALL_NOT_OPEN",
                               "CALL_NOT_REFUNDABLE",
@@ -24527,6 +26191,8 @@
                               "GRANT_REQUIRED",
                               "INVALID_QUOTE",
                               "INVALID_VERSION",
+                              "SESSION_NOT_FOUND",
+                              "INVALID_SESSION",
                               "CALL_NOT_FOUND",
                               "CALL_NOT_OPEN",
                               "CALL_NOT_REFUNDABLE",
@@ -25502,6 +27168,199 @@
                   "base",
                   "manifest",
                   "publishedSlot"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "timestamp",
+              "type",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "type": {
+                "type": "string",
+                "const": "session.updated"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "caller": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "delegate": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "nonce": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "mint": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 44
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 32,
+                        "maxLength": 44
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "budget": {
+                    "type": "object",
+                    "properties": {
+                      "amount": {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                        "minLength": 1
+                      },
+                      "mint": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 32,
+                            "maxLength": 44
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "decimals": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 255
+                      },
+                      "symbol": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "amount",
+                      "mint",
+                      "decimals",
+                      "symbol"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "spent": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "remaining": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "callsOpened": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "openedSlot": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "expiresAtSlot": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "closedSlot": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "returnedAmount": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "closed"
+                    ]
+                  }
+                },
+                "required": [
+                  "address",
+                  "caller",
+                  "delegate",
+                  "nonce",
+                  "mint",
+                  "model",
+                  "budget",
+                  "spent",
+                  "remaining",
+                  "callsOpened",
+                  "openedSlot",
+                  "expiresAtSlot",
+                  "closedSlot",
+                  "returnedAmount",
+                  "status"
                 ],
                 "additionalProperties": false
               }
@@ -26681,6 +28540,182 @@
           "version"
         ],
         "additionalProperties": false
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "caller": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "delegate": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "nonce": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "mint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "budget": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
+              },
+              "mint": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "decimals": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "symbol": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "mint",
+              "decimals",
+              "symbol"
+            ],
+            "additionalProperties": false
+          },
+          "spent": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "remaining": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "callsOpened": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "openedSlot": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "expiresAtSlot": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "closedSlot": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "returnedAmount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          }
+        },
+        "required": [
+          "address",
+          "caller",
+          "delegate",
+          "nonce",
+          "mint",
+          "model",
+          "budget",
+          "spent",
+          "remaining",
+          "callsOpened",
+          "openedSlot",
+          "expiresAtSlot",
+          "closedSlot",
+          "returnedAmount",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "SessionStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed"
+        ]
       },
       "SetPolicyRequest": {
         "type": "object",
