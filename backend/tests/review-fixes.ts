@@ -5126,6 +5126,9 @@ test('Build 10 Step 3: publishVersion confirms via HTTP getSignatureStatuses (no
       const val = statusCalls >= 2 ? { slot: 101, confirmations: 1, err: null, confirmationStatus: 'confirmed' } : null
       return c.json({ jsonrpc: '2.0', id: req.id, result: { context: { slot: 101 }, value: [val] } })
     }
+    if (req.method === 'getAccountInfo') {
+      return c.json({ jsonrpc: '2.0', id: req.id, result: { context: { slot: 100 }, value: null } })
+    }
     if (req.method === 'getBlockHeight') {
       return c.json({ jsonrpc: '2.0', id: req.id, result: 150 })
     }
@@ -5154,6 +5157,7 @@ test('Build 10 Step 3: publishVersion confirms via HTTP getSignatureStatuses (no
     // Direct SDK test with a stub Connection whose confirmTransaction MUST NOT be called.
     let directPolls = 0
     const stubConn = {
+      getAccountInfo: async () => null,
       getLatestBlockhash: async () => ({ blockhash: fakeBlockhash, lastValidBlockHeight: 200 }),
       getMinimumBalanceForRentExemption: async () => 2_000_000,
       sendRawTransaction: async () => fakeSig,
@@ -5209,5 +5213,153 @@ test('Build 10 Step 3: publishVersion confirms via HTTP getSignatureStatuses (no
       new Promise<void>(r => rpcServer.close(() => r())),
     ])
     rmSync(scratch, { recursive: true, force: true })
+  }
+})
+
+test('Build 10 Step 3 (voynich@0.2.38): write_version_weights <= 1104B wire size and idempotent uploading ModelVersion resume', async () => {
+  const { Hono } = await import('hono')
+  const { serve } = await import('@hono/node-server')
+  const { ComputeBudgetProgram, Connection, TransactionMessage, VersionedTransaction } = await import('@solana/web3.js')
+  const { createVoynich, VERSION_WRITE_CHUNK_BYTES } = await import('voynich')
+  const { sealWeights, toBase64, toHex, utf8, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER } = await import('voynich/crypto')
+  const { chainPrograms, modelVersionPda, PROGRAM_ID } = await import('voynich/program')
+  const { fixtureConfig, fixtureModel, fixtureSignature } = await import('@voynich/contract/fixtures')
+
+  assert.equal(VERSION_WRITE_CHUNK_BYTES, 704)
+
+  // 1. Assert real write_version_weights v0 wire transaction with 704B payload + compute budget ixs is <= 1104B.
+  const owner = Keypair.generate()
+  const modelPubkey = Keypair.generate().publicKey
+  const weightsPubkey = Keypair.generate().publicKey
+  const mvPda = modelVersionPda(modelPubkey, 2, PROGRAM_ID)
+  const [eventAuthority] = PublicKey.findProgramAddressSync([Buffer.from('__event_authority')], PROGRAM_ID)
+  const { voynich } = chainPrograms(new Connection('http://127.0.0.1:8899'))
+  const writeIx = await voynich.methods
+    .writeVersionWeights(0, Buffer.alloc(VERSION_WRITE_CHUNK_BYTES, 0xaa))
+    .accountsStrict({
+      owner: owner.publicKey,
+      model: modelPubkey,
+      modelVersion: mvPda,
+      weights: weightsPubkey,
+      eventAuthority,
+      program: PROGRAM_ID,
+    })
+    .instruction()
+  const fakeBlockhash = Keypair.generate().publicKey.toBase58()
+  const wireTx = new VersionedTransaction(new TransactionMessage({
+    payerKey: owner.publicKey,
+    recentBlockhash: fakeBlockhash,
+    instructions: [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 }),
+      writeIx,
+    ],
+  }).compileToV0Message())
+  wireTx.sign([owner])
+  const wireBytes = wireTx.serialize().length
+  assert.ok(wireBytes <= 1104, `Expected write_version_weights tx <= 1104B, got ${wireBytes}B`)
+
+  // 2. Idempotent resume when ModelVersion v2 is already 'uploading' on chain with first 704B already written.
+  const plaintext = new Uint8Array(1500).fill(0x42)
+  const modelKey = new Uint8Array(32).fill(0x11)
+  const noncePrefix = new Uint8Array(16).fill(0x22)
+  const expectedSeal = sealWeights(plaintext, modelKey, {
+    cipher: WEIGHTS_CIPHER,
+    noncePrefix,
+    plaintextBytes: plaintext.length,
+    chunkBytes: WEIGHTS_CHUNK_BYTES,
+  })
+  const expectedSha = toHex(expectedSeal.merkleRoot)
+  const expectedLen = expectedSeal.ciphertext.length // 1516 bytes -> 3 slices: [0,704), [704,1408), [1408,1516)
+
+  // Encode ModelVersion account (status = uploading = 0, weights = [weightsPubkey], sizeBytes = expectedLen, noncePrefix, sealedChunks = 0).
+  const mvParts: Buffer[] = [
+    Buffer.from(sha256(utf8('account:ModelVersion')).subarray(0, 8)),
+    modelPubkey.toBuffer(),
+    (() => { const b = Buffer.alloc(4); b.writeUInt32LE(2, 0); return b })(),
+    Buffer.from([0]), // status = uploading
+    (() => { const b = Buffer.alloc(4); b.writeUInt32LE(1, 0); return b })(), // weights vec len
+    weightsPubkey.toBuffer(),
+    (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(expectedLen), 0); return b })(),
+    Buffer.from(noncePrefix),
+    Buffer.alloc(32, 0), // ciphertext_sha256
+    Buffer.alloc(4, 0), // manifest len = 0
+    Buffer.from([0]), // base = None
+    Buffer.from([1]), // hash_version = 1
+    Buffer.alloc(4, 0), // sealed_chunks = 0
+    Buffer.alloc(4, 0), // merkle_frontier len = 0
+    Buffer.alloc(4, 0), // merkle_frontier_mask = 0
+    Buffer.alloc(8, 0), // published_slot = 0
+    Buffer.from([255]), // bump
+  ]
+  const mvAccountData = Buffer.concat(mvParts)
+
+  // Encode Weights account with first 704B already written on chain.
+  const weightsData = Buffer.alloc(56 + expectedLen)
+  Buffer.from(sha256(utf8('account:Weights')).subarray(0, 8)).copy(weightsData, 0)
+  modelPubkey.toBuffer().copy(weightsData, 8)
+  weightsData.writeUInt32LE(0, 40) // index
+  weightsData.writeUInt32LE(expectedLen, 44) // size_bytes
+  weightsData.writeUInt32LE(VERSION_WRITE_CHUNK_BYTES, 48) // written_bytes = 704
+  weightsData.writeUInt32LE(0, 52) // global_offset
+  Buffer.from(expectedSeal.ciphertext.subarray(0, VERSION_WRITE_CHUNK_BYTES)).copy(weightsData, 56)
+
+  let versionNow = 1
+  let beginCalled = false
+  let createCalled = false
+  const writtenOffsets: number[] = []
+  let publishedSha = ''
+  const mockBuild = (id: string, action: string) => ({
+    id, action, transactionBase64: 'AA==', blockhash: fakeBlockhash, lastValidBlockHeight: 200,
+    cosigned: false, addresses: {}, requiredSigners: [owner.publicKey.toBase58()], fixture: true,
+  })
+  const apiApp = new Hono()
+  apiApp.get('/v1/config', c => c.json({
+    ...fixtureConfig, mode: 'chain', cluster: 'mainnet-beta', fixture: false,
+    programId: PROGRAM_ID.toBase58(), rpcUrl: 'http://127.0.0.1:1/never-use',
+  }))
+  apiApp.get('/v1/models/:id', c => c.json({ ...fixtureModel, address: modelPubkey.toBase58(), owner: owner.publicKey.toBase58(), currentVersion: versionNow }))
+  apiApp.post('/v1/models/:id/versions/build', c => { beginCalled = true; return c.json(mockBuild('b', 'begin_version')) })
+  apiApp.post('/v1/models/:id/versions/write/build', async c => {
+    const body = await c.req.json() as { offset: number; weights: string; bytesBase64: string }
+    assert.equal(body.weights, weightsPubkey.toBase58())
+    const len = Buffer.from(body.bytesBase64, 'base64').length
+    assert.ok(len <= VERSION_WRITE_CHUNK_BYTES)
+    writtenOffsets.push(body.offset)
+    return c.json(mockBuild(`w-${body.offset}`, 'write_version_weights'))
+  })
+  apiApp.post('/v1/models/:id/versions/publish/build', async c => {
+    const body = await c.req.json() as { ciphertextSha256: string }
+    publishedSha = body.ciphertextSha256
+    versionNow = 2
+    return c.json(mockBuild('pub', 'publish_version'))
+  })
+  apiApp.post('/v1/transactions/submit', async c => {
+    const body = await c.req.json() as { buildId?: string }
+    return c.json({ id: body.buildId ?? 'tx', status: 'confirmed', signature: fixtureSignature('res'), error: null })
+  })
+
+  const apiServer = serve({ fetch: apiApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => apiServer.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(apiServer.address() as { port: number }).port}`
+
+  try {
+    const resumeConn = {
+      getAccountInfo: async (pubkey: PublicKey) => pubkey.equals(mvPda) ? { data: mvAccountData, owner: PROGRAM_ID } : null,
+      getMultipleAccountsInfo: async (pubkeys: PublicKey[]) => pubkeys.map(k => k.equals(weightsPubkey) ? { data: weightsData, owner: PROGRAM_ID } : null),
+      sendRawTransaction: async () => { createCalled = true; return fixtureSignature('unexpected') },
+    }
+    const sdk = createVoynich({ apiUrl, signer: owner, connection: resumeConn as never, pollMs: 5 })
+    const res = await sdk.publishVersion(modelPubkey.toBase58(), { weights: plaintext, modelKey })
+    assert.equal(beginCalled, false, 'Must skip beginVersion when ModelVersion is already uploading')
+    assert.equal(createCalled, false, 'Must skip createAccount when ModelVersion is already uploading')
+    assert.deepEqual(writtenOffsets.sort((a, b) => a - b), [704, 1408], 'Must skip already-written [0,704) slice and write only remaining 704B chunks')
+    assert.equal(publishedSha, expectedSha)
+    assert.equal(res.ciphertextSha256, expectedSha)
+    assert.equal(res.noncePrefix, toBase64(noncePrefix))
+    assert.equal(res.version, 2)
+  } finally {
+    ;(apiServer as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => apiServer.close(() => r()))
   }
 })
