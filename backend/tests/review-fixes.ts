@@ -5633,3 +5633,95 @@ test('Build 11 Step 1: Session PDA, decodeSessionAccount, tx builders, fixture s
     await new Promise<void>(r => server.close(() => r()))
   }
 })
+
+test('Build 11 Step 2: crank expired-session sweep instructions (SOL & SPL) and CLI session open/list/close + call --session', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, readFileSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { Connection } = await import('@solana/web3.js')
+  const { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } = await import('@solana/spl-token')
+  const { serve } = await import('@hono/node-server')
+  const { chainPrograms, PROGRAM_ID, sessionPda } = await import('voynich/program')
+  const { buildExpiredSessionCloseInstructions } = await import('../src/chain/crank.js')
+  const { buildApp } = await import('../src/app.js')
+  const execFileAsync = promisify(execFile)
+
+  // 1. Crank expired-session close instruction builder (SOL = 1 ix; SPL = 2 ixs with idempotent caller ATA allowOwnerOffCurve=true)
+  const { voynich } = chainPrograms(new Connection('http://127.0.0.1:8899'))
+  const keeper = Keypair.generate().publicKey
+  const caller = Keypair.generate()
+  const delegate = Keypair.generate().publicKey
+  const sessionKey = sessionPda(caller.publicKey, delegate, 1n, PROGRAM_ID)
+  const solIxs = await buildExpiredSessionCloseInstructions(voynich, keeper, sessionKey, {
+    caller: caller.publicKey, delegate, nonce: new BN(1), mint: PublicKey.default, model: PublicKey.default,
+    budget: new BN(100_000), spent: new BN(0), callsOpened: new BN(0), openedSlot: new BN(10), expiresAtSlot: new BN(20), status: 'open', bump: 254,
+  })
+  assert.equal(solIxs.length, 1)
+  assert(solIxs[0]!.programId.equals(PROGRAM_ID))
+
+  const mint = Keypair.generate().publicKey
+  const splIxs = await buildExpiredSessionCloseInstructions(voynich, keeper, sessionKey, {
+    caller: caller.publicKey, delegate, nonce: new BN(2), mint, model: PublicKey.default,
+    budget: new BN(100_000), spent: new BN(0), callsOpened: new BN(0), openedSlot: new BN(10), expiresAtSlot: new BN(20), status: 'open', bump: 253,
+  })
+  assert.equal(splIxs.length, 2)
+  assert(splIxs[0]!.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID))
+  const expectedCallerAta = getAssociatedTokenAddressSync(mint, caller.publicKey, true)
+  assert(splIxs[0]!.keys.some(k => k.pubkey.equals(expectedCallerAta)))
+  assert(splIxs[1]!.programId.equals(PROGRAM_ID))
+
+  // 2. Compiled CLI: session open -> session list -> call --session --delegate (no caller keypair!) -> session close
+  const app = buildApp()
+  const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b11s2-cli-'))
+  const callerKeyPath = join(scratch, 'caller.json')
+  const delegateKeyPath = join(scratch, 'delegate.json')
+  const inputPath = join(scratch, 'sketch.json')
+  writeFileSync(callerKeyPath, JSON.stringify([...caller.secretKey]))
+  writeFileSync(inputPath, JSON.stringify(Array(784).fill(0)))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  const runCli = async (args: string[]) => {
+    const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, ...args], {
+      cwd: resolve('.'),
+      encoding: 'utf8',
+    })
+    return JSON.parse(stdout) as Record<string, unknown>
+  }
+
+  try {
+    const opened = await runCli([
+      '--keypair', callerKeyPath,
+      'session', 'open', '--budget', '250000', '--model', 'sketch-32', '--ttl-slots', '1000', '--delegate-out', delegateKeyPath, '--json',
+    ])
+    const sessionAddr = opened.address as string
+    assert.ok(sessionAddr)
+    const savedDelegate = JSON.parse(readFileSync(delegateKeyPath, 'utf8')) as number[]
+    assert.equal(savedDelegate.length, 64)
+
+    const listed = await runCli(['--keypair', callerKeyPath, 'session', 'list', '--json'])
+    const items = listed.items as Array<{ address: string; status: string }>
+    assert.equal(items.length, 1)
+    assert.equal(items[0]!.address, sessionAddr)
+    assert.equal(items[0]!.status, 'open')
+
+    // Delegate-only call without passing caller --keypair
+    const called = await runCli(['call', 'sketch-32', inputPath, '--session', sessionAddr, '--delegate', delegateKeyPath])
+    assert.equal((called.receipt as { caller: string }).caller, caller.publicKey.toBase58())
+
+    const closed = await runCli(['--keypair', callerKeyPath, 'session', 'close', sessionAddr, '--json'])
+    const closedSession = closed.session as { status: string; returnedAmount: string; callsOpened: string }
+    assert.equal(closedSession.status, 'closed')
+    assert.equal(closedSession.callsOpened, '1')
+    assert.equal(closedSession.returnedAmount, '150000')
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 import { stdin, stdout, stderr } from 'node:process'
 import { homedir, tmpdir } from 'node:os'
@@ -30,6 +30,8 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   'allow-list': { type: 'boolean' }, caller: { type: 'string', multiple: true }, 'max-calls': { type: 'string' }, 'window-slots': { type: 'string' },
   operator: { type: 'string', multiple: true }, region: { type: 'string', multiple: true },
   'owner-key': { type: 'string' },
+  budget: { type: 'string' }, 'ttl-slots': { type: 'string' }, 'delegate-gas': { type: 'string' }, 'delegate-out': { type: 'string' },
+  wallet: { type: 'string' }, session: { type: 'string' }, delegate: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } })
 if (values['api-url'] ?? values.api) process.env.VOYNICH_API_URL = values['api-url'] ?? values.api
@@ -83,10 +85,12 @@ async function configureCliSigner(): Promise<void> {
   } else if (command === 'enclave' && argument === 'quote') {
     process.env.VOYNICH_KEYPAIR = values.keypair ?? process.env.VOYNICH_KEYPAIR ?? process.env.OPERATOR_KEYPAIR ?? await solanaCliKeypairPath()
   } else if (
-    ['call', 'seal', 'grant', 'refund', 'settle'].includes(command ?? '')
+    (['call', 'seal', 'grant', 'refund', 'settle'].includes(command ?? '') && !(command === 'call' && values.session))
     || (command === 'model' && ['price', 'retire', 'revoke', 'upgrade'].includes(argument ?? ''))
     || (command === 'model' && argument === 'policy' && ['set', 'clear'].includes(third ?? ''))
     || (command === 'measurement' && ['publish', 'deprecate'].includes(argument ?? ''))
+    || (command === 'session' && ['open', 'close'].includes(argument ?? ''))
+    || (command === 'session' && argument === 'list' && !values.wallet)
   ) {
     process.env.VOYNICH_KEYPAIR = values.keypair ?? process.env.VOYNICH_KEYPAIR ?? await solanaCliKeypairPath()
   }
@@ -336,11 +340,55 @@ async function main(): Promise<unknown> {
       },
     }
   }
+  if (command === 'session') {
+    if (argument === 'open') {
+      const budget = required(values.budget, '--budget')
+      const opened = await voynich.openSession({
+        budget,
+        ...(values.model ? { model: values.model } : {}),
+        ...(values['ttl-slots'] ? { durationSlots: values['ttl-slots'] } : {}),
+        ...(values['delegate-gas'] ? { delegateGasLamports: values['delegate-gas'] } : {}),
+        ...(values.mint ? { mint: parseMint(values.mint, null) } : {}),
+      })
+      let delegateKeypair: string | undefined
+      if (values['delegate-out']) {
+        delegateKeypair = resolve(values['delegate-out'])
+        await writeFile(delegateKeypair, JSON.stringify([...opened.delegate.secretKey]), { mode: 0o600 })
+      }
+      return {
+        address: opened.address,
+        delegate: opened.delegate.publicKey.toBase58(),
+        ...(delegateKeypair ? { delegateKeypair } : {}),
+        session: opened.session,
+      }
+    }
+    if (argument === 'list') {
+      const wallet = values.wallet ?? (await loadCliKeypair()).publicKey.toBase58()
+      return voynich.listSessions(wallet)
+    }
+    if (argument === 'close') {
+      const res = await voynich.closeSession(required(third, 'session address'))
+      return {
+        session: res.session,
+        transaction: res.transaction.signature ?? null,
+      }
+    }
+    throw new Error('Use session open --budget <units>, session list, or session close <session-address>.')
+  }
   if (command === 'call') {
     const strategy = parseStrategy(values.strategy)
     const maxTokens = values['max-tokens'] !== undefined ? Number(values['max-tokens']) : undefined
     if (maxTokens !== undefined && (!Number.isSafeInteger(maxTokens) || maxTokens < 1 || maxTokens > 4096)) {
       throw new Error('--max-tokens must be an integer between 1 and 4096.')
+    }
+    let sessionAuth: { address: string; delegate: Keypair } | undefined
+    if (values.session) {
+      const delegatePath = required(values.delegate, '--delegate <keypair-file> when using --session')
+      const raw = JSON.parse(await readFile(delegatePath, 'utf8')) as unknown
+      if (!Array.isArray(raw) || raw.length !== 64 || !raw.every(b => Number.isInteger(b) && b >= 0 && b <= 255)) {
+        throw new Error('--delegate must name a readable 64-byte Solana JSON keypair file.')
+      }
+      sessionAuth = { address: values.session, delegate: Keypair.fromSecretKey(Uint8Array.from(raw)) }
     }
     if (values.stream) {
       const prompt = required(values.text, '--text for --stream')
@@ -349,6 +397,7 @@ async function main(): Promise<unknown> {
         ...(values.enclave ? { enclave: values.enclave } : {}),
         ...(strategy ? { strategy } : {}),
         ...(maxTokens !== undefined ? { maxTokens } : {}),
+        ...(sessionAuth ? { session: sessionAuth } : {}),
       })
       let stopSent = false
       const onSigint = () => {
@@ -395,6 +444,7 @@ async function main(): Promise<unknown> {
       ...(strategy ? { strategy } : {}),
       ...(maxTokens !== undefined ? { maxTokens } : {}),
       ...(values.ceiling !== undefined ? { ceiling: values.ceiling } : {}),
+      ...(sessionAuth ? { session: sessionAuth } : {}),
     })
   }
   if (command === 'enclave') {

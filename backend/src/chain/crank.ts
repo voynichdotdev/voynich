@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { Keypair, PublicKey, type TransactionInstruction } from '@solana/web3.js'
+import { Keypair, PublicKey, SystemProgram, type TransactionInstruction } from '@solana/web3.js'
 import type { Prisma } from '@prisma/client'
 import { createAssociatedTokenAccountIdempotentInstruction, createBurnCheckedInstruction, getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, unpackMint, type Mint } from '@solana/spl-token'
-import { decodeCallAccount, eventAccounts } from 'voynich/program'
+import { decodeCallAccount, decodeSessionAccount, eventAccounts, type DecodedSessionAccount } from 'voynich/program'
 import { createKeeperRuntime } from '../engines/keeper/runtime.js'
 import { createScheduler } from '../engines/keeper/scheduler.js'
 import { createJournal } from '../engines/keeper/journal.js'
@@ -24,6 +24,32 @@ const wire = (instruction: TransactionInstruction): WireInstruction => ({ progra
 
 export function refundCallerTokenAccount(priceMint: PublicKey, caller: PublicKey): PublicKey {
   return getAssociatedTokenAddressSync(priceMint, caller, true)
+}
+
+export async function buildExpiredSessionCloseInstructions(
+  voynichProgram: ChainRuntime['programs']['voynich'],
+  closer: PublicKey,
+  sessionKey: PublicKey,
+  chainSession: DecodedSessionAccount,
+): Promise<TransactionInstruction[]> {
+  const token = !chainSession.mint.equals(PublicKey.default)
+  const callerTokens = token ? getAssociatedTokenAddressSync(chainSession.mint, chainSession.caller, true) : null
+  return [
+    ...(token ? [createAssociatedTokenAccountIdempotentInstruction(closer, callerTokens!, chainSession.caller, chainSession.mint)] : []),
+    await voynichProgram.methods
+      .closeSession()
+      .accountsStrict({
+        closer,
+        session: sessionKey,
+        caller: chainSession.caller,
+        sessionEscrow: token ? getAssociatedTokenAddressSync(chainSession.mint, sessionKey, true) : null,
+        callerTokens,
+        tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+        systemProgram: SystemProgram.programId,
+        ...eventAccounts(voynichProgram.programId),
+      })
+      .instruction(),
+  ]
 }
 
 export function readKey(value: string | undefined, name: string): Keypair {
@@ -61,6 +87,22 @@ export async function runCrank(runtime: ChainRuntime) {
         ...(token ? [createAssociatedTokenAccountIdempotentInstruction(keeper.publicKey, callerTokens!, chainCall.caller, chainCall.priceMint)] : []),
         await programs.voynich.methods.refundCall().accountsStrict({ actor: keeper.publicKey, call: new PublicKey(call.address), caller: chainCall.caller, escrowTokens: token ? getAssociatedTokenAddressSync(chainCall.priceMint, new PublicKey(call.address), true) : null, callerTokens, tokenProgram: token ? TOKEN_PROGRAM_ID : null, ...eventAccounts(programs.voynich.programId) }).instruction(),
       ])
+    })))
+  }
+
+  const sweepSessions = async () => {
+    const slot = await runtime.readModel.currentSlot()
+    const expired = await db.session.findMany({ where: { status: 'open', expiresAtSlot: { lt: slot } }, orderBy: { expiresAtSlot: 'asc' }, take: 50 })
+    await Promise.all(expired.map(sess => scheduler.safely(`close-session:${sess.address}`, async () => {
+      const sessionKey = new PublicKey(sess.address)
+      const info = await rpc.connection.getAccountInfo(sessionKey, 'confirmed')
+      if (!info || !info.owner.equals(programs.voynich.programId)) return
+      const chainSession = decodeSessionAccount(info.data)
+      if (chainSession.status !== 'open') return
+      if (slot <= BigInt(chainSession.expiresAtSlot.toString())) return
+      await journal.execute(`close-session:${sess.address}`, () =>
+        buildExpiredSessionCloseInstructions(programs.voynich, keeper.publicKey, sessionKey, chainSession),
+      )
     })))
   }
 
@@ -298,6 +340,7 @@ export async function runCrank(runtime: ChainRuntime) {
   const scheduler = createScheduler([
     { name: 'resume', everyMs: 0, run: () => journal.resume() },
     { name: 'refunds', everyMs: 2000, run: refund },
+    { name: 'sessions', everyMs: 5000, run: sweepSessions },
     { name: 'trading-fees', everyMs: 30_000, run: claimTradingFees },
     { name: 'buybacks', everyMs: 5000, run: buyback },
   ], { onError: (task, error) => console.error(JSON.stringify({ event: 'crank_task_failed', task, name: error instanceof Error ? error.name : 'Error', message: error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, '[url]') : 'Unknown error' })) })
