@@ -343,18 +343,20 @@ async function main(): Promise<unknown> {
   if (command === 'session') {
     if (argument === 'open') {
       const budget = required(values.budget, '--budget')
+      const delegate = Keypair.generate()
+      let delegateKeypair: string | undefined
+      if (values['delegate-out']) {
+        delegateKeypair = resolve(values['delegate-out'])
+        await writeFile(delegateKeypair, JSON.stringify([...delegate.secretKey]), { mode: 0o600 })
+      }
       const opened = await voynich.openSession({
         budget,
+        delegate,
         ...(values.model ? { model: values.model } : {}),
         ...(values['ttl-slots'] ? { durationSlots: values['ttl-slots'] } : {}),
         ...(values['delegate-gas'] ? { delegateGasLamports: values['delegate-gas'] } : {}),
         ...(values.mint ? { mint: parseMint(values.mint, null) } : {}),
       })
-      let delegateKeypair: string | undefined
-      if (values['delegate-out']) {
-        delegateKeypair = resolve(values['delegate-out'])
-        await writeFile(delegateKeypair, JSON.stringify([...opened.delegate.secretKey]), { mode: 0o600 })
-      }
       return {
         address: opened.address,
         delegate: opened.delegate.publicKey.toBase58(),

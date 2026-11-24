@@ -5725,3 +5725,94 @@ test('Build 11 Step 2: crank expired-session sweep instructions (SOL & SPL) and 
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 11 Step 3 (voynich@0.2.42): unsigned u64 session nonce (> 2^63-1) stores/reads as text and CLI writes --delegate-out before openSession', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { Hono } = await import('hono')
+  const { serve } = await import('@hono/node-server')
+  const { Prisma } = await import('@prisma/client')
+  const { ReadModel } = await import('../src/chain/read-model.js')
+  const { buildApp } = await import('../src/app.js')
+  const execFileAsync = promisify(execFile)
+
+  const highNonce = '11633500358553462560' // > signed BIGINT max (9223372036854775807)
+
+  // 1. ReadModel.session() handles full unsigned u64 string nonce cleanly
+  const caller = Keypair.generate()
+  const delegate = Keypair.generate()
+  const sessionAddr = Keypair.generate().publicKey.toBase58()
+  const mockDb = {
+    session: {
+      findUnique: async () => ({
+        address: sessionAddr,
+        caller: caller.publicKey.toBase58(),
+        delegate: delegate.publicKey.toBase58(),
+        nonce: highNonce,
+        mint: null,
+        modelAddress: null,
+        budget: new Prisma.Decimal('25000000'),
+        spent: new Prisma.Decimal('0'),
+        callsOpened: 0n,
+        openedSlot: 473524432n,
+        expiresAtSlot: 473525932n,
+        closedSlot: null,
+        returnedAmount: null,
+        status: 'open' as const,
+      }),
+    },
+  }
+  const rm = new ReadModel(mockDb as never, {} as never)
+  const readSess = await rm.session(sessionAddr)
+  assert.equal(readSess.nonce, highNonce)
+  assert.equal(readSess.remaining, '25000000')
+
+  // 2. Fixture API accepts high u64 nonce directly
+  const fixtureApp = buildApp()
+  const buildRes = await fixtureApp.request('/v1/sessions/build', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ wallet: caller.publicKey.toBase58(), delegate: delegate.publicKey.toBase58(), nonce: highNonce, budget: '25000000', durationSlots: '1500' }),
+  })
+  assert.equal(buildRes.status, 200)
+
+  // 3. CLI session open --delegate-out writes keypair file BEFORE POST /v1/sessions/build is sent
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b11s3-del-'))
+  const callerKeyPath = join(scratch, 'caller.json')
+  const delegateKeyPath = join(scratch, 'delegate.json')
+  writeFileSync(callerKeyPath, JSON.stringify([...caller.secretKey]))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  let fileExistedDuringBuild = false
+  let delegateMatchedFile = false
+  const spyApp = new Hono()
+  spyApp.post('/v1/sessions/build', async c => {
+    const body = await c.req.json() as { delegate: string }
+    fileExistedDuringBuild = existsSync(delegateKeyPath)
+    if (fileExistedDuringBuild) {
+      const saved = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(delegateKeyPath, 'utf8')) as number[]))
+      delegateMatchedFile = saved.publicKey.toBase58() === body.delegate
+    }
+    return c.json({ error: { code: 'INVALID_SESSION', message: 'stop-after-check', retryable: false, stage: 'build' } }, 422)
+  })
+  const spyServer = serve({ fetch: spyApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => spyServer.once('listening', () => r()))
+  const spyUrl = `http://127.0.0.1:${(spyServer.address() as { port: number }).port}`
+
+  try {
+    await assert.rejects(() => execFileAsync(
+      process.execPath,
+      [cliPath, '--api', spyUrl, '--keypair', callerKeyPath, 'session', 'open', '--budget', '25000000', '--delegate-out', delegateKeyPath],
+      { cwd: resolve('.'), encoding: 'utf8' },
+    ))
+    assert.equal(fileExistedDuringBuild, true, '--delegate-out must be written BEFORE openSession() submits')
+    assert.equal(delegateMatchedFile, true, 'pre-written delegate keypair must match the delegate passed to /v1/sessions/build')
+  } finally {
+    ;(spyServer as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => spyServer.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

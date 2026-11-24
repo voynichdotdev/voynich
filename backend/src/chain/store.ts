@@ -466,7 +466,7 @@ export function createApply(attestationProgramId: string) {
             address,
             caller: text(data, 'caller'),
             delegate: text(data, 'delegate'),
-            nonce: BigInt(text(data, 'nonce')),
+            nonce: text(data, 'nonce'),
             mint: rawMint === ZERO_KEY ? null : rawMint,
             modelAddress: rawModel === ZERO_KEY ? null : rawModel,
             budget: new Prisma.Decimal(text(data, 'budget')),

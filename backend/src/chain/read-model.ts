@@ -103,7 +103,7 @@ export class ReadModel {
         }]
     return { items, currentVersion: model.currentVersion ?? 1 }
   }
-  private async sessionRow(row: { address: string; caller: string; delegate: string; nonce: bigint; mint: string | null; modelAddress: string | null; budget: Prisma.Decimal; spent: Prisma.Decimal; callsOpened: bigint; openedSlot: bigint; expiresAtSlot: bigint; closedSlot: bigint | null; returnedAmount: Prisma.Decimal | null; status: 'open' | 'closed' }) {
+  private async sessionRow(row: { address: string; caller: string; delegate: string; nonce: string; mint: string | null; modelAddress: string | null; budget: Prisma.Decimal; spent: Prisma.Decimal; callsOpened: bigint; openedSlot: bigint; expiresAtSlot: bigint; closedSlot: bigint | null; returnedAmount: Prisma.Decimal | null; status: 'open' | 'closed' }) {
     const budgetBig = BigInt(row.budget.toFixed(0))
     const spentBig = BigInt(row.spent.toFixed(0))
     const remainingBig = budgetBig > spentBig ? budgetBig - spentBig : 0n
@@ -111,7 +111,7 @@ export class ReadModel {
       address: row.address,
       caller: row.caller,
       delegate: row.delegate,
-      nonce: String(row.nonce),
+      nonce: row.nonce,
       mint: row.mint,
       model: row.modelAddress,
       budget: await this.money(row.budget.toFixed(0), row.mint),
