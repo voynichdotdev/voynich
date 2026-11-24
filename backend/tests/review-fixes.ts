@@ -5363,3 +5363,184 @@ test('Build 10 Step 3 (voynich@0.2.38): write_version_weights <= 1104B wire size
     await new Promise<void>(r => apiServer.close(() => r()))
   }
 })
+
+test('Build 10 Step 3 (voynich@0.2.39): encryptionDestination accepts legacy 223B Grant and rejects revoked 223B Grant', async () => {
+  const { Hono } = await import('hono')
+  const { serve } = await import('@hono/node-server')
+  const { Connection } = await import('@solana/web3.js')
+  const { createVoynich, VoynichError } = await import('voynich')
+  const { generateEncryptionKeyPair, toBase64, utf8 } = await import('voynich/crypto')
+  const { addresses: pdaAddrs, ATTESTATION_PROGRAM_ID, chainPrograms, GRANT_BASE_SPACE, PROGRAM_ID } = await import('voynich/program')
+  const { FIXTURE_TIME, fixtureConfig, fixtureEnclave, fixtureGrant, fixtureModel } = await import('@voynich/contract/fixtures')
+
+  const owner = Keypair.generate()
+  const caller = Keypair.generate()
+  const operator = Keypair.generate()
+  const signing = Keypair.generate()
+  const encKey = generateEncryptionKeyPair()
+  const pdas = pdaAddrs(PROGRAM_ID, ATTESTATION_PROGRAM_ID)
+  const modelName = 'text-1m-legacy'
+  const modelKey = pdas.model(modelName)
+  const enclaveKey = pdas.enclave(signing.publicKey)
+  const recordKey = pdas.record(signing.publicKey)
+  const grantKey = pdas.grant(modelKey, enclaveKey)
+  const measurement = Array.from({ length: 48 }, (_, i) => i + 1)
+
+  const { voynich, attest } = chainPrograms(new Connection('http://127.0.0.1:8899'))
+  const configBuf = await voynich.coder.accounts.encode('config', {
+    admin: owner.publicKey,
+    attestationProgram: ATTESTATION_PROGRAM_ID,
+    recordLayoutVersion: 1,
+    feeRecipient: owner.publicKey,
+    protocolShareBps: 500,
+    callDeadlineSlots: new BN(450),
+    bump: 255,
+    maxOpenAnswerBytes: 1024,
+  })
+  const modelBuf = await voynich.coder.accounts.encode('model', {
+    owner: owner.publicKey,
+    name: modelName,
+    manifest: Buffer.from(JSON.stringify(fixtureModel.manifest)),
+    weights: [Keypair.generate().publicKey],
+    sizeBytes: new BN(1024),
+    cipher: 'xchacha20poly1305-64k-v1',
+    noncePrefix: Array.from(new Uint8Array(16).fill(1)),
+    ciphertextSha256: Array.from(new Uint8Array(32).fill(2)),
+    allowedMeasurements: [measurement],
+    price: new BN(100_000),
+    priceMint: PublicKey.default,
+    operatorShareBps: 2500,
+    uploadKey: PublicKey.default,
+    status: { live: {} },
+    createdSlot: new BN(10),
+    sealedSlot: new BN(20),
+    callsSettled: new BN(0),
+    bump: 254,
+    uploadKeys: [],
+    hashVersion: 1,
+    sealedChunks: 1,
+    merkleFrontier: [],
+    merkleFrontierMask: 0,
+    base: null,
+    priceUnit: { call: {} },
+    hasPolicy: false,
+    currentVersion: 2,
+  })
+  const enclaveBuf = await voynich.coder.accounts.encode('enclave', {
+    signingKey: signing.publicKey,
+    encryptionKey: Array.from(encKey.publicKey),
+    operator: operator.publicKey,
+    endpoint: 'http://127.0.0.1:9707',
+    attestationRecord: recordKey,
+    hardwareType: 0,
+    measurement,
+    recordedSlot: new BN(50),
+    expiresAtSlot: new BN(500),
+    callsSettled: new BN(0),
+    bump: 253,
+  })
+  const recordBuf = await attest.coder.accounts.encode('attestationRecord', {
+    layoutVersion: 1,
+    signingKey: signing.publicKey,
+    hardwareType: { dev: {} },
+    measurement,
+    recordedSlot: new BN(50),
+    expiresAtSlot: new BN(500),
+    bump: 252,
+  })
+
+  // Build exact legacy 223-byte Grant (no trailing Option<u16> quoted_operator_share_bps).
+  const buildLegacyGrant = (revoked: boolean) => {
+    const buf = Buffer.alloc(GRANT_BASE_SPACE)
+    Buffer.from(sha256(utf8('account:Grant')).subarray(0, 8)).copy(buf, 0)
+    modelKey.toBuffer().copy(buf, 8)
+    enclaveKey.toBuffer().copy(buf, 40)
+    buf.writeUInt32LE(104, 72) // wrapped_key Vec<u8> len
+    Buffer.alloc(104, 0x77).copy(buf, 76) // wrapped_key bytes
+    owner.publicKey.toBuffer().copy(buf, 180) // granted_by
+    buf.writeBigUInt64LE(60n, 212) // granted_slot
+    buf[220] = revoked ? 1 : 0
+    buf[221] = 251 // bump
+    return buf
+  }
+  let grantBuf = buildLegacyGrant(false)
+  assert.equal(grantBuf.length, 223)
+
+  let openCallHit = false
+  const apiApp = new Hono()
+  apiApp.get('/v1/config', c => c.json({
+    ...fixtureConfig, mode: 'chain', cluster: 'mainnet-beta', fixture: false, programId: PROGRAM_ID.toBase58(),
+  }))
+  apiApp.get('/v1/models/:id', c => c.json({
+    ...fixtureModel,
+    address: modelKey.toBase58(),
+    name: modelName,
+    owner: owner.publicKey.toBase58(),
+  }))
+  apiApp.get('/v1/models/:id/enclaves', c => c.json({
+    items: [{
+      enclave: {
+        ...fixtureEnclave,
+        address: enclaveKey.toBase58(),
+        signingKey: signing.publicKey.toBase58(),
+        encryptionKey: toBase64(encKey.publicKey),
+        operator: operator.publicKey.toBase58(),
+        measurement: Buffer.from(measurement).toString('hex'),
+      },
+      grant: {
+        ...fixtureGrant,
+        address: grantKey.toBase58(),
+        model: modelKey.toBase58(),
+        modelName,
+        enclave: enclaveKey.toBase58(),
+        grantedBy: owner.publicKey.toBase58(),
+        quotedOperatorShareBps: null,
+        medianAnswerMs: null,
+      },
+    }],
+    asOf: FIXTURE_TIME,
+  }))
+  apiApp.post('/v1/calls/build', c => {
+    openCallHit = true
+    return c.json({ error: { code: 'STOP_AFTER_AUTH', message: 'Reached build after legacy Grant decode', retryable: false, stage: 'build' } }, 400)
+  })
+
+  const apiServer = serve({ fetch: apiApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => apiServer.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(apiServer.address() as { port: number }).port}`
+
+  const lookup = (k: PublicKey) => {
+    if (k.equals(pdas.config)) return { data: configBuf, owner: PROGRAM_ID }
+    if (k.equals(modelKey)) return { data: modelBuf, owner: PROGRAM_ID }
+    if (k.equals(enclaveKey)) return { data: enclaveBuf, owner: PROGRAM_ID }
+    if (k.equals(recordKey)) return { data: recordBuf, owner: ATTESTATION_PROGRAM_ID }
+    if (k.equals(grantKey)) return { data: grantBuf, owner: PROGRAM_ID }
+    return null
+  }
+  const conn = {
+    getMultipleAccountsInfoAndContext: async (keys: PublicKey[]) => ({ context: { slot: 100 }, value: keys.map(lookup) }),
+    getSlot: async () => 100,
+  }
+
+  try {
+    const sdk = createVoynich({ apiUrl, signer: caller, connection: conn as never, pollMs: 5 })
+    // 1. Active 223B Grant passes encryptionDestination() and reaches /v1/calls/build without ERR_OUT_OF_RANGE.
+    await assert.rejects(
+      () => sdk.call(modelName, new Float32Array(784)),
+      (err: unknown) => err instanceof Error && err.name === 'ApiClientError',
+    )
+    assert.equal(openCallHit, true)
+
+    // 2. Revoked 223B Grant is rejected with GRANT_REQUIRED.
+    openCallHit = false
+    grantBuf = buildLegacyGrant(true)
+    await assert.rejects(
+      () => sdk.call(modelName, new Float32Array(784)),
+      (err: unknown) => err instanceof VoynichError && err.code === 'GRANT_REQUIRED',
+    )
+    assert.equal(openCallHit, false)
+  } finally {
+    ;(apiServer as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => apiServer.close(() => r()))
+  }
+})

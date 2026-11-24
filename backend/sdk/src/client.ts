@@ -3,7 +3,7 @@ import type { IdlAccounts } from '@coral-xyz/anchor'
 import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelVersion, type ModelVersions, type Money, type PriceUnit, type Receipt, type ReceiptView, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
 import { decodeAdapter } from './adapter.js'
 import { CIPHER_CHUNK_BYTES, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER, ciphertextHash, decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, openWeightsChunk, sealWeights, sha256, signSealDerivation, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, verifyReceipt, wrapKey, type SealDerivationSigner, type WeightsCipherHeader } from './crypto.js'
-import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeModelBaseBytes, decodeModelVersionAccount, decodeReceiptAccount, decodeWeightsHeader, modelVersionPda, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
+import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeGrantAccount, decodeModelBaseBytes, decodeModelVersionAccount, decodeReceiptAccount, decodeWeightsHeader, modelVersionPda, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
 import { preprocessSketch, type SketchInput } from './preprocess.js'
 import { historicalAttestation, transactionSettledReceipt } from './history.js'
 
@@ -560,7 +560,7 @@ export function createVoynich(options: VoynichOptions) {
     if (requireGrant) {
       const grantInfo = second.value[1]
       if (!grantInfo || !grantInfo.owner.equals(PROGRAM_ID)) throw new VoynichError('GRANT_REQUIRED', 'The enclave has no chain grant for this model.')
-      const grant = voynich.coder.accounts.decode<IdlAccounts<VoynichProgram>['grant']>('grant', grantInfo.data)
+      const grant = decodeGrantAccount(grantInfo.data)
       if (grant.revoked || grant.model.toBase58() !== model.address || grant.enclave.toBase58() !== candidate.address) throw new VoynichError('GRANT_REQUIRED', 'The enclave has no active chain grant for this model.')
     }
     const manifest = decodeManifest(Uint8Array.from(chainModel.manifest))
