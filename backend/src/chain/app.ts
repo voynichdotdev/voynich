@@ -107,6 +107,7 @@ export function buildChainApp(runtime: ChainRuntime) {
     '/v1/models/:id/split/build', '/v1/models/:id/split/claim/build',
     '/v1/models/:id/versions/build', '/v1/models/:id/versions/publish/build',
     '/v1/enclaves/:key/quote/build',
+    '/v1/enclaves/:key/bond/deposit/build', '/v1/enclaves/:key/bond/withdraw/build',
     '/v1/calls/build', '/v1/calls/:id/refund/build',
     '/v1/bounties/build', '/v1/bounties/:address/draw/build',
     '/v1/bounties/:address/collect/build', '/v1/bounties/:address/cancel/build',
@@ -123,6 +124,7 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/models/:id/versions', async c => c.json(await read.modelVersions(readParam(c, 'id', s.ModelId))))
   app.get('/v1/enclaves', async c => c.json(await read.enclaves(readQuery(c, s.PageQuery))))
   app.get('/v1/enclaves/:key', async c => c.json(await read.enclave(readParam(c, 'key', s.Address))))
+  app.get('/v1/enclaves/:key/bond', async c => c.json(await read.enclaveBond(readParam(c, 'key', s.Address))))
   app.get('/v1/measurements', async c => c.json(await read.measurements(readQuery(c, s.MeasurementQuery))))
   app.get('/v1/measurements/:digest', async c => c.json(await read.measurement(readParam(c, 'digest', s.HardwareMeasurement))))
   app.get('/v1/receipts/:id', async c => c.json(await read.receipt(readParam(c, 'id', s.ReceiptId))))
@@ -333,6 +335,8 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/models/:id/versions/seal-range/build', async c => c.json(await build.sealVersionRange(readParam(c, 'id', s.ModelId), await readJson(c, s.SealVersionRangeRequest))))
   app.post('/v1/models/:id/versions/publish/build', async c => c.json(await build.publishVersion(readParam(c, 'id', s.ModelId), await readJson(c, s.PublishVersionRequest))))
   app.post('/v1/enclaves/:key/quote/build', async c => c.json(await build.setQuote(readParam(c, 'key', s.Address), await readJson(c, s.SetQuoteRequest))))
+  app.post('/v1/enclaves/:key/bond/deposit/build', async c => c.json(await build.depositBond(readParam(c, 'key', s.Address), await readJson(c, s.DepositBondRequest))))
+  app.post('/v1/enclaves/:key/bond/withdraw/build', async c => c.json(await build.withdrawBond(readParam(c, 'key', s.Address), await readJson(c, s.WithdrawBondRequest))))
   app.post('/v1/calls/build', async c => c.json(await build.open(await readJson(c, s.OpenCallRequest))))
   app.post('/v1/calls/:id/settle/build', async c => c.json(await build.settleMetered(readParam(c, 'id', s.Address), await readJson(c, s.SettleCallRequest))))
   app.post('/v1/calls/:id/refund/build', async c => c.json(await build.refund(readParam(c, 'id', s.Address), await readJson(c, s.WalletRequest))))

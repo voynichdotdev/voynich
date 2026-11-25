@@ -186,6 +186,7 @@ model Enclave {
   grants                    Grant[]
   calls                     Call[]
   receipts                  Receipt[]
+  bond                      Bond?
 
   @@index([operator])
   @@map("enclaves")
@@ -520,4 +521,19 @@ model Split {
   updatedSlot   BigInt
 
   @@map("splits")
+}
+
+model Bond {
+  address        String  @id @db.VarChar(44)
+  enclaveAddress String  @unique @db.VarChar(44)
+  enclave        Enclave @relation(fields: [enclaveAddress], references: [address])
+  operator       String  @db.VarChar(44)
+  bondedLamports Decimal @default(0) @db.Decimal(20, 0)
+  slashedTotal   Decimal @default(0) @db.Decimal(20, 0)
+  missedCalls    BigInt  @default(0)
+  slashBps       Int     @default(1000)
+  updatedSlot    BigInt
+
+  @@index([operator])
+  @@map("bonds")
 }

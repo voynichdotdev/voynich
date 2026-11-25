@@ -608,6 +608,71 @@ export function createApply(attestationProgramId: string) {
           }
           break
         }
+        case 'bonddeposited': {
+          const address = text(data, 'bond')
+          const enclaveAddress = text(data, 'enclave')
+          const operator = text(data, 'operator')
+          const bondedLamports = new Prisma.Decimal(text(data, 'bondedLamports'))
+          const slashBps = number(data, 'slashBps')
+          await tx.bond.upsert({
+            where: { address },
+            create: {
+              address,
+              enclaveAddress,
+              operator,
+              bondedLamports,
+              slashedTotal: new Prisma.Decimal('0'),
+              missedCalls: 0n,
+              slashBps,
+              updatedSlot: currentSlot,
+            },
+            update: {
+              operator,
+              bondedLamports,
+              slashBps,
+              updatedSlot: currentSlot,
+            },
+          })
+          await notify(tx, 'bond.updated', enclaveAddress)
+          await notify(tx, 'enclave.updated', enclaveAddress)
+          break
+        }
+        case 'bondwithdrawn': {
+          const address = text(data, 'bond')
+          const enclaveAddress = text(data, 'enclave')
+          const existing = await tx.bond.findUnique({ where: { address } })
+          if (existing) {
+            await tx.bond.update({
+              where: { address },
+              data: {
+                bondedLamports: new Prisma.Decimal(text(data, 'bondedLamports')),
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'bond.updated', enclaveAddress)
+            await notify(tx, 'enclave.updated', enclaveAddress)
+          }
+          break
+        }
+        case 'bondslashed': {
+          const address = text(data, 'bond')
+          const enclaveAddress = text(data, 'enclave')
+          const existing = await tx.bond.findUnique({ where: { address } })
+          if (existing) {
+            await tx.bond.update({
+              where: { address },
+              data: {
+                bondedLamports: new Prisma.Decimal(text(data, 'bondedLamports')),
+                slashedTotal: new Prisma.Decimal(text(data, 'slashedTotal')),
+                missedCalls: BigInt(text(data, 'missedCalls')),
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'bond.updated', enclaveAddress)
+            await notify(tx, 'enclave.updated', enclaveAddress)
+          }
+          break
+        }
       }
     }
   }

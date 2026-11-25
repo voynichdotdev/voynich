@@ -59,6 +59,9 @@ const voynich = {
   getSplit: async (...args: Parameters<Voynich['getSplit']>) => (await load()).getSplit(...args),
   setSplit: async (...args: Parameters<Voynich['setSplit']>) => (await load(true)).setSplit(...args),
   claimSplit: async (...args: Parameters<Voynich['claimSplit']>) => (await load(true)).claimSplit(...args),
+  getBond: async (...args: Parameters<Voynich['getBond']>) => (await load()).getBond(...args),
+  depositBond: async (...args: Parameters<Voynich['depositBond']>) => (await load(true)).depositBond(...args),
+  withdrawBond: async (...args: Parameters<Voynich['withdrawBond']>) => (await load(true)).withdrawBond(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

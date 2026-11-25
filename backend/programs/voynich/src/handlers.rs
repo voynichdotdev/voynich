@@ -1412,14 +1412,111 @@ pub fn settle_metered_call<'info>(
     }
     Ok(())
 }
-pub fn refund_call(ctx: Context<RefundCall>) -> Result<()> {
+pub fn refund_call<'info>(ctx: Context<'_, '_, 'info, 'info, RefundCall<'info>>) -> Result<()> {
     require!(ctx.accounts.call.status == CallStatus::Open, VoynichError::CallNotOpen);
     let slot = Clock::get()?.slot;
     require!(slot > ctx.accounts.call.deadline_slot, VoynichError::CallNotRefundable);
     let amount = ctx.accounts.call.escrow_amount();
+    let enclave_key = ctx.accounts.call.enclave;
+    let call_key = ctx.accounts.call.key();
+    let caller_key = ctx.accounts.call.caller;
+    let price_mint = ctx.accounts.call.price_mint;
     money::refund(&ctx)?;
     let call = &mut ctx.accounts.call; call.status = CallStatus::Refunded;
-    emit_cpi!(CallRefunded { call: call.key(), caller: call.caller, price_mint: call.price_mint, amount, slot, status: CallStatus::Refunded });
+    emit_cpi!(CallRefunded { call: call_key, caller: caller_key, price_mint, amount, slot, status: CallStatus::Refunded });
+
+    let (expected_bond, _) = Pubkey::find_program_address(&[b"bond", enclave_key.as_ref()], &crate::ID);
+    if let Some(bond_info) = ctx.remaining_accounts.iter().find(|info| info.key() == expected_bond) {
+        if bond_info.owner == &crate::ID && bond_info.is_writable && bond_info.data_len() >= Bond::SPACE {
+            let mut bond = {
+                let data = bond_info.try_borrow_data()?;
+                let mut slice: &[u8] = &data;
+                Bond::try_deserialize(&mut slice).map_err(|_| error!(VoynichError::InvalidBond))?
+            };
+            require_keys_eq!(bond.enclave, enclave_key, VoynichError::InvalidBond);
+            if bond.bonded_lamports > 0 {
+                let slash_cap = if price_mint == Pubkey::default() {
+                    ((u128::from(amount) * u128::from(bond.slash_bps)) / 10_000) as u64
+                } else {
+                    SPL_BOND_SLASH_LAMPORTS
+                };
+                let slash = bond.bonded_lamports.min(slash_cap);
+                if slash > 0 {
+                    money::slash_bond(bond_info, &ctx.accounts.caller.to_account_info(), slash)?;
+                    bond.bonded_lamports = bond.bonded_lamports.checked_sub(slash).ok_or(VoynichError::ArithmeticOverflow)?;
+                    bond.slashed_total = bond.slashed_total.checked_add(slash).ok_or(VoynichError::ArithmeticOverflow)?;
+                    bond.missed_calls = bond.missed_calls.checked_add(1).ok_or(VoynichError::ArithmeticOverflow)?;
+                    bond.updated_slot = slot;
+                    {
+                        let mut data = bond_info.try_borrow_mut_data()?;
+                        let mut cursor: &mut [u8] = &mut data;
+                        bond.try_serialize(&mut cursor)?;
+                    }
+                    emit_cpi!(BondSlashed {
+                        bond: expected_bond,
+                        enclave: enclave_key,
+                        operator: bond.operator,
+                        call: call_key,
+                        caller: caller_key,
+                        amount: slash,
+                        bonded_lamports: bond.bonded_lamports,
+                        slashed_total: bond.slashed_total,
+                        missed_calls: bond.missed_calls,
+                        slot,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn deposit_bond(ctx: Context<DepositBond>, amount_lamports: u64) -> Result<()> {
+    require!(amount_lamports > 0, VoynichError::InvalidBond);
+    let slot = Clock::get()?.slot;
+    money::deposit_bond(&ctx, amount_lamports)?;
+    let bond = &mut ctx.accounts.bond;
+    if bond.enclave == Pubkey::default() {
+        bond.enclave = ctx.accounts.enclave.key();
+        bond.operator = ctx.accounts.operator.key();
+        bond.bonded_lamports = 0;
+        bond.slashed_total = 0;
+        bond.missed_calls = 0;
+        bond.slash_bps = DEFAULT_BOND_SLASH_BPS;
+        bond.bump = ctx.bumps.bond;
+    } else {
+        require_keys_eq!(bond.enclave, ctx.accounts.enclave.key(), VoynichError::InvalidBond);
+        require_keys_eq!(bond.operator, ctx.accounts.operator.key(), VoynichError::Unauthorized);
+    }
+    bond.bonded_lamports = bond.bonded_lamports.checked_add(amount_lamports).ok_or(VoynichError::ArithmeticOverflow)?;
+    bond.updated_slot = slot;
+    emit_cpi!(BondDeposited {
+        bond: bond.key(),
+        enclave: bond.enclave,
+        operator: bond.operator,
+        amount: amount_lamports,
+        bonded_lamports: bond.bonded_lamports,
+        slash_bps: bond.slash_bps,
+        slot,
+    });
+    Ok(())
+}
+
+pub fn withdraw_bond(ctx: Context<WithdrawBond>, amount_lamports: u64) -> Result<()> {
+    require!(amount_lamports > 0 && amount_lamports <= ctx.accounts.bond.bonded_lamports, VoynichError::InvalidBond);
+    let slot = Clock::get()?.slot;
+    money::withdraw_bond(&ctx, amount_lamports)?;
+    let bond = &mut ctx.accounts.bond;
+    bond.bonded_lamports = bond.bonded_lamports.checked_sub(amount_lamports).ok_or(VoynichError::ArithmeticOverflow)?;
+    bond.updated_slot = slot;
+    emit_cpi!(BondWithdrawn {
+        bond: bond.key(),
+        enclave: bond.enclave,
+        operator: bond.operator,
+        amount: amount_lamports,
+        bonded_lamports: bond.bonded_lamports,
+        slot,
+    });
     Ok(())
 }
 

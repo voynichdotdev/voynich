@@ -37,4 +37,5 @@ pub enum VoynichError {
     #[msg("The model version is invalid or not in the required state.")] InvalidVersion,
     #[msg("The caller session is closed, expired, out of budget, or does not match this call.")] InvalidSession,
     #[msg("The revenue split configuration, remaining account, or claim is invalid.")] InvalidSplit,
+    #[msg("The operator bond deposit, withdrawal, or remaining account is invalid.")] InvalidBond,
 }

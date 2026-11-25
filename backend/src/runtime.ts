@@ -60,7 +60,8 @@ export function createChainRuntime(role: 'api' | 'indexer' | 'crank') {
       : event.type === 'policy.cleared' ? (() => { const [model, policy] = event.id.split(':'); return { model, policy } })()
       : event.type === 'version.published' ? await (async () => { const [model, ver] = event.id.split(':'); const list = await readModel.modelVersions(model!); return list.items.find(item => item.version === Number(ver)) ?? null })()
       : event.type === 'session.updated' ? await readModel.session(event.id)
-      : event.type === 'split.updated' ? await readModel.modelSplit(event.id) : null
+      : event.type === 'split.updated' ? await readModel.modelSplit(event.id)
+      : event.type === 'bond.updated' ? await readModel.enclaveBond(event.id) : null
     if (data) hub.publish(streamEvent(event.type, data))
   }
   return {

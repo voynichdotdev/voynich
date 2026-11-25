@@ -82,3 +82,18 @@ pub struct SplitClaimed {
     pub split: Pubkey, pub model: Pubkey, pub recipient: Pubkey, pub mint: Pubkey,
     pub amount: u64, pub total_claimed: u64, pub slot: u64,
 }
+#[event]
+pub struct BondDeposited {
+    pub bond: Pubkey, pub enclave: Pubkey, pub operator: Pubkey,
+    pub amount: u64, pub bonded_lamports: u64, pub slash_bps: u16, pub slot: u64,
+}
+#[event]
+pub struct BondWithdrawn {
+    pub bond: Pubkey, pub enclave: Pubkey, pub operator: Pubkey,
+    pub amount: u64, pub bonded_lamports: u64, pub slot: u64,
+}
+#[event]
+pub struct BondSlashed {
+    pub bond: Pubkey, pub enclave: Pubkey, pub operator: Pubkey, pub call: Pubkey, pub caller: Pubkey,
+    pub amount: u64, pub bonded_lamports: u64, pub slashed_total: u64, pub missed_calls: u64, pub slot: u64,
+}

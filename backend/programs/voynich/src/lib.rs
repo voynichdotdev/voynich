@@ -38,7 +38,7 @@ pub mod voynich {
     pub fn open_metered_call(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answer_mode: AnswerMode, callback: Option<CallbackSpec>, ceiling: u64) -> Result<()> { handlers::open_metered_call(ctx, nonce, input_hash, answer_mode, callback, ceiling) }
     pub fn settle_call<'info>(ctx: Context<'_, '_, 'info, 'info, SettleCall<'info>>, output_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16, open_answer: Vec<u8>) -> Result<()> { handlers::settle_call(ctx, output_hash, signature, ed25519_instruction_index, open_answer) }
     pub fn settle_metered_call<'info>(ctx: Context<'_, '_, 'info, 'info, SettleMeteredCall<'info>>, count: u64, running_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16) -> Result<()> { handlers::settle_metered_call(ctx, count, running_hash, signature, ed25519_instruction_index) }
-    pub fn refund_call(ctx: Context<RefundCall>) -> Result<()> { handlers::refund_call(ctx) }
+    pub fn refund_call<'info>(ctx: Context<'_, '_, 'info, 'info, RefundCall<'info>>) -> Result<()> { handlers::refund_call(ctx) }
     pub fn publish_measurement(ctx: Context<PublishMeasurement>, digest: [u8; 48], source_repo: String, commit_sha: String, recipe_hash: [u8; 32], version: String) -> Result<()> { handlers::publish_measurement(ctx, digest, source_repo, commit_sha, recipe_hash, version) }
     pub fn deprecate_measurement(ctx: Context<DeprecateMeasurement>) -> Result<()> { handlers::deprecate_measurement(ctx) }
     pub fn set_policy(ctx: Context<SetPolicy>, args: PolicyArgs) -> Result<()> { handlers::set_policy(ctx, args) }
@@ -53,4 +53,6 @@ pub mod voynich {
     pub fn open_session_metered_call(ctx: Context<OpenSessionCall>, nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>, ceiling: u64) -> Result<()> { handlers::open_session_metered_call(ctx, nonce, input_hash, answer_mode, callback, ceiling) }
     pub fn set_split(ctx: Context<SetSplit>, recipients: Vec<SplitRecipientInput>) -> Result<()> { handlers::set_split(ctx, recipients) }
     pub fn claim_split(ctx: Context<ClaimSplit>) -> Result<()> { handlers::claim_split(ctx) }
+    pub fn deposit_bond(ctx: Context<DepositBond>, amount_lamports: u64) -> Result<()> { handlers::deposit_bond(ctx, amount_lamports) }
+    pub fn withdraw_bond(ctx: Context<WithdrawBond>, amount_lamports: u64) -> Result<()> { handlers::withdraw_bond(ctx, amount_lamports) }
 }

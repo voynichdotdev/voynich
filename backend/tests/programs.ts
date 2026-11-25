@@ -41,7 +41,7 @@ const u64le = (value: bigint) => {
 
 // Run against a fresh local validator with both programs deployed.
 // The wallet must be both programs' upgrade authority and hold local development SOL.
-test('Voynich program flows on the supplied local validator', { timeout: 180_000 }, async t => {
+test('Voynich program flows on the supplied local validator', { timeout: 240_000 }, async t => {
   const rpcUrl = process.env.ANCHOR_PROVIDER_URL ?? process.env.SOLANA_RPC_URL
   assert(rpcUrl, 'Set ANCHOR_PROVIDER_URL or SOLANA_RPC_URL to the supplied local validator')
   assert(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(rpcUrl).hostname), 'Program tests require a loopback RPC endpoint')
@@ -2451,5 +2451,103 @@ test('Voynich program flows on the supplied local validator', { timeout: 180_000
     assert.equal(deactivated.active, false)
     assert.equal(deactivated.recipients.length, 0)
     assert.equal((await voynich.account.model.fetch(splitModel.address)).hasSplit, false)
+  })
+
+  await t.test('Build 13 Step 1: Bond PDA deposit, timeout slash in refund_call (escrow + 10% slash), partial withdraw, and Unauthorized/InvalidBond rejections', async () => {
+    const { BOND_SPACE, DEFAULT_BOND_SLASH_BPS, bondPda, decodeBondAccount } = await import('../sdk/src/program.js')
+    await refresh(first)
+    const bondKey = bondPda(first.address, voynich.programId)
+    const stranger = Keypair.generate()
+    await execute([SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: stranger.publicKey, lamports: 50_000_000 })], [])
+
+    // 1. Non-operator cannot deposit_bond -> Unauthorized
+    await assert.rejects(
+      execute([await voynich.methods.depositBond(bn(5_000_000)).accountsStrict({
+        operator: stranger.publicKey, enclave: first.address, bond: bondKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [stranger]),
+      /Unauthorized/,
+    )
+
+    // 2. Zero deposit -> InvalidBond
+    await assert.rejects(
+      execute([await voynich.methods.depositBond(bn(0)).accountsStrict({
+        operator: first.operator.publicKey, enclave: first.address, bond: bondKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [first.operator]),
+      /InvalidBond/,
+    )
+
+    // 3. Operator deposits 20_000_000 lamports (0.02 SOL)
+    const initialDeposit = 20_000_000n
+    await execute([await voynich.methods.depositBond(bn(initialDeposit)).accountsStrict({
+      operator: first.operator.publicKey, enclave: first.address, bond: bondKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [first.operator])
+
+    const bondInfo = await connection.getAccountInfo(bondKey, 'confirmed')
+    assert.equal(bondInfo?.data.length, BOND_SPACE)
+    const decoded = decodeBondAccount(bondInfo!.data)
+    assert(decoded.enclave.equals(first.address))
+    assert(decoded.operator.equals(first.operator.publicKey))
+    assert.equal(decoded.bondedLamports.toString(), initialDeposit.toString())
+    assert.equal(decoded.slashBps, DEFAULT_BOND_SLASH_BPS)
+    assert.equal(decoded.slashedTotal.toString(), '0')
+    assert.equal(decoded.missedCalls.toString(), '0')
+
+    // 4. Restore short deadline (DEADLINE_SLOTS), open a SOL call against `first`, let it expire, then refund with Bond PDA in remaining_accounts
+    await execute([await voynich.methods.setConfig(configArgs(DEADLINE_SLOTS)).accountsStrict({
+      admin: admin.publicKey, config, ...events(voynich.programId),
+    }).instruction()], [])
+    const bondModel = await createModel('bond-model')
+    await uploadAndSeal(bondModel)
+    await execute([await ownerGrant(bondModel, first)], [owner])
+    const expiredCall = await open(bondModel)
+    const callData = await voynich.account.call.fetch(expiredCall.address)
+    await waitPast(BigInt(callData.deadlineSlot.toString()))
+
+    const callerBalBefore = await connection.getBalance(caller.publicKey, 'confirmed')
+    const refundIx = await voynich.methods.refundCall().accountsStrict({
+      actor: admin.publicKey,
+      call: expiredCall.address,
+      caller: caller.publicKey,
+      escrowTokens: null,
+      callerTokens: null,
+      tokenProgram: null,
+      ...events(voynich.programId),
+    }).remainingAccounts([{ pubkey: bondKey, isWritable: true, isSigner: false }]).instruction()
+    await execute([refundIx], [])
+
+    const expectedSlash = (PRICE * BigInt(DEFAULT_BOND_SLASH_BPS)) / 10_000n
+    const callerBalAfter = await connection.getBalance(caller.publicKey, 'confirmed')
+    assert.equal(BigInt(callerBalAfter - callerBalBefore), PRICE + expectedSlash)
+
+    const slashed = decodeBondAccount((await connection.getAccountInfo(bondKey, 'confirmed'))!.data)
+    assert.equal(slashed.bondedLamports.toString(), (initialDeposit - expectedSlash).toString())
+    assert.equal(slashed.slashedTotal.toString(), expectedSlash.toString())
+    assert.equal(slashed.missedCalls.toString(), '1')
+
+    // 5. Non-operator cannot withdraw_bond -> Unauthorized; over-withdraw -> InvalidBond
+    await assert.rejects(
+      execute([await voynich.methods.withdrawBond(bn(1_000_000)).accountsStrict({
+        operator: stranger.publicKey, enclave: first.address, bond: bondKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [stranger]),
+      /Unauthorized/,
+    )
+    await assert.rejects(
+      execute([await voynich.methods.withdrawBond(bn(initialDeposit)).accountsStrict({
+        operator: first.operator.publicKey, enclave: first.address, bond: bondKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [first.operator]),
+      /InvalidBond/,
+    )
+
+    // 6. Operator withdraws partial bond cleanly
+    const withdrawAmount = 5_000_000n
+    const opBefore = await connection.getBalance(first.operator.publicKey, 'confirmed')
+    await execute([await voynich.methods.withdrawBond(bn(withdrawAmount)).accountsStrict({
+      operator: first.operator.publicKey, enclave: first.address, bond: bondKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [first.operator])
+    const opAfter = await connection.getBalance(first.operator.publicKey, 'confirmed')
+    assert.equal(BigInt(opAfter - opBefore), withdrawAmount)
+
+    const finalBond = decodeBondAccount((await connection.getAccountInfo(bondKey, 'confirmed'))!.data)
+    assert.equal(finalBond.bondedLamports.toString(), (initialDeposit - expectedSlash - withdrawAmount).toString())
   })
 })

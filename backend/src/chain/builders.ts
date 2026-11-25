@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BN, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BN, BOND_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -422,7 +422,20 @@ export function builders(runtime: ChainRuntime) {
         }
         instructions.push(createAssociatedTokenAccountIdempotentInstruction(actor, callerTokens, row.caller, row.priceMint))
       }
-      instructions.push(await voynich.methods.refundCall().accountsStrict({ actor, call, caller: row.caller, escrowTokens: token ? getAssociatedTokenAddressSync(row.priceMint, call, true) : null, callerTokens, tokenProgram: token ? TOKEN_PROGRAM_ID : null, ...events }).instruction())
+      const bondKey = a.bond(row.enclave)
+      const bondInfo = await runtime.rpc.connection.getAccountInfo(bondKey, 'confirmed')
+      const bondRemaining = bondInfo && bondInfo.owner.equals(runtime.programId)
+        ? (() => {
+            try {
+              const decoded = decodeBondAccount(bondInfo.data)
+              return BigInt(decoded.bondedLamports.toString()) > 0n ? [{ pubkey: bondKey, isWritable: true, isSigner: false }] : []
+            } catch {
+              return []
+            }
+          })()
+        : []
+      const refundBuilder = voynich.methods.refundCall().accountsStrict({ actor, call, caller: row.caller, escrowTokens: token ? getAssociatedTokenAddressSync(row.priceMint, call, true) : null, callerTokens, tokenProgram: token ? TOKEN_PROGRAM_ID : null, ...events })
+      instructions.push(await (bondRemaining.length > 0 ? refundBuilder.remainingAccounts(bondRemaining) : refundBuilder).instruction())
       return ledger.build('refund_call', actor, instructions, { model: row.model.toBase58(), call: id }, requiredLamports)
     },
     async postBounty(body: c.PostBountyRequest) {
@@ -918,6 +931,57 @@ export function builders(runtime: ChainRuntime) {
           .instruction(),
       )
       return ledger.build('claim_split', payer, instructions, { model: row.key.toBase58(), split: split.toBase58() }, requiredLamports)
+    },
+    async depositBond(enclaveKeyRaw: string, body: c.DepositBondRequest) {
+      const targetKey = publicKey(enclaveKeyRaw)
+      const resolved = await runtime.db.enclave.findFirst({ where: { OR: [{ address: enclaveKeyRaw }, { signingKey: enclaveKeyRaw }] }, select: { address: true } })
+      const enclaveKey = resolved ? publicKey(resolved.address) : targetKey
+      const entry = await enclave(enclaveKey)
+      const operator = publicKey(body.wallet)
+      if (!entry.operator.equals(operator)) fail('UNAUTHORIZED', 'Only the enclave operator can deposit into its bond.', { stage: 'build' })
+      const amount = BigInt(body.amountLamports)
+      if (amount <= 0n) fail('INVALID_BOND', 'Bond deposit amount must be positive.', { stage: 'build' })
+      const bond = a.bond(enclaveKey)
+      const existingInfo = await runtime.rpc.connection.getAccountInfo(bond, 'confirmed')
+      const rent = existingInfo ? 0n : BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(BOND_SPACE))
+      const instruction = await voynich.methods
+        .depositBond(bn(amount))
+        .accountsStrict({
+          operator,
+          enclave: enclaveKey,
+          bond,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .instruction()
+      return ledger.build('deposit_bond', operator, [instruction], { bond: bond.toBase58() }, rent + amount)
+    },
+    async withdrawBond(enclaveKeyRaw: string, body: c.WithdrawBondRequest) {
+      const targetKey = publicKey(enclaveKeyRaw)
+      const resolved = await runtime.db.enclave.findFirst({ where: { OR: [{ address: enclaveKeyRaw }, { signingKey: enclaveKeyRaw }] }, select: { address: true } })
+      const enclaveKey = resolved ? publicKey(resolved.address) : targetKey
+      const entry = await enclave(enclaveKey)
+      const operator = publicKey(body.wallet)
+      if (!entry.operator.equals(operator)) fail('UNAUTHORIZED', 'Only the enclave operator can withdraw from its bond.', { stage: 'build' })
+      const amount = BigInt(body.amountLamports)
+      const bond = a.bond(enclaveKey)
+      const bondInfo = await runtime.rpc.connection.getAccountInfo(bond, 'confirmed')
+      const chainBond = bondInfo && bondInfo.owner.equals(runtime.programId) ? decodeBondAccount(bondInfo.data) : null
+      if (!chainBond) fail('BOND_NOT_FOUND', 'No operator bond is configured for this enclave.')
+      if (amount <= 0n || amount > BigInt(chainBond.bondedLamports.toString())) {
+        fail('INVALID_BOND', 'Withdraw amount exceeds the available bonded lamports.', { stage: 'build' })
+      }
+      const instruction = await voynich.methods
+        .withdrawBond(bn(amount))
+        .accountsStrict({
+          operator,
+          enclave: enclaveKey,
+          bond,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .instruction()
+      return ledger.build('withdraw_bond', operator, [instruction], { bond: bond.toBase58() }, 0n)
     },
   }
 }

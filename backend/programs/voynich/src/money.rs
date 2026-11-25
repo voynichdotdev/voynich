@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*, system_program};
 use anchor_spl::{associated_token, token::{self, CloseAccount, Token, TokenAccount, Transfer}};
-use crate::{contexts::{ClaimSplit, CloseSession, OpenCall, OpenSession, OpenSessionCall, RefundCall, SettleCall, SettleMeteredCall}, errors::VoynichError, state::{Call, Session}};
+use crate::{contexts::{ClaimSplit, CloseSession, DepositBond, OpenCall, OpenSession, OpenSessionCall, RefundCall, SettleCall, SettleMeteredCall, WithdrawBond}, errors::VoynichError, state::{Call, Session}};
 
 fn token_account(account: &Account<TokenAccount>, owner: Pubkey, mint: Pubkey, associated: bool) -> Result<()> {
     require_keys_eq!(account.owner, owner, VoynichError::InvalidTokenAccount);
@@ -164,7 +164,7 @@ pub fn settle_metered<'info>(
     Ok(())
 }
 
-pub fn refund(ctx: &Context<RefundCall>) -> Result<()> {
+pub fn refund<'info>(ctx: &Context<'_, '_, 'info, 'info, RefundCall<'info>>) -> Result<()> {
     let call = &ctx.accounts.call;
     let amount = call.escrow_amount();
     require_keys_eq!(ctx.accounts.caller.key(), call.caller, VoynichError::InvalidRecipient);
@@ -342,4 +342,25 @@ pub fn claim_split_payout(ctx: &Context<ClaimSplit>, amount: u64) -> Result<()> 
         )?;
     }
     Ok(())
+}
+
+pub fn deposit_bond(ctx: &Context<DepositBond>, amount: u64) -> Result<()> {
+    system_program::transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.operator.to_account_info(),
+                to: ctx.accounts.bond.to_account_info(),
+            },
+        ),
+        amount,
+    )
+}
+
+pub fn withdraw_bond(ctx: &Context<WithdrawBond>, amount: u64) -> Result<()> {
+    native(&ctx.accounts.bond.to_account_info(), &ctx.accounts.operator.to_account_info(), amount)
+}
+
+pub fn slash_bond(bond_info: &AccountInfo, caller_info: &AccountInfo, amount: u64) -> Result<()> {
+    native(bond_info, caller_info, amount)
 }

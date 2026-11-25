@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Voynich API",
-    "version": "0.1.31",
+    "version": "0.1.32",
     "description": "Public reads and unsigned transaction builds. No sessions or login. MODE=fixture serves isolated in-memory fixture sessions selected by X-Fixture-Session. Amounts and slots are decimal strings. Null mint means native SOL. Example fixture monetary values are not launch configuration."
   },
   "servers": [
@@ -85,6 +85,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -313,6 +315,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -541,6 +545,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -769,6 +775,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -1032,6 +1040,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -1268,6 +1278,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -1526,6 +1538,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -1762,6 +1776,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2019,6 +2035,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2248,6 +2266,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2487,6 +2507,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2734,6 +2756,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2981,6 +3005,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -3228,6 +3254,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -3474,6 +3502,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -3721,6 +3751,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -3967,6 +3999,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4214,6 +4248,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4460,6 +4496,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4706,6 +4744,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4942,6 +4982,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -5188,6 +5230,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -5434,6 +5478,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -5670,6 +5716,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -5916,6 +5964,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -6162,6 +6212,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -6398,6 +6450,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -6644,6 +6698,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -6890,6 +6946,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7136,6 +7194,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7395,6 +7455,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7631,6 +7693,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7867,6 +7931,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7905,6 +7971,740 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SetQuoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Build"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/enclaves/{key}/bond": {
+      "get": {
+        "operationId": "enclaveBond",
+        "summary": "Read the operator SOL bond, slash history, and missed call count for an enclave",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorBond"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/enclaves/{key}/bond/deposit/build": {
+      "post": {
+        "operationId": "depositBond",
+        "summary": "Build deposit_bond as the enclave operator to deposit SOL into the enclave Bond PDA",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositBondRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Build"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/enclaves/{key}/bond/withdraw/build": {
+      "post": {
+        "operationId": "withdrawBond",
+        "summary": "Build withdraw_bond as the enclave operator to withdraw unslashed SOL from the enclave Bond PDA",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawBondRequest"
               }
             }
           }
@@ -8138,6 +8938,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -8374,6 +9176,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -8602,6 +9406,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -8848,6 +9654,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -9095,6 +9903,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -9331,6 +10141,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -9560,6 +10372,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -9806,6 +10620,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -10043,6 +10859,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -10289,6 +11107,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -10525,6 +11345,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -10762,6 +11584,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -11009,6 +11833,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -11255,6 +12081,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -11547,6 +12375,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -11783,6 +12613,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12011,6 +12843,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12257,6 +13091,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12503,6 +13339,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12749,6 +13587,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12995,6 +13835,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -13231,6 +14073,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -13459,6 +14303,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -13705,6 +14551,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -13951,6 +14799,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -14190,6 +15040,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -14437,6 +15289,8 @@
                 "POLICY_REQUIRED",
                 "SPLIT_NOT_FOUND",
                 "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -15533,6 +16387,24 @@
                     "layoutVersion"
                   ],
                   "additionalProperties": false
+                },
+                "bondedLamports": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "missedCalls": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "slashedTotal": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
                 }
               },
               "required": [
@@ -15842,6 +16714,8 @@
                             "POLICY_REQUIRED",
                             "SPLIT_NOT_FOUND",
                             "INVALID_SPLIT",
+                            "BOND_NOT_FOUND",
+                            "INVALID_BOND",
                             "GRANT_REQUIRED",
                             "INVALID_QUOTE",
                             "INVALID_VERSION",
@@ -16140,7 +17014,9 @@
           "close_session",
           "open_session_call",
           "set_split",
-          "claim_split"
+          "claim_split",
+          "deposit_bond",
+          "withdraw_bond"
         ]
       },
       "AnswerMode": {
@@ -16191,6 +17067,8 @@
                   "POLICY_REQUIRED",
                   "SPLIT_NOT_FOUND",
                   "INVALID_SPLIT",
+                  "BOND_NOT_FOUND",
+                  "INVALID_BOND",
                   "GRANT_REQUIRED",
                   "INVALID_QUOTE",
                   "INVALID_VERSION",
@@ -17347,7 +18225,9 @@
               "close_session",
               "open_session_call",
               "set_split",
-              "claim_split"
+              "claim_split",
+              "deposit_bond",
+              "withdraw_bond"
             ]
           },
           "requiredSigners": {
@@ -17428,6 +18308,11 @@
                 "maxLength": 44
               },
               "split": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              "bond": {
                 "type": "string",
                 "minLength": 32,
                 "maxLength": 44
@@ -17713,6 +18598,8 @@
                       "POLICY_REQUIRED",
                       "SPLIT_NOT_FOUND",
                       "INVALID_SPLIT",
+                      "BOND_NOT_FOUND",
+                      "INVALID_BOND",
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
@@ -18035,6 +18922,8 @@
                           "POLICY_REQUIRED",
                           "SPLIT_NOT_FOUND",
                           "INVALID_SPLIT",
+                          "BOND_NOT_FOUND",
+                          "INVALID_BOND",
                           "GRANT_REQUIRED",
                           "INVALID_QUOTE",
                           "INVALID_VERSION",
@@ -18210,6 +19099,8 @@
                       "POLICY_REQUIRED",
                       "SPLIT_NOT_FOUND",
                       "INVALID_SPLIT",
+                      "BOND_NOT_FOUND",
+                      "INVALID_BOND",
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
@@ -18307,6 +19198,8 @@
               "POLICY_REQUIRED",
               "SPLIT_NOT_FOUND",
               "INVALID_SPLIT",
+              "BOND_NOT_FOUND",
+              "INVALID_BOND",
               "GRANT_REQUIRED",
               "INVALID_QUOTE",
               "INVALID_VERSION",
@@ -18476,6 +19369,8 @@
                       "POLICY_REQUIRED",
                       "SPLIT_NOT_FOUND",
                       "INVALID_SPLIT",
+                      "BOND_NOT_FOUND",
+                      "INVALID_BOND",
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
@@ -18666,6 +19561,8 @@
                       "POLICY_REQUIRED",
                       "SPLIT_NOT_FOUND",
                       "INVALID_SPLIT",
+                      "BOND_NOT_FOUND",
+                      "INVALID_BOND",
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
@@ -19237,6 +20134,26 @@
         ],
         "additionalProperties": false
       },
+      "DepositBondRequest": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "amountLamports": {
+            "type": "string",
+            "maxLength": 78,
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        },
+        "required": [
+          "wallet",
+          "amountLamports"
+        ],
+        "additionalProperties": false
+      },
       "DrawBountyRequest": {
         "type": "object",
         "properties": {
@@ -19444,6 +20361,24 @@
               "layoutVersion"
             ],
             "additionalProperties": false
+          },
+          "bondedLamports": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "missedCalls": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "slashedTotal": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
           }
         },
         "required": [
@@ -19606,6 +20541,24 @@
                   "layoutVersion"
                 ],
                 "additionalProperties": false
+              },
+              "bondedLamports": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
+              },
+              "missedCalls": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
+              },
+              "slashedTotal": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
               }
             },
             "required": [
@@ -20130,6 +21083,24 @@
                     "layoutVersion"
                   ],
                   "additionalProperties": false
+                },
+                "bondedLamports": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "missedCalls": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                },
+                "slashedTotal": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
                 }
               },
               "required": [
@@ -20227,6 +21198,8 @@
           "POLICY_REQUIRED",
           "SPLIT_NOT_FOUND",
           "INVALID_SPLIT",
+          "BOND_NOT_FOUND",
+          "INVALID_BOND",
           "GRANT_REQUIRED",
           "INVALID_QUOTE",
           "INVALID_VERSION",
@@ -20497,6 +21470,24 @@
                   "layoutVersion"
                 ],
                 "additionalProperties": false
+              },
+              "bondedLamports": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
+              },
+              "missedCalls": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
+              },
+              "slashedTotal": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
               }
             },
             "required": [
@@ -20755,6 +21746,24 @@
                         "layoutVersion"
                       ],
                       "additionalProperties": false
+                    },
+                    "bondedLamports": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                      "minLength": 1
+                    },
+                    "missedCalls": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                      "minLength": 1
+                    },
+                    "slashedTotal": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                      "minLength": 1
                     }
                   },
                   "required": [
@@ -25136,6 +26145,66 @@
         ],
         "additionalProperties": false
       },
+      "OperatorBond": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "enclave": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "operator": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "bondedLamports": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "slashedTotal": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "missedCalls": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "slashBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "updatedSlot": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "address",
+          "enclave",
+          "operator",
+          "bondedLamports",
+          "slashedTotal",
+          "missedCalls",
+          "slashBps",
+          "updatedSlot"
+        ],
+        "additionalProperties": false
+      },
       "Payment": {
         "type": "object",
         "properties": {
@@ -25636,6 +26705,8 @@
                                       "POLICY_REQUIRED",
                                       "SPLIT_NOT_FOUND",
                                       "INVALID_SPLIT",
+                                      "BOND_NOT_FOUND",
+                                      "INVALID_BOND",
                                       "GRANT_REQUIRED",
                                       "INVALID_QUOTE",
                                       "INVALID_VERSION",
@@ -25811,6 +26882,8 @@
                                   "POLICY_REQUIRED",
                                   "SPLIT_NOT_FOUND",
                                   "INVALID_SPLIT",
+                                  "BOND_NOT_FOUND",
+                                  "INVALID_BOND",
                                   "GRANT_REQUIRED",
                                   "INVALID_QUOTE",
                                   "INVALID_VERSION",
@@ -26602,6 +27675,24 @@
                       "layoutVersion"
                     ],
                     "additionalProperties": false
+                  },
+                  "bondedLamports": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "missedCalls": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "slashedTotal": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -26891,6 +27982,8 @@
                               "POLICY_REQUIRED",
                               "SPLIT_NOT_FOUND",
                               "INVALID_SPLIT",
+                              "BOND_NOT_FOUND",
+                              "INVALID_BOND",
                               "GRANT_REQUIRED",
                               "INVALID_QUOTE",
                               "INVALID_VERSION",
@@ -27202,6 +28295,8 @@
                               "POLICY_REQUIRED",
                               "SPLIT_NOT_FOUND",
                               "INVALID_SPLIT",
+                              "BOND_NOT_FOUND",
+                              "INVALID_BOND",
                               "GRANT_REQUIRED",
                               "INVALID_QUOTE",
                               "INVALID_VERSION",
@@ -28501,6 +29596,90 @@
                   "active",
                   "totalReceived",
                   "recipients",
+                  "updatedSlot"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "timestamp",
+              "type",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "type": {
+                "type": "string",
+                "const": "bond.updated"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "enclave": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "operator": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "bondedLamports": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "slashedTotal": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "missedCalls": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  },
+                  "slashBps": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "updatedSlot": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "address",
+                  "enclave",
+                  "operator",
+                  "bondedLamports",
+                  "slashedTotal",
+                  "missedCalls",
+                  "slashBps",
                   "updatedSlot"
                 ],
                 "additionalProperties": false
@@ -30937,6 +32116,26 @@
         "required": [
           "offset",
           "length"
+        ],
+        "additionalProperties": false
+      },
+      "WithdrawBondRequest": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "amountLamports": {
+            "type": "string",
+            "maxLength": 78,
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        },
+        "required": [
+          "wallet",
+          "amountLamports"
         ],
         "additionalProperties": false
       },

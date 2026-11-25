@@ -58,6 +58,9 @@ export function sessionPda(caller: Key, delegate: Key, nonce: bigint | number | 
 export function splitPda(model: Key, programId: Key = PROGRAM_ID): PublicKey {
   return pda(key(programId), utf8('split'), key(model).toBytes())
 }
+export function bondPda(enclave: Key, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('bond'), key(enclave).toBytes())
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -72,6 +75,7 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     modelVersion: (model: Key, version: number) => modelVersionPda(model, version, programId),
     session: (caller: Key, delegate: Key, nonce: bigint | number | string) => sessionPda(caller, delegate, nonce, programId),
     split: (model: Key) => splitPda(model, programId),
+    bond: (enclave: Key) => bondPda(enclave, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -118,6 +122,8 @@ export const GRANT_SPACE = 226
 export const MODEL_VERSION_SPACE = 8192
 export const SESSION_SPACE = 186
 export const SPLIT_SPACE = 526
+export const BOND_SPACE = 107
+export const DEFAULT_BOND_SLASH_BPS = 1000
 export const DEFAULT_MAX_OPEN_ANSWER_BYTES = 1024
 
 const matchesDisc = (data: Uint8Array, label: string) => {
@@ -1150,5 +1156,91 @@ export async function buildClaimSplitTx(params: {
   const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
   return new VersionedTransaction(
     new TransactionMessage({ payerKey: payer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export type DecodedBondAccount = {
+  enclave: PublicKey
+  operator: PublicKey
+  bondedLamports: BN
+  slashedTotal: BN
+  missedCalls: BN
+  slashBps: number
+  updatedSlot: BN
+  bump: number
+}
+
+export function decodeBondAccount(data: Uint8Array): DecodedBondAccount {
+  if (!matchesDisc(data, 'account:Bond') || data.length < BOND_SPACE) {
+    throw new Error('Invalid Bond account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const enclave = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const operator = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const bondedLamports = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const slashedTotal = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const missedCalls = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const slashBps = view.getUint16(offset, true); offset += 2
+  const updatedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const bump = data[offset++]!
+  return { enclave, operator, bondedLamports, slashedTotal, missedCalls, slashBps, updatedSlot, bump }
+}
+
+export async function buildDepositBondTx(params: {
+  connection: Connection
+  operator: Key
+  enclave: Key
+  amountLamports: bigint | number | string
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const operator = key(params.operator)
+  const enclave = key(params.enclave)
+  const bond = bondPda(enclave, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .depositBond(new BN(BigInt(params.amountLamports).toString()))
+    .accountsStrict({
+      operator,
+      enclave,
+      bond,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: operator, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildWithdrawBondTx(params: {
+  connection: Connection
+  operator: Key
+  enclave: Key
+  amountLamports: bigint | number | string
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const operator = key(params.operator)
+  const enclave = key(params.enclave)
+  const bond = bondPda(enclave, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .withdrawBond(new BN(BigInt(params.amountLamports).toString()))
+    .accountsStrict({
+      operator,
+      enclave,
+      bond,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: operator, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
   )
 }

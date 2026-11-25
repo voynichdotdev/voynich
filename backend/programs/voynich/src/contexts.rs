@@ -403,3 +403,21 @@ pub struct ClaimSplit<'info> {
     pub token_program: Option<Program<'info, Token>>,
     pub system_program: Program<'info, System>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct DepositBond<'info> {
+    #[account(mut)] pub operator: Signer<'info>,
+    #[account(seeds = [b"enclave", enclave.signing_key.as_ref()], bump = enclave.bump, has_one = operator @ VoynichError::Unauthorized)] pub enclave: Box<Account<'info, Enclave>>,
+    #[account(init_if_needed, payer = operator, space = Bond::SPACE, seeds = [b"bond", enclave.key().as_ref()], bump)] pub bond: Box<Account<'info, Bond>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct WithdrawBond<'info> {
+    #[account(mut)] pub operator: Signer<'info>,
+    #[account(seeds = [b"enclave", enclave.signing_key.as_ref()], bump = enclave.bump, has_one = operator @ VoynichError::Unauthorized)] pub enclave: Box<Account<'info, Enclave>>,
+    #[account(mut, seeds = [b"bond", enclave.key().as_ref()], bump = bond.bump, has_one = enclave @ VoynichError::InvalidBond, has_one = operator @ VoynichError::Unauthorized)] pub bond: Box<Account<'info, Bond>>,
+    pub system_program: Program<'info, System>,
+}

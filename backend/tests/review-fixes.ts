@@ -6058,3 +6058,81 @@ test('Build 12 Step 2: enclave Split remainingAccounts (SOL, SPL, callback coexi
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 13 Step 1: Bond PDA helpers, decodeBondAccount, tx builders, fixture bond routes, and SDK getBond/depositBond/withdrawBond', async () => {
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const { BOND_SPACE, DEFAULT_BOND_SLASH_BPS, addresses, bondPda, buildDepositBondTx, buildWithdrawBondTx, decodeBondAccount } = await import('../sdk/src/program.js')
+  const { DepositBondRequest, WithdrawBondRequest } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { sha256, utf8 } = await import('voynich/crypto')
+  const { createVoynich } = await import('../sdk/src/client.js')
+  const { buildApp } = await import('../src/app.js')
+
+  assert.equal(BOND_SPACE, 107)
+  assert.equal(DEFAULT_BOND_SLASH_BPS, 1000)
+  const enclaveKey = Keypair.generate().publicKey
+  const operatorKey = Keypair.generate().publicKey
+  assert(bondPda(enclaveKey).equals(addresses().bond(enclaveKey)))
+
+  // 1. decodeBondAccount round-trip
+  const buf = Buffer.alloc(BOND_SPACE)
+  Buffer.from(sha256(utf8('account:Bond')).subarray(0, 8)).copy(buf, 0)
+  let off = 8
+  enclaveKey.toBuffer().copy(buf, off); off += 32
+  operatorKey.toBuffer().copy(buf, off); off += 32
+  buf.writeBigUInt64LE(500_000_000n, off); off += 8
+  buf.writeBigUInt64LE(1_000_000n, off); off += 8
+  buf.writeBigUInt64LE(1n, off); off += 8
+  buf.writeUInt16LE(1000, off); off += 2
+  buf.writeBigUInt64LE(474_000_000n, off); off += 8
+  buf[off++] = 253
+
+  const decoded = decodeBondAccount(buf)
+  assert(decoded.enclave.equals(enclaveKey))
+  assert(decoded.operator.equals(operatorKey))
+  assert.equal(decoded.bondedLamports.toString(), '500000000')
+  assert.equal(decoded.slashedTotal.toString(), '1000000')
+  assert.equal(decoded.missedCalls.toString(), '1')
+  assert.equal(decoded.slashBps, 1000)
+  assert.equal(decoded.updatedSlot.toString(), '474000000')
+  assert.equal(decoded.bump, 253)
+
+  // 2. buildDepositBondTx & buildWithdrawBondTx build valid v0 transactions offline
+  const dummyConn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const blockhash = Keypair.generate().publicKey.toBase58()
+  const depTx = await buildDepositBondTx({ connection: dummyConn, operator: operatorKey, enclave: enclaveKey, amountLamports: 100_000_000n, recentBlockhash: blockhash })
+  assert.equal(depTx.message.compiledInstructions.length, 1)
+  const wdrTx = await buildWithdrawBondTx({ connection: dummyConn, operator: operatorKey, enclave: enclaveKey, amountLamports: 50_000_000n, recentBlockhash: blockhash })
+  assert.equal(wdrTx.message.compiledInstructions.length, 1)
+
+  // 3. Request validation rejects zero amounts
+  assert.equal(DepositBondRequest.safeParse({ wallet: operatorKey.toBase58(), amountLamports: '0' }).success, false)
+  assert.equal(WithdrawBondRequest.safeParse({ wallet: operatorKey.toBase58(), amountLamports: '0' }).success, false)
+  assert.equal(DepositBondRequest.safeParse({ wallet: operatorKey.toBase58(), amountLamports: '100000000' }).success, true)
+
+  // 4. Fixture API + SDK getBond / depositBond / withdrawBond
+  const app = buildApp()
+  const operatorWallet = {
+    publicKey: new PublicKey(FIXTURE.operator),
+    async signTransaction(tx: import('@solana/web3.js').VersionedTransaction) { return tx },
+  }
+  const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', 'bond-test-session')
+    return app.request(new Request(req, { headers }))
+  }) as typeof fetch
+  const sdk = createVoynich({ apiUrl: 'http://localhost', signer: operatorWallet, fetch: fetchFixture, pollMs: 5 })
+
+  assert.equal(await sdk.getBond(FIXTURE.enclave), null)
+  const deposited = await sdk.depositBond(FIXTURE.enclave, 250_000_000n)
+  assert.equal(deposited.bondedLamports, '250000000')
+  assert.equal(deposited.slashBps, 1000)
+  assert.equal(deposited.missedCalls, '0')
+
+  const withdrawn = await sdk.withdrawBond(FIXTURE.enclave, 100_000_000n)
+  assert.equal(withdrawn.bondedLamports, '150000000')
+
+  const detail = await sdk.enclave(FIXTURE.enclave)
+  assert.equal(detail.enclave.bondedLamports, '150000000')
+})

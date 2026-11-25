@@ -1,17 +1,17 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { PublicKey, type Connection } from '@solana/web3.js'
-import { decodeManifest, type AttestationRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type Receipt, type ModelQuery } from '@voynich/contract'
+import { decodeManifest, type AttestationRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Receipt, type ModelQuery } from '@voynich/contract'
 import { toBase64 } from 'voynich/crypto'
 import { fail } from './errors.js'
 
 type ModelRow = Prisma.ModelGetPayload<{ include: { weights: true } }>
-type EnclaveRow = Prisma.EnclaveGetPayload<{ include: { attestationRecord: true } }>
-type GrantRow = Prisma.GrantGetPayload<{ include: { model: true; enclave: { include: { attestationRecord: true } } } }>
+type EnclaveRow = Prisma.EnclaveGetPayload<{ include: { attestationRecord: true; bond: true } }>
+type GrantRow = Prisma.GrantGetPayload<{ include: { model: true; enclave: { include: { attestationRecord: true; bond: true } } } }>
 type ReceiptRow = Prisma.ReceiptGetPayload<{ include: { call: { select: { caller: true; callerIsProgram: true } }; model: true; payments: true; attestationRecord: true } }>
 const callInclude = { receipt: true, model: { select: { name: true } } } as const
 type CallRow = Prisma.CallGetPayload<{ include: typeof callInclude }>
 type Page = { limit: number; cursor?: string }
-const enclaveInclude = { attestationRecord: true } as const
+const enclaveInclude = { attestationRecord: true, bond: true } as const
 const grantInclude = { model: true, enclave: { include: enclaveInclude } } as const
 const receiptInclude = { call: { select: { caller: true, callerIsProgram: true } }, model: true, payments: true, attestationRecord: true } as const
 const page = <T>(rows: T[], query: Page) => ({ items: rows.slice(0, query.limit), page: { nextCursor: rows.length > query.limit ? String(Number(query.cursor ?? 0) + query.limit) : null, hasMore: rows.length > query.limit }, asOf: new Date().toISOString() })
@@ -154,7 +154,10 @@ export class ReadModel {
   }
   async enclaveRow(row: EnclaveRow): Promise<Enclave> {
     const slot = await this.currentSlot()
-    return { address: row.address, signingKey: row.signingKey, encryptionKey: toBase64(row.encryptionKey), operator: row.operator, endpoint: row.endpoint, relayPath: '/v1/calls/{call}/input', hardwareType: row.attestationRecord.hardwareType === 'sev_snp' ? 'sev-snp' : row.attestationRecord.hardwareType, measurement: row.attestationRecord.measurement, expiresAtSlot: String(row.attestationRecord.expiresAtSlot), status: row.attestationRecord.expiresAtSlot > slot ? 'live' : 'expired', reachable: row.reachable, lastSeen: row.lastSeen?.toISOString() ?? null, callsSettled: String(row.callsSettled), modelsHeld: await this.db.grant.count({ where: { enclaveAddress: row.address, revokedSlot: null } }), attestation: this.attestationRow(row.attestationRecord, row.encryptionKey) }
+    return {
+      address: row.address, signingKey: row.signingKey, encryptionKey: toBase64(row.encryptionKey), operator: row.operator, endpoint: row.endpoint, relayPath: '/v1/calls/{call}/input', hardwareType: row.attestationRecord.hardwareType === 'sev_snp' ? 'sev-snp' : row.attestationRecord.hardwareType, measurement: row.attestationRecord.measurement, expiresAtSlot: String(row.attestationRecord.expiresAtSlot), status: row.attestationRecord.expiresAtSlot > slot ? 'live' : 'expired', reachable: row.reachable, lastSeen: row.lastSeen?.toISOString() ?? null, callsSettled: String(row.callsSettled), modelsHeld: await this.db.grant.count({ where: { enclaveAddress: row.address, revokedSlot: null } }), attestation: this.attestationRow(row.attestationRecord, row.encryptionKey),
+      ...(row.bond ? { bondedLamports: row.bond.bondedLamports.toFixed(0), missedCalls: String(row.bond.missedCalls), slashedTotal: row.bond.slashedTotal.toFixed(0) } : {}),
+    }
   }
   async grantRow(row: GrantRow): Promise<Grant> {
     return { address: row.address, model: row.modelAddress, modelName: row.model.name, enclave: row.enclaveAddress, wrappedKey: toBase64(row.wrappedKey), grantedBy: row.grantedBy, grantedSlot: String(row.grantedSlot), status: row.revokedSlot !== null ? 'revoked' : row.enclave.attestationRecord.expiresAtSlot <= await this.currentSlot() ? 'expired' : 'live', quotedOperatorShareBps: row.quotedOperatorShareBps ?? null, medianAnswerMs: row.medianAnswerMs ?? null }
@@ -360,5 +363,24 @@ export class ReadModel {
     const row = await this.db.split.findUnique({ where: { modelAddress: resolved.address } })
     if (!row) fail('SPLIT_NOT_FOUND', 'No revenue split is configured for this model.')
     return this.splitRow(row)
+  }
+  bondRow(row: Prisma.BondGetPayload<Record<string, never>>): OperatorBond {
+    return {
+      address: row.address,
+      enclave: row.enclaveAddress,
+      operator: row.operator,
+      bondedLamports: row.bondedLamports.toFixed(0),
+      slashedTotal: row.slashedTotal.toFixed(0),
+      missedCalls: String(row.missedCalls),
+      slashBps: row.slashBps,
+      updatedSlot: String(row.updatedSlot),
+    }
+  }
+  async enclaveBond(key: string): Promise<OperatorBond> {
+    const resolved = await this.db.enclave.findFirst({ where: { OR: [{ address: key }, { signingKey: key }] }, select: { address: true } })
+    if (!resolved) fail('ENCLAVE_NOT_FOUND', 'This enclave was not found.')
+    const row = await this.db.bond.findUnique({ where: { enclaveAddress: resolved.address } })
+    if (!row) fail('BOND_NOT_FOUND', 'No operator bond is configured for this enclave.')
+    return this.bondRow(row)
   }
 }

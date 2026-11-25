@@ -110,6 +110,12 @@ export function buildApp() {
     const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address))
     return c.json({ enclave, grants: state.grants.filter(g => g.enclave === enclave.address), receipts: state.receipts.filter(r => r.enclave === enclave.address), earnings: state.earnings('operator', enclave.operator) })
   })
+  app.get('/v1/enclaves/:key/bond', c => {
+    const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address))
+    const bond = state.bonds.get(enclave.address)
+    if (!bond) fail('BOND_NOT_FOUND', 'No operator bond is configured for this enclave.')
+    return c.json(bond)
+  })
   app.get('/v1/measurements', c => {
     const state = c.get('fixture'); const q = readQuery(c, s.MeasurementQuery, queryKeys)
     const items = q.status ? state.measurements.filter(m => m.status === q.status) : state.measurements
@@ -632,6 +638,51 @@ export function buildApp() {
   app.post('/v1/calls/:id/settle/build', async c => {
     const state = c.get('fixture'); const call = state.call(readParam(c, 'id', s.Address)); const body = await readJson(c, s.SettleCallRequest)
     return c.json(state.settleMetered(call, body))
+  })
+  app.post('/v1/enclaves/:key/bond/deposit/build', async c => {
+    const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address)); const body = await readJson(c, s.DepositBondRequest)
+    if (enclave.operator !== body.wallet) fail('UNAUTHORIZED', 'Only the enclave operator can deposit into its bond.', { stage: 'build' })
+    const bondAddress = fixtureAddress(`bond:${enclave.address}`)
+    const amount = BigInt(body.amountLamports)
+    return c.json(state.build('deposit_bond', [body.wallet], { bond: bondAddress }, () => {
+      const existing = state.bonds.get(enclave.address)
+      const next: s.OperatorBond = {
+        address: bondAddress,
+        enclave: enclave.address,
+        operator: body.wallet,
+        bondedLamports: String(BigInt(existing?.bondedLamports ?? '0') + amount),
+        slashedTotal: existing?.slashedTotal ?? '0',
+        missedCalls: existing?.missedCalls ?? '0',
+        slashBps: existing?.slashBps ?? s.DEFAULT_BOND_SLASH_BPS,
+        updatedSlot: String(state.slot),
+      }
+      state.bonds.set(enclave.address, next)
+      enclave.bondedLamports = next.bondedLamports
+      enclave.missedCalls = next.missedCalls
+      enclave.slashedTotal = next.slashedTotal
+      state.emit('bond.updated', next)
+      state.emit('enclave.updated', enclave)
+    }))
+  })
+  app.post('/v1/enclaves/:key/bond/withdraw/build', async c => {
+    const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address)); const body = await readJson(c, s.WithdrawBondRequest)
+    if (enclave.operator !== body.wallet) fail('UNAUTHORIZED', 'Only the enclave operator can withdraw from its bond.', { stage: 'build' })
+    const existing = state.bonds.get(enclave.address)
+    if (!existing) fail('BOND_NOT_FOUND', 'No operator bond is configured for this enclave.')
+    const amount = BigInt(body.amountLamports)
+    const available = BigInt(existing.bondedLamports)
+    if (amount <= 0n || amount > available) fail('INVALID_BOND', 'Withdraw amount exceeds the available bonded lamports.', { stage: 'build' })
+    return c.json(state.build('withdraw_bond', [body.wallet], { bond: existing.address }, () => {
+      const next: s.OperatorBond = {
+        ...existing,
+        bondedLamports: String(available - amount),
+        updatedSlot: String(state.slot),
+      }
+      state.bonds.set(enclave.address, next)
+      enclave.bondedLamports = next.bondedLamports
+      state.emit('bond.updated', next)
+      state.emit('enclave.updated', enclave)
+    }))
   })
   app.post('/v1/calls/:id/refund/build', async c => {
     const state = c.get('fixture'); const call = state.call(readParam(c, 'id', s.Address)); const body = await readJson(c, s.WalletRequest)

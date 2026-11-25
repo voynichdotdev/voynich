@@ -419,6 +419,24 @@ impl Split {
     pub const SPACE: usize = 8 + 32 * 3 + 1 + 8 + 8 + (4 + SplitRecipient::SPACE * MAX_SPLIT_RECIPIENTS) + 1;
 }
 
+pub const DEFAULT_BOND_SLASH_BPS: u16 = 1000;
+pub const SPL_BOND_SLASH_LAMPORTS: u64 = 1_000_000;
+
+#[account]
+pub struct Bond {
+    pub enclave: Pubkey,
+    pub operator: Pubkey,
+    pub bonded_lamports: u64,
+    pub slashed_total: u64,
+    pub missed_calls: u64,
+    pub slash_bps: u16,
+    pub updated_slot: u64,
+    pub bump: u8,
+}
+impl Bond {
+    pub const SPACE: usize = 8 + 32 * 2 + 8 * 4 + 2 + 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -732,5 +750,23 @@ mod tests {
         s.try_serialize(&mut buf).unwrap();
         assert_eq!(Split::SPACE, 526);
         assert_eq!(buf.len(), Split::SPACE);
+    }
+
+    #[test]
+    fn worst_case_bond_fits_within_space() {
+        let b = Bond {
+            enclave: Pubkey::new_unique(),
+            operator: Pubkey::new_unique(),
+            bonded_lamports: u64::MAX,
+            slashed_total: u64::MAX,
+            missed_calls: u64::MAX,
+            slash_bps: 10_000,
+            updated_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut buf = Vec::new();
+        b.try_serialize(&mut buf).unwrap();
+        assert_eq!(Bond::SPACE, 107);
+        assert_eq!(buf.len(), Bond::SPACE);
     }
 }
