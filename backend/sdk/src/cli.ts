@@ -83,7 +83,7 @@ async function solanaCliKeypairPath(): Promise<string> {
 async function configureCliSigner(): Promise<void> {
   if (command === 'enclave' && ['run', 'register'].includes(argument ?? '')) {
     process.env.OPERATOR_KEYPAIR = values.keypair ?? process.env.OPERATOR_KEYPAIR ?? await solanaCliKeypairPath()
-  } else if (command === 'enclave' && argument === 'quote') {
+  } else if (command === 'enclave' && (argument === 'quote' || (argument === 'bond' && (['deposit', 'withdraw'].includes(third ?? '') || (third === 'show' && !fourth && !values.enclave))))) {
     process.env.VOYNICH_KEYPAIR = values.keypair ?? process.env.VOYNICH_KEYPAIR ?? process.env.OPERATOR_KEYPAIR ?? await solanaCliKeypairPath()
   } else if (
     (['call', 'seal', 'grant', 'refund', 'settle'].includes(command ?? '') && !(command === 'call' && values.session))
@@ -496,6 +496,51 @@ async function main(): Promise<unknown> {
         transaction: tx.signature ?? null,
         status: tx.status,
       }
+    }
+    if (argument === 'bond') {
+      const action = required(third, 'bond subcommand (show, deposit, or withdraw)')
+      const resolveOperatorEnclave = async (client: ReturnType<typeof createVoynich>, explicit?: string) => {
+        if (explicit) return explicit
+        const signer = await loadCliKeypair()
+        const page = await client.enclaves({ limit: 100 })
+        const owned = page.items.filter(item => item.operator === signer.publicKey.toBase58())
+        if (owned.length === 1) return owned[0]!.address
+        if (owned.length === 0) throw new Error('No enclave found for this operator keypair. Pass --enclave <key>.')
+        throw new Error('Multiple enclaves found for this operator keypair. Pass --enclave <key>.')
+      }
+      if (action === 'show') {
+        const explicit = fourth ?? values.enclave
+        if (explicit) {
+          const bond = await voynich.getBond(explicit)
+          return bond ?? { enclave: explicit, bond: null }
+        }
+        const signer = await loadCliKeypair()
+        const client = createVoynich({
+          apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+          rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+          signer,
+        })
+        const enclaveKey = await resolveOperatorEnclave(client)
+        const bond = await client.getBond(enclaveKey)
+        return bond ?? { enclave: enclaveKey, bond: null }
+      }
+      if (action === 'deposit' || action === 'withdraw') {
+        const amountStr = required(fourth, 'lamports').trim()
+        if (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n) {
+          throw new Error('Bond amount must be a positive integer number of lamports.')
+        }
+        const signer = await loadCliKeypair()
+        const client = createVoynich({
+          apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+          rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+          signer,
+        })
+        const enclaveKey = await resolveOperatorEnclave(client, values.enclave)
+        return action === 'deposit'
+          ? await client.depositBond(enclaveKey, amountStr)
+          : await client.withdrawBond(enclaveKey, amountStr)
+      }
+      throw new Error('Use enclave bond show [<enclave>], enclave bond deposit <lamports>, or enclave bond withdraw <lamports>.')
     }
     return enclaveCommand(argument)
   }

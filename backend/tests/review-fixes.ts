@@ -6136,3 +6136,105 @@ test('Build 13 Step 1: Bond PDA helpers, decodeBondAccount, tx builders, fixture
   const detail = await sdk.enclave(FIXTURE.enclave)
   assert.equal(detail.enclave.bondedLamports, '150000000')
 })
+
+test('Build 13 Step 2: crank Bond remainingAccounts attachment on expired refund_call and CLI enclave bond show/deposit/withdraw', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { PROGRAM_ID, bondPda, chainPrograms } = await import('../sdk/src/program.js')
+  const { buildExpiredCallRefundInstructions } = await import('../src/chain/crank.js')
+  const { buildApp } = await import('../src/app.js')
+  const execFileAsync = promisify(execFile)
+
+  // 1. crank buildExpiredCallRefundInstructions attaches writable Bond PDA when bonded, omits when unbonded (SOL & SPL)
+  const conn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const { voynich } = chainPrograms(conn, { programId: PROGRAM_ID })
+  const actor = Keypair.generate().publicKey
+  const callKey = Keypair.generate().publicKey
+  const callerKey = Keypair.generate().publicKey
+  const enclaveKey = Keypair.generate().publicKey
+  const mintKey = Keypair.generate().publicKey
+  const expectedBond = bondPda(enclaveKey, PROGRAM_ID)
+
+  const solNoBond = await buildExpiredCallRefundInstructions(voynich, actor, callKey, { caller: callerKey, priceMint: PublicKey.default }, null)
+  assert.equal(solNoBond.length, 1)
+  assert.equal(solNoBond[0]!.keys.some(k => k.pubkey.equals(expectedBond)), false)
+
+  const solWithBond = await buildExpiredCallRefundInstructions(voynich, actor, callKey, { caller: callerKey, priceMint: PublicKey.default }, expectedBond)
+  assert.equal(solWithBond.length, 1)
+  const bondMeta = solWithBond[0]!.keys.find(k => k.pubkey.equals(expectedBond))
+  assert.ok(bondMeta, 'SOL refund_call must include Bond PDA in remainingAccounts')
+  assert.equal(bondMeta.isWritable, true)
+  assert.equal(bondMeta.isSigner, false)
+
+  const splWithBond = await buildExpiredCallRefundInstructions(voynich, actor, callKey, { caller: callerKey, priceMint: mintKey }, expectedBond)
+  assert.equal(splWithBond.length, 2, 'SPL refund prepends idempotent caller ATA creation')
+  const splBondMeta = splWithBond[1]!.keys.find(k => k.pubkey.equals(expectedBond))
+  assert.ok(splBondMeta && splBondMeta.isWritable && !splBondMeta.isSigner)
+
+  // 2. Compiled CLI `voynich enclave bond show|deposit|withdraw` against in-process fixture API
+  const opKp = Keypair.generate()
+  const fixtureApp = buildApp()
+  const wrapperApp = new (await import('hono')).Hono()
+  wrapperApp.all('*', async c => {
+    const url = new URL(c.req.url)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('X-Fixture-Session', 'cli-bond-test')
+    let bodyText: string | undefined
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      bodyText = (await c.req.text()).replaceAll(opKp.publicKey.toBase58(), FIXTURE.operator)
+    }
+    const res = await fixtureApp.request(new Request(url.toString(), {
+      method: c.req.method,
+      headers,
+      body: bodyText,
+    }))
+    // Map FIXTURE.operator -> opKp in GET /v1/enclaves so auto-resolve matches opKp!
+    if (c.req.method === 'GET' && url.pathname === '/v1/enclaves') {
+      const text = (await res.text()).replaceAll(FIXTURE.operator, opKp.publicKey.toBase58())
+      return new Response(text, { status: res.status, headers: res.headers })
+    }
+    return res
+  })
+  const server = serve({ fetch: wrapperApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b13s2-cli-'))
+  const opKeyPath = join(scratch, 'operator.json')
+  writeFileSync(opKeyPath, JSON.stringify([...opKp.secretKey]))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  try {
+    const runCli = async (args: string[]) => {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, ...args], { cwd: resolve('.'), encoding: 'utf8' })
+      return JSON.parse(stdout) as Record<string, unknown>
+    }
+
+    // show before deposit (explicit enclave key)
+    const emptyShow = await runCli(['enclave', 'bond', 'show', FIXTURE.enclave])
+    assert.equal(emptyShow.bond, null)
+
+    // deposit 250_000_000 lamports (auto-resolving enclave from operator keypair!)
+    const depRes = await runCli(['enclave', 'bond', 'deposit', '250000000', '--keypair', opKeyPath])
+    assert.equal(depRes.bondedLamports, '250000000')
+    assert.equal(depRes.slashBps, 1000)
+
+    // show auto-resolved from operator keypair
+    const activeShow = await runCli(['enclave', 'bond', 'show', '--keypair', opKeyPath])
+    assert.equal(activeShow.bondedLamports, '250000000')
+
+    // withdraw 100_000_000 lamports
+    const wdrRes = await runCli(['enclave', 'bond', 'withdraw', '100000000', '--keypair', opKeyPath])
+    assert.equal(wdrRes.bondedLamports, '150000000')
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

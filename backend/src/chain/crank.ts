@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { Keypair, PublicKey, SystemProgram, type TransactionInstruction } from '@solana/web3.js'
 import type { Prisma } from '@prisma/client'
 import { createAssociatedTokenAccountIdempotentInstruction, createBurnCheckedInstruction, getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, unpackMint, type Mint } from '@solana/spl-token'
-import { decodeCallAccount, decodeSessionAccount, eventAccounts, type DecodedSessionAccount } from 'voynich/program'
+import { bondPda, decodeBondAccount, decodeCallAccount, decodeSessionAccount, eventAccounts, type DecodedCallAccount, type DecodedSessionAccount } from 'voynich/program'
 import { createKeeperRuntime } from '../engines/keeper/runtime.js'
 import { createScheduler } from '../engines/keeper/scheduler.js'
 import { createJournal } from '../engines/keeper/journal.js'
@@ -24,6 +24,34 @@ const wire = (instruction: TransactionInstruction): WireInstruction => ({ progra
 
 export function refundCallerTokenAccount(priceMint: PublicKey, caller: PublicKey): PublicKey {
   return getAssociatedTokenAddressSync(priceMint, caller, true)
+}
+
+export async function buildExpiredCallRefundInstructions(
+  voynichProgram: ChainRuntime['programs']['voynich'],
+  actor: PublicKey,
+  callKey: PublicKey,
+  chainCall: Pick<DecodedCallAccount, 'caller' | 'priceMint'>,
+  bondKey?: PublicKey | null,
+): Promise<TransactionInstruction[]> {
+  const token = !chainCall.priceMint.equals(PublicKey.default)
+  const callerTokens = token ? refundCallerTokenAccount(chainCall.priceMint, chainCall.caller) : null
+  const builder = voynichProgram.methods.refundCall().accountsStrict({
+    actor,
+    call: callKey,
+    caller: chainCall.caller,
+    escrowTokens: token ? getAssociatedTokenAddressSync(chainCall.priceMint, callKey, true) : null,
+    callerTokens,
+    tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+    ...eventAccounts(voynichProgram.programId),
+  })
+  const refundIx = await (bondKey
+    ? builder.remainingAccounts([{ pubkey: bondKey, isWritable: true, isSigner: false }])
+    : builder
+  ).instruction()
+  return [
+    ...(token ? [createAssociatedTokenAccountIdempotentInstruction(actor, callerTokens!, chainCall.caller, chainCall.priceMint)] : []),
+    refundIx,
+  ]
 }
 
 export async function buildExpiredSessionCloseInstructions(
@@ -81,12 +109,18 @@ export async function runCrank(runtime: ChainRuntime) {
       if (!info || !info.owner.equals(programs.voynich.programId)) return
       const chainCall = decodeCallAccount(info.data)
       if (!('open' in chainCall.status)) return
-      const token = !chainCall.priceMint.equals(PublicKey.default)
-      const callerTokens = token ? refundCallerTokenAccount(chainCall.priceMint, chainCall.caller) : null
-      await journal.execute(`refund:${call.address}`, async () => [
-        ...(token ? [createAssociatedTokenAccountIdempotentInstruction(keeper.publicKey, callerTokens!, chainCall.caller, chainCall.priceMint)] : []),
-        await programs.voynich.methods.refundCall().accountsStrict({ actor: keeper.publicKey, call: new PublicKey(call.address), caller: chainCall.caller, escrowTokens: token ? getAssociatedTokenAddressSync(chainCall.priceMint, new PublicKey(call.address), true) : null, callerTokens, tokenProgram: token ? TOKEN_PROGRAM_ID : null, ...eventAccounts(programs.voynich.programId) }).instruction(),
-      ])
+      const callKey = new PublicKey(call.address)
+      const candidateBond = bondPda(chainCall.enclave, programs.voynich.programId)
+      const bondInfo = await rpc.connection.getAccountInfo(candidateBond, 'confirmed')
+      let activeBond: PublicKey | null = null
+      if (bondInfo && bondInfo.owner.equals(programs.voynich.programId)) {
+        try {
+          if (BigInt(decodeBondAccount(bondInfo.data).bondedLamports.toString()) > 0n) activeBond = candidateBond
+        } catch {}
+      }
+      await journal.execute(`refund:${call.address}`, () =>
+        buildExpiredCallRefundInstructions(programs.voynich, keeper.publicKey, callKey, chainCall, activeBond),
+      )
     })))
   }
 
