@@ -32,7 +32,7 @@
   {
     "account": "Model",
     "discriminator": "`98ddf77ab97ddf97`",
-    "fields": 27,
+    "fields": 28,
     "bytes": ""
   },
   {
@@ -58,5 +58,11 @@
     "discriminator": "`f3514873d6bc4890`",
     "fields": 12,
     "bytes": "186"
+  },
+  {
+    "account": "Split",
+    "discriminator": "`a6fe8d2e17dd81c3`",
+    "fields": 8,
+    "bytes": ""
   }
 ]

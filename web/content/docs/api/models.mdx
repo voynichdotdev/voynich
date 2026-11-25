@@ -1,9 +1,9 @@
 ---
 title: Models
-description: Every model route of the Voynich HTTP API, from listing and reading models, versions, policies and ciphertext to the cost quote and the fifteen builds of a model.
+description: Every model route of the Voynich HTTP API, from listing and reading models, versions, policies, splits and ciphertext to the cost quote and the seventeen builds of a model.
 ---
 
-Seven routes read models, versions and policies, one quotes the cost of sealing, and fifteen build the transactions that create, upgrade and change a model. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models).
+Eight routes read models, versions, policies and splits, one quotes the cost of sealing, and seventeen build the transactions that create, upgrade and change a model. What a sealed model is on chain is told in [Sealed models](/docs/concepts/sealed-models).
 
 In every path, `{id}` is the model's account address or its name, such as `sketch-32`. The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
 
@@ -86,6 +86,9 @@ True when the model has an active on-chain [ModelPolicy](#modelpolicy) PDA (`["p
 </Field>
 <Field name="currentVersion" type="integer">
 Active release number (`1` on initial seal; incremented atomically by `publish_version`).
+</Field>
+<Field name="hasSplit" type="boolean">
+True when the model has an active on-chain `Split` PDA (`["split", model]`) routing `owner_amount`.
 </Field>
 </Fields>
 
@@ -413,6 +416,10 @@ Slot the version went live (`null` while uploading).
 </Field>
 </Fields>
 
+## `GET /v1/models/{id}/split`
+
+Reads the model's on-chain revenue split (`ModelSplit`: `{ address, model, authority, mint, active, totalReceived, updatedSlot, recipients }`, where each recipient holds `{ wallet, shareBps, accrued, claimed, claimable }`). Answers `SPLIT_NOT_FOUND` (`404`) when no `Split` PDA exists for the model.
+
 ## `POST /v1/models/quote`
 
 Computes what sealing a model of a given ciphertext size costs, from the cluster's rent and the fees of the transactions a sealing sends. With the model's create metadata in `create`, it also measures the `create_model` transaction and says whether it fits. It builds nothing, signs nothing and needs no Weights account to exist.
@@ -554,7 +561,7 @@ Next: when `canCreate` is `true`, create the Weights accounts at the addresses i
 
 ## Builds
 
-The fifteen routes below each return a [Build](/docs/api/transactions#build): an unsigned transaction and the addresses it creates. Sign it and send it through [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit). Signing, the order of signatures and the errors every build shares are in [Transactions](/docs/api/transactions).
+The seventeen routes below each return a [Build](/docs/api/transactions#build): an unsigned transaction and the addresses it creates. Sign it and send it through [`POST /v1/transactions/submit`](/docs/api/transactions#post-v1transactionssubmit). Signing, the order of signatures and the errors every build shares are in [Transactions](/docs/api/transactions).
 
 Each build route can return `MODEL_NOT_FOUND` (except `POST /v1/models/build`), `INSUFFICIENT_FUNDS`, `SIMULATION_FAILED` and `PROGRAM_REFUSED` as told in [Errors from a build](/docs/api/transactions#errors-from-a-build). The tables below list what each adds.
 
@@ -1008,6 +1015,18 @@ Body (`SealVersionRangeRequest`): `{ wallet, version, chunkCount? }`. Returns a 
 Builds [`publish_version`](/docs/program/instructions#publishversion): verifies the Merkle root (`ciphertextSha256`) and atomically swaps the uploading version live onto `Model`, archiving the prior version without invalidating existing grants.
 
 Body (`PublishVersionRequest`): `{ wallet, version, ciphertextSha256 }`. Returns a Build with `action: "publish_version"` and `addresses: { model, modelVersion }`. Answers `INVALID_VERSION` (`422`), `UPLOAD_INCOMPLETE`, or `CIPHERTEXT_HASH_MISMATCH` on invalid state or hash.
+
+## `POST /v1/models/{id}/split/build`
+
+Builds [`set_split`](/docs/program/instructions#setsplit): creates, updates, or deactivates the model's 526-byte `Split` PDA (`["split", model]`).
+
+Body (`SetSplitRequest`): `{ wallet, recipients: [{ wallet, shareBps }] }` (1 to 8 unique wallets with `shareBps > 0` summing to `10000`, or `[]` to deactivate). Returns a Build with `action: "set_split"` and `addresses: { model, split }`. Answers `INVALID_SPLIT` (`422`) on invalid recipients or unclaimed balances.
+
+## `POST /v1/models/{id}/split/claim/build`
+
+Builds [`claim_split`](/docs/program/instructions#claimsplit): permissionlessly pays `accrued - claimed` from the `Split` PDA directly to `recipient`.
+
+Body (`ClaimSplitRequest`): `{ wallet, recipient? }` (`wallet` pays the tx fee; `recipient` defaults to `wallet`). Returns a Build with `action: "claim_split"` and `addresses: { model, split }`. Answers `SPLIT_NOT_FOUND` (`404`) or `INVALID_SPLIT` (`422`) when nothing is claimable.
 
 ## Read next
 

@@ -236,5 +236,12 @@
     "hex": "`0x1791`",
     "message": "The caller session is closed, expired, out of budget, or does not match this call.",
     "raisedWhen": "In `open_session`: `budget == 0`, `ttl_slots == 0`, or `delegate` is the default address. In `open_session_call` / `open_session_metered_call`: the session is closed, expired, mismatched on `mint` or `model`, or lacks remaining `budget - spent`. In `close_session`: the session is already closed, or a non-caller tried to close it before `expires_at_slot`."
+  },
+  {
+    "name": "InvalidSplit",
+    "code": "6034",
+    "hex": "`0x1792`",
+    "message": "The revenue split configuration, remaining account, or claim is invalid.",
+    "raisedWhen": "In `set_split`: more than 8 recipients, duplicate or default recipient wallets, `share_bps == 0`, shares not summing to 10,000, or rewriting recipients while unclaimed balance remains (`accrued > claimed`). In `settle_call` / `settle_metered_call`: `model.has_split` is true but the canonical Split PDA (or SPL escrow) was omitted from remaining accounts. In `claim_split`: `recipient` is not in `split.recipients` or has zero claimable balance."
   }
 ]

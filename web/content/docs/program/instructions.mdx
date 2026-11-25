@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 35 instructions.
+The program has 37 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -248,7 +248,7 @@ Checks the enclave's signature, writes the Receipt, invokes any registered `on_r
 The transaction carries an Ed25519 program instruction before `settle_call`, and `ed25519_instruction_index` is its index. That instruction verifies exactly one signature and carries the signature, the enclave's signing key and the [receipt message](/docs/concepts/calls-and-receipts#what-the-enclave-signs) in its own data: 114 bytes (`voynich/receipt/v1`) when `Model.base` is `None`, or 146 bytes (`voynich/receipt/v2`, appending `base.sha256`) when `Model.base` is `Some`. When `Call.callback_program` is not the default address, the transaction passes `[callback_program, ...callback_accounts]` as remaining accounts after the listed accounts.
 
 - **Checks.** The call is `Open` (`CallNotOpen`) and has `price_unit == PriceUnit::Call` (`InvalidCall`). The current slot is at most the deadline slot (`CallDeadlinePassed`). The record is the one the Enclave names, valid and unexpired (`InvalidEnclave`, `InvalidAttestation`), and its measurement is allowed (`MeasurementNotAllowed`). For a `Sealed` call, `open_answer` is empty; for an `Open` call, `open_answer` is non-empty, at most `Config.max_open_answer_bytes`, and hashes to `output_hash` (`InvalidOpenAnswer`). The Ed25519 instruction at the index matches the signature, the enclave's signing key and the `v1` (standalone) or `v2` (adapter with `Model.base.sha256`) receipt message (`InvalidSignature`). The caller, owner, operator and fee recipient are the ones the Call recorded (`InvalidRecipient`). For a price in a mint: the escrow, owner, operator and protocol accounts are associated token accounts of the right wallet and mint (`InvalidTokenAccount`). The escrow holds the price (`InsufficientEscrow`). When `Call.callback_program` is set: remaining accounts equal `[callback_program, ...callback_accounts]`, `callback_program` is executable, and every callback account marked `is_writable` is passed writable (`InvalidCallback`).
-- **Effects.** The operator receives `price × operator_share_bps / 10,000`, rounded down. The fee recipient receives `price × protocol_share_bps / 10,000`, rounded down. The owner receives the rest. The Receipt holds the call, model, enclave, both hashes, the signature, `answer_mode`, `open_answer`, `caller_is_program`, the slot and the three payments. The Call's status is `Settled`, and the model's and the enclave's `calls_settled` rise by one. Emits `CallSettled`. When `Call.callback_program` is set, the program flushes `Receipt`, `Call`, `Model` and `Enclave`, and invokes `callback_program::on_receipt` (discriminator `93db513a4577e15d`) with accounts `[receipt, call, model, ...callback_accounts]` before transferring the escrow. For a price in a mint, the escrow token account is closed and its rent returns to the caller.
+- **Effects.** The operator receives `price × operator_share_bps / 10,000`, rounded down. The fee recipient receives `price × protocol_share_bps / 10,000`, rounded down. The owner receives the rest (or, when `model.has_split` is true, `owner_amount` routes into the canonical `Split` PDA passed in remaining accounts, crediting each recipient's `accrued` share with rounding dust to `recipients[0]` and emitting `SplitCredited`, coexisting with any `callback_program` remaining accounts). The Receipt holds the call, model, enclave, both hashes, the signature, `answer_mode`, `open_answer`, `caller_is_program`, the slot and the three payments. The Call's status is `Settled`, and the model's and the enclave's `calls_settled` rise by one. Emits `CallSettled`. When `Call.callback_program` is set, the program flushes `Receipt`, `Call`, `Model` and `Enclave`, and invokes `callback_program::on_receipt` (discriminator `93db513a4577e15d`) with accounts `[receipt, call, model, ...callback_accounts]` before transferring the escrow. For a price in a mint, the escrow token account is closed and its rent returns to the caller.
 
 ## settle_metered_call
 
@@ -397,3 +397,23 @@ Opens a per-token metered `Call` signed by `delegate` alone, debiting `ceiling` 
 
 - **Checks.** Passes the same session checks as `open_session_call` against `ceiling` (`session.budget - session.spent >= ceiling`) plus the per-token model and ceiling checks of `open_metered_call`.
 - **Effects.** Debits `ceiling` from `session` into `call` escrow, increments `session.spent` and `session.calls_opened`, writes the canonical metered `Call` PDA with `call.caller = session.caller`, and emits `CallOpened` and `SessionDebited`.
+
+## set_split
+
+Creates, updates, or deactivates a model's 526-byte `Split` PDA at `["split", model]`.
+
+<Rows data="ix-set-split-args" />
+
+<Rows data="ix-set-split" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). When `recipients` is non-empty: 1 to 8 unique non-default wallets with `share_bps > 0` summing to `10,000`, and no existing recipient has unclaimed balance (`accrued > claimed`) (`InvalidSplit`).
+- **Effects.** Empty `recipients` sets `split.active = false` and `model.has_split = false` (preserving existing recipients if any unclaimed balance remains). Non-empty `recipients` initializes (if needed) or updates `split.recipients`, sets `split.active = true` and `model.has_split = true`, and emits `SplitUpdated`.
+
+## claim_split
+
+Permissionlessly transfers `owed = recipient.accrued - recipient.claimed` from a `Split` PDA directly to `recipient` (SOL lamports or PDA-signed SPL transfer).
+
+<Rows data="ix-claim-split" />
+
+- **Checks.** `recipient` is listed in `split.recipients` and has `accrued > claimed` (`InvalidSplit`). For an SPL mint, `split_escrow` and `recipient_tokens` match `split.mint` (`InvalidTokenAccount`).
+- **Effects.** Transfers `owed` to `recipient` (or `recipient_tokens`), sets `recipient.claimed = recipient.accrued`, and emits `SplitClaimed`.

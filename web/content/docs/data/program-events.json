@@ -142,5 +142,23 @@
     "discriminator": "`39ed0bf3c222781b`",
     "emittedBy": "`close_session`",
     "says": "A Session PDA was closed and its unspent budget returned to `caller`."
+  },
+  {
+    "event": "SplitUpdated",
+    "discriminator": "`6e558f87629cb95b`",
+    "emittedBy": "`set_split`",
+    "says": "A model's Split PDA was created, updated, or deactivated."
+  },
+  {
+    "event": "SplitCredited",
+    "discriminator": "`d7f4f255e91a6d7a`",
+    "emittedBy": "`settle_call`, `settle_metered_call`",
+    "says": "Settled `owner_amount` was routed into a model's Split PDA and credited across recipients."
+  },
+  {
+    "event": "SplitClaimed",
+    "discriminator": "`ea0b2cb28d8917c1`",
+    "emittedBy": "`claim_split`",
+    "says": "Accrued split balance (`accrued - claimed`) was paid out to a recipient wallet."
   }
 ]

@@ -22,6 +22,7 @@ The `voynich` program is an Anchor program. Its address on a cluster is `program
 | Call | PDA `["call", caller, nonce]` | 349 bytes plus 33 bytes per callback account (302, 303, 304 or 340 + 33 * N legacy) | the payer |
 | Receipt | PDA `["receipt", call]` | 407 bytes plus `open_answer` (423 bytes for metered calls; 401 or 406 plus `open_answer` legacy) | the settling payer |
 | Session | PDA `["session", caller, delegate, nonce]` | 186 bytes | the caller |
+| Split | PDA `["split", model]` | 526 bytes | the model's owner |
 
 In a seed, `name` is the model's name as UTF-8, an address is its 32 bytes, and `nonce` is 8 bytes little-endian.
 
@@ -33,11 +34,11 @@ One per program, at PDA `["config"]`. Written by `initialize`, `set_config` and 
 
 ## Model
 
-One per sealed model, at PDA `["model", name]`. Created by `create_model`. Changed by `attach_weights`, `seal_range`, `seal_model`, `set_price`, `set_allowed_measurements`, `set_policy`, `clear_policy`, `publish_version`, `retire_model`, `grant_by_owner` and `settle_call`.
+One per sealed model, at PDA `["model", name]`. Created by `create_model`. Changed by `attach_weights`, `seal_range`, `seal_model`, `set_price`, `set_allowed_measurements`, `set_policy`, `clear_policy`, `set_split`, `publish_version`, `retire_model`, `grant_by_owner` and `settle_call`.
 
 <Rows data="account-model" columns="field,type,meaning" />
 
-`status` is one byte: 0 `Uploading`, 1 `Sealed`, 2 `Live`, 3 `Retired`. `price_unit` is one byte: 0 `Call`, 1 `Token`. A measurement is 48 bytes. `ModelBase` is `sha256: [u8; 32]`, `size_bytes: u64`, `format: string` (`onnx`, `safetensors` or `gguf`, at most 32 bytes), and `source: string` (1 to 256 bytes starting with `https://`, `http://`, `ipfs://` or `hf://`, no ASCII whitespace or control bytes). Legacy 6,000-byte and earlier 8,192-byte Model accounts decode trailing zeros as `base: None`, `price_unit: Call`, `has_policy: false` and `current_version: 0` (interpreted as `1` via `effective_version()`). What these facts mean is in [Sealed models](/docs/concepts/sealed-models).
+`status` is one byte: 0 `Uploading`, 1 `Sealed`, 2 `Live`, 3 `Retired`. `price_unit` is one byte: 0 `Call`, 1 `Token`. A measurement is 48 bytes. `ModelBase` is `sha256: [u8; 32]`, `size_bytes: u64`, `format: string` (`onnx`, `safetensors` or `gguf`, at most 32 bytes), and `source: string` (1 to 256 bytes starting with `https://`, `http://`, `ipfs://` or `hf://`, no ASCII whitespace or control bytes). Legacy 6,000-byte and earlier 8,192-byte Model accounts decode trailing zeros as `base: None`, `price_unit: Call`, `has_policy: false`, `current_version: 0` (interpreted as `1` via `effective_version()`) and `has_split: false`. What these facts mean is in [Sealed models](/docs/concepts/sealed-models).
 
 ## ModelVersion
 
@@ -122,3 +123,11 @@ One per delegated caller budget, at PDA `["session", caller, delegate, nonce_le]
 <Rows data="account-session" columns="field,type,offset,meaning" />
 
 `status` is one byte: 0 `Open`, 1 `Closed`. A SOL session holds its `budget - spent` lamports inside the Session PDA above rent; an SPL session holds its budget in its associated token account `session_escrow`. Delegated calls write the exact same `Call` PDA with `call.caller = session.caller`, keeping `Policy` allow lists, `settle_call`, `settle_metered_call`, `refund_call`, `Receipt`, and enclave verification unchanged.
+
+## Split
+
+Optional per-model owner revenue split, at PDA `["split", model]` (`Split::SPACE = 526` bytes). Created, updated, or deactivated by `set_split`, credited during `settle_call` and `settle_metered_call` when `model.has_split` is true, and claimed per recipient via permissionless `claim_split`.
+
+<Rows data="account-split" columns="field,type,meaning" />
+
+Each `SplitRecipient` holds `wallet: pubkey`, `share_bps: u16`, `accrued: u64`, and `claimed: u64` (up to `MAX_SPLIT_RECIPIENTS = 8` unique non-default wallets summing to `10,000` bps when active). Rounding dust from `floor(owner_amount * share_bps / 10_000)` goes to `recipients[0]` so `sum(accrued) == total_received` to the exact base unit.

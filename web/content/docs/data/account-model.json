@@ -160,5 +160,11 @@
     "type": "u32",
     "offset": "",
     "meaning": "Active version number on chain (`0` on legacy accounts, interpreted as `1` via `effective_version()`). Incremented atomically by `publish_version`."
+  },
+  {
+    "field": "has_split",
+    "type": "bool",
+    "offset": "",
+    "meaning": "True when an active Split PDA exists for this model (`[\"split\", model]`). When true, `settle_call` and `settle_metered_call` require the Split PDA in remaining accounts and route `owner_amount` into it."
   }
 ]

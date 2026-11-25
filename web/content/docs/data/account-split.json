@@ -1,0 +1,50 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model whose owner revenue this Split PDA routes."
+  },
+  {
+    "field": "authority",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The model owner authorized to update or deactivate the split."
+  },
+  {
+    "field": "mint",
+    "type": "pubkey",
+    "offset": "72",
+    "meaning": "The mint of the split payouts. The default (all-zero) address means native SOL."
+  },
+  {
+    "field": "active",
+    "type": "bool",
+    "offset": "104",
+    "meaning": "True when `settle_call` and `settle_metered_call` route `owner_amount` into this Split PDA."
+  },
+  {
+    "field": "total_received",
+    "type": "u64",
+    "offset": "105",
+    "meaning": "Cumulative `owner_amount` credited into this Split PDA across settled calls."
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64",
+    "offset": "113",
+    "meaning": "The slot the split was last updated or credited in."
+  },
+  {
+    "field": "recipients",
+    "type": "Vec<SplitRecipient>",
+    "offset": "121",
+    "meaning": "Up to 8 `SplitRecipient` entries (`wallet`, `share_bps`, `accrued`, `claimed`) whose `share_bps` sum to 10,000 when active."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "",
+    "meaning": "The PDA bump."
+  }
+]

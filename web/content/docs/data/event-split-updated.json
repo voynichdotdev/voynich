@@ -1,0 +1,30 @@
+[
+  {
+    "field": "split",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "authority",
+    "type": "pubkey"
+  },
+  {
+    "field": "mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "active",
+    "type": "bool"
+  },
+  {
+    "field": "recipients",
+    "type": "Vec<SplitRecipient>"
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64"
+  }
+]

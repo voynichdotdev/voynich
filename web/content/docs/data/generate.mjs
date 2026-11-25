@@ -81,6 +81,7 @@ const FIELDS = {
     price_unit: 'Whether `price` is charged per `Call` (`0`) or per output `Token` (`1`).',
     has_policy: 'True when an active Policy PDA exists for this model (`["policy", model]`). When true, `open_call`, `open_metered_call`, `grant_by_owner` and `grant_by_enclave` require the Policy PDA in remaining accounts.',
     current_version: 'Active version number on chain (`0` on legacy accounts, interpreted as `1` via `effective_version()`). Incremented atomically by `publish_version`.',
+    has_split: 'True when an active Split PDA exists for this model (`["split", model]`). When true, `settle_call` and `settle_metered_call` require the Split PDA in remaining accounts and route `owner_amount` into it.',
   },
   ModelVersion: {
     model: 'The Model this version belongs to.',
@@ -203,6 +204,16 @@ const FIELDS = {
     status: '`Open` (`0`) or `Closed` (`1`).',
     bump: 'The PDA bump.',
   },
+  Split: {
+    model: 'The Model whose owner revenue this Split PDA routes.',
+    authority: 'The model owner authorized to update or deactivate the split.',
+    mint: 'The mint of the split payouts. The default (all-zero) address means native SOL.',
+    active: 'True when `settle_call` and `settle_metered_call` route `owner_amount` into this Split PDA.',
+    total_received: 'Cumulative `owner_amount` credited into this Split PDA across settled calls.',
+    updated_slot: 'The slot the split was last updated or credited in.',
+    recipients: 'Up to 8 `SplitRecipient` entries (`wallet`, `share_bps`, `accrued`, `claimed`) whose `share_bps` sum to 10,000 when active.',
+    bump: 'The PDA bump.',
+  },
 }
 
 const accounts = idl.accounts.map((account) => {
@@ -265,6 +276,8 @@ const SAYS = {
   close_session: 'Sweeps remaining `budget - spent` from a Session PDA back to `caller` and marks it `Closed`. Callable by `caller` anytime or by anyone after `expires_at_slot`.',
   open_session_call: 'Opens a per-call Call signed by `delegate` alone, debiting `model.price` from the Session PDA and recording `call.caller = session.caller`.',
   open_session_metered_call: 'Opens a per-token metered Call signed by `delegate` alone, debiting `ceiling` from the Session PDA and recording `call.caller = session.caller`.',
+  set_split: 'Creates, updates, or deactivates a model\'s 526-byte Split PDA (`1..=8` recipients summing to 10,000 bps, or empty to deactivate) and sets `model.has_split`.',
+  claim_split: 'Permissionlessly pays `accrued - claimed` from a Split PDA (SOL or SPL) directly to `recipient` and sets `claimed = accrued`.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -472,6 +485,17 @@ const ACCOUNTS = {
     session_escrow: 'The Session PDA\'s associated token account. Only for a price in a mint.',
     escrow_tokens: 'The Call\'s associated token account for the mint, created here. Only for a price in a mint.',
   },
+  set_split: {
+    owner: 'The model\'s owner. Signs and pays the 526-byte Split PDA\'s rent on creation.',
+    split: 'The Split PDA at `["split", model]`, created if needed or updated in place.',
+  },
+  claim_split: {
+    payer: 'Anyone paying the transaction fee to release accrued split balance to `recipient`.',
+    split: 'The Split PDA at `["split", model]` holding the accrued balance.',
+    recipient: 'The recipient wallet listed in `split.recipients` receiving `accrued - claimed`.',
+    split_escrow: 'The Split PDA\'s associated token account for `split.mint`. Only for an SPL mint.',
+    recipient_tokens: 'The recipient\'s associated token account for `split.mint`. Only for an SPL mint.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -540,6 +564,9 @@ const EVENTS = {
   SessionOpened: ['open_session', 'A funded Session PDA was created authorizing a delegate until `expires_at_slot`.'],
   SessionDebited: ['open_session_call, open_session_metered_call', 'Escrow was debited from a Session PDA to open a delegated call.'],
   SessionClosed: ['close_session', 'A Session PDA was closed and its unspent budget returned to `caller`.'],
+  SplitUpdated: ['set_split', 'A model\'s Split PDA was created, updated, or deactivated.'],
+  SplitCredited: ['settle_call, settle_metered_call', 'Settled `owner_amount` was routed into a model\'s Split PDA and credited across recipients.'],
+  SplitClaimed: ['claim_split', 'Accrued split balance (`accrued - claimed`) was paid out to a recipient wallet.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -587,6 +614,7 @@ const RAISED = {
   InvalidQuote: 'In `set_quote`: `operator_share_bps` exceeds `model.operator_share_bps`.',
   InvalidVersion: 'In `begin_version`: `version` is not `model.effective_version() + 1` or the model is not `Live`. In `write_version_weights`, `seal_version_range` or `publish_version`: `model_version.status` is not `Uploading` or `version` does not match.',
   InvalidSession: 'In `open_session`: `budget == 0`, `ttl_slots == 0`, or `delegate` is the default address. In `open_session_call` / `open_session_metered_call`: the session is closed, expired, mismatched on `mint` or `model`, or lacks remaining `budget - spent`. In `close_session`: the session is already closed, or a non-caller tried to close it before `expires_at_slot`.',
+  InvalidSplit: 'In `set_split`: more than 8 recipients, duplicate or default recipient wallets, `share_bps == 0`, shares not summing to 10,000, or rewriting recipients while unclaimed balance remains (`accrued > claimed`). In `settle_call` / `settle_metered_call`: `model.has_split` is true but the canonical Split PDA (or SPL escrow) was omitted from remaining accounts. In `claim_split`: `recipient` is not in `split.recipients` or has zero claimable balance.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -648,6 +676,8 @@ const API_ERRORS = {
   INVALID_VERSION: 'The requested model version number or upload state is invalid.',
   SESSION_NOT_FOUND: 'No session has this address.',
   INVALID_SESSION: 'The session parameters, budget, expiry, model scope, or status are invalid.',
+  SPLIT_NOT_FOUND: 'This model has no revenue split configured.',
+  INVALID_SPLIT: 'The revenue split recipients, share sum, unclaimed balance state, or claim request is invalid.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

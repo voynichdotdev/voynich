@@ -150,6 +150,16 @@
     "meaning": "This model has an active policy; pass its Policy account in remaining accounts."
   },
   {
+    "code": "SPLIT_NOT_FOUND",
+    "status": "404",
+    "meaning": "This model has no revenue split configured."
+  },
+  {
+    "code": "INVALID_SPLIT",
+    "status": "422",
+    "meaning": "The revenue split recipients, share sum, unclaimed balance state, or claim request is invalid."
+  },
+  {
     "code": "GRANT_REQUIRED",
     "status": "409",
     "meaning": "The enclave holds no live grant for the model."

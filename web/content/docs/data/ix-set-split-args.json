@@ -1,0 +1,6 @@
+[
+  {
+    "argument": "recipients",
+    "type": "Vec<SplitRecipientInput>"
+  }
+]

@@ -208,5 +208,17 @@
     "arguments": "`nonce: u64`, `input_hash: [u8; 32]`, `answer_mode: AnswerMode`, `callback: Option<CallbackSpec>`, `ceiling: u64`",
     "signers": "`delegate`",
     "does": "Opens a per-token metered Call signed by `delegate` alone, debiting `ceiling` from the Session PDA and recording `call.caller = session.caller`."
+  },
+  {
+    "instruction": "set_split",
+    "arguments": "`recipients: Vec<SplitRecipientInput>`",
+    "signers": "`owner`",
+    "does": "Creates, updates, or deactivates a model's 526-byte Split PDA (`1..=8` recipients summing to 10,000 bps, or empty to deactivate) and sets `model.has_split`."
+  },
+  {
+    "instruction": "claim_split",
+    "arguments": "",
+    "signers": "`payer`",
+    "does": "Permissionlessly pays `accrued - claimed` from a Split PDA (SOL or SPL) directly to `recipient` and sets `claimed = accrued`."
   }
 ]

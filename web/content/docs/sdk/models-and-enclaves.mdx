@@ -14,6 +14,9 @@ Eight read functions read what the API indexes from the chain (none needs a wall
 | `policy(modelId)` | The model's active `ModelPolicy`, or `null` when none exists. | [`GET /v1/models/{id}/policy`](/docs/api/models#get-v1modelsidpolicy) |
 | `setPolicy(modelId, input, options?)` | Signs `set_policy` and returns the indexed `ModelPolicy`. | [`POST /v1/models/{id}/policy/build`](/docs/api/models#post-v1modelsidpolicybuild) |
 | `clearPolicy(modelId, options?)` | Signs `clear_policy` and returns the confirmed `TxStatus`. | [`POST /v1/models/{id}/policy/clear/build`](/docs/api/models#post-v1modelsidpolicyclearbuild) |
+| `getSplit(modelId, options?)` | The model's `ModelSplit`, or `null` when none exists. | [`GET /v1/models/{id}/split`](/docs/api/models#get-v1modelsidsplit) |
+| `setSplit(modelId, recipients, options?)` | Signs `set_split` and returns the indexed `ModelSplit`. | [`POST /v1/models/{id}/split/build`](/docs/api/models#post-v1modelsidsplitbuild) |
+| `claimSplit(modelId, recipient?, options?)` | Signs `claim_split` and returns the confirmed `TxStatus`. | [`POST /v1/models/{id}/split/claim/build`](/docs/api/models#post-v1modelsidsplitclaimbuild) |
 | `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
 | `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
 | `measurements(query?)` | A page of published measurement records. | [`GET /v1/measurements`](/docs/api/enclaves#get-v1measurements) |
@@ -83,6 +86,22 @@ const cleared = await voynich.clearPolicy('sketch-32')
 ```
 
 `policy(modelId)` reads the model's active `ModelPolicy` and returns `null` when the API answers `POLICY_NOT_FOUND`. `setPolicy(modelId, input, options?)` requires the model owner's signer (`WALLET_REQUIRED`), submits `set_policy`, waits for indexing, and resolves to the updated `ModelPolicy`. `clearPolicy(modelId, options?)` closes the `Policy` PDA, returns its rent to the owner, and resolves to `TxStatus`.
+
+## getSplit, setSplit and claimSplit
+
+```ts
+const split = await voynich.getSplit('sketch-32')
+
+const updated = await voynich.setSplit('sketch-32', [
+  { wallet: authorA, shareBps: 5000 },
+  { wallet: authorB, shareBps: 3000 },
+  { wallet: authorC, shareBps: 2000 },
+])
+
+const claimed = await voynich.claimSplit('sketch-32', authorB)
+```
+
+`getSplit(modelId)` reads `GET /v1/models/{id}/split` and returns `null` on `SPLIT_NOT_FOUND`. `setSplit(modelId, recipients)` requires the model owner's signer (`1..8` recipients summing to `10,000` bps, or `[]` to deactivate). `claimSplit(modelId, recipient?)` is permissionless (`recipient` defaults to the signer's wallet) and releases `accrued - claimed` directly to `recipient`.
 
 ## enclaves and enclave
 

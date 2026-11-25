@@ -110,6 +110,21 @@
     "does": "Build clear_policy to remove a model policy and return rent to the owner"
   },
   {
+    "route": "GET /v1/models/{id}/split",
+    "operation": "modelSplit",
+    "does": "Read the revenue split configuration and claimable balances for a model"
+  },
+  {
+    "route": "POST /v1/models/{id}/split/build",
+    "operation": "setSplit",
+    "does": "Build set_split to configure up to 8 owner revenue recipients totaling 10000 bps or deactivate with an empty list"
+  },
+  {
+    "route": "POST /v1/models/{id}/split/claim/build",
+    "operation": "claimSplit",
+    "does": "Build claim_split to withdraw accrued split revenue to a recipient wallet"
+  },
+  {
     "route": "GET /v1/models/{id}/versions",
     "operation": "modelVersions",
     "does": "List published and uploading versions for a model, newest first"
