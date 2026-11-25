@@ -214,6 +214,16 @@ const FIELDS = {
     recipients: 'Up to 8 `SplitRecipient` entries (`wallet`, `share_bps`, `accrued`, `claimed`) whose `share_bps` sum to 10,000 when active.',
     bump: 'The PDA bump.',
   },
+  Bond: {
+    enclave: 'The Enclave this SOL bond backs.',
+    operator: 'The enclave operator authorized to deposit into and withdraw from this bond.',
+    bonded_lamports: 'Current bonded SOL balance held above rent-exemption in lamports, slashable on timed-out calls.',
+    slashed_total: 'Cumulative lamports slashed from this bond across all timed-out calls.',
+    missed_calls: 'Count of timed-out calls settled through `refund_call` that slashed this bond.',
+    slash_bps: 'Slash rate in basis points applied to a timed-out SOL call\'s escrow (`DEFAULT_BOND_SLASH_BPS = 1000`, 10%).',
+    updated_slot: 'The slot the bond was last deposited into, withdrawn from, or slashed in.',
+    bump: 'The PDA bump.',
+  },
 }
 
 const accounts = idl.accounts.map((account) => {
@@ -263,7 +273,7 @@ const SAYS = {
   open_metered_call: 'Creates a per-token metered Call and moves the caller\'s escrow ceiling into its escrow.',
   settle_call: 'Checks the enclave\'s signature, writes the Receipt and pays out the escrow.',
   settle_metered_call: 'Checks the enclave\'s piece signature, writes a 423-byte metered Receipt, pays out count * price and returns the unspent ceiling to the caller.',
-  refund_call: 'Returns the escrow of a call past its deadline to the caller.',
+  refund_call: 'Returns the escrow of a call past its deadline to the caller, and optionally slashes the enclave\'s Bond PDA to `caller` when passed in remaining accounts.',
   publish_measurement: 'Creates an immutable Measurement PDA binding a 48-byte SHA-384 digest to its source repo, commit SHA, recipe hash and version.',
   deprecate_measurement: 'Marks a published Measurement PDA as `Deprecated`. Callable only by its publisher or `Config.admin`.',
   set_policy: 'Creates or updates a model\'s Policy PDA and sets `model.has_policy = true`. Callable only by the model\'s owner.',
@@ -278,6 +288,8 @@ const SAYS = {
   open_session_metered_call: 'Opens a per-token metered Call signed by `delegate` alone, debiting `ceiling` from the Session PDA and recording `call.caller = session.caller`.',
   set_split: 'Creates, updates, or deactivates a model\'s 526-byte Split PDA (`1..=8` recipients summing to 10,000 bps, or empty to deactivate) and sets `model.has_split`.',
   claim_split: 'Permissionlessly pays `accrued - claimed` from a Split PDA (SOL or SPL) directly to `recipient` and sets `claimed = accrued`.',
+  deposit_bond: 'Creates (if needed) and tops up an enclave\'s 107-byte Bond PDA (`["bond", enclave]`) with `amount_lamports` of slashable SOL.',
+  withdraw_bond: 'Withdraws up to `bonded_lamports` of unslashed SOL from an enclave\'s Bond PDA back to `operator` while preserving rent-exemption.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -496,6 +508,16 @@ const ACCOUNTS = {
     split_escrow: 'The Split PDA\'s associated token account for `split.mint`. Only for an SPL mint.',
     recipient_tokens: 'The recipient\'s associated token account for `split.mint`. Only for an SPL mint.',
   },
+  deposit_bond: {
+    operator: 'The enclave\'s operator. Signs, pays the 107-byte Bond PDA\'s rent on creation, and deposits `amount_lamports`.',
+    enclave: 'The Enclave backed by this bond.',
+    bond: 'The Bond PDA at `["bond", enclave]`, created if needed or topped up in place.',
+  },
+  withdraw_bond: {
+    operator: 'The enclave\'s operator. Signs and receives `amount_lamports` back from the Bond PDA.',
+    enclave: 'The Enclave backed by this bond.',
+    bond: 'The Bond PDA at `["bond", enclave]` debited by `amount_lamports`.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -567,6 +589,9 @@ const EVENTS = {
   SplitUpdated: ['set_split', 'A model\'s Split PDA was created, updated, or deactivated.'],
   SplitCredited: ['settle_call, settle_metered_call', 'Settled `owner_amount` was routed into a model\'s Split PDA and credited across recipients.'],
   SplitClaimed: ['claim_split', 'Accrued split balance (`accrued - claimed`) was paid out to a recipient wallet.'],
+  BondDeposited: ['deposit_bond', 'An enclave operator deposited SOL into the enclave\'s Bond PDA.'],
+  BondWithdrawn: ['withdraw_bond', 'An enclave operator withdrew unslashed SOL from the enclave\'s Bond PDA.'],
+  BondSlashed: ['refund_call', 'A timed-out call slashed the enclave\'s Bond PDA and paid the slash directly to `call.caller`.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -615,6 +640,7 @@ const RAISED = {
   InvalidVersion: 'In `begin_version`: `version` is not `model.effective_version() + 1` or the model is not `Live`. In `write_version_weights`, `seal_version_range` or `publish_version`: `model_version.status` is not `Uploading` or `version` does not match.',
   InvalidSession: 'In `open_session`: `budget == 0`, `ttl_slots == 0`, or `delegate` is the default address. In `open_session_call` / `open_session_metered_call`: the session is closed, expired, mismatched on `mint` or `model`, or lacks remaining `budget - spent`. In `close_session`: the session is already closed, or a non-caller tried to close it before `expires_at_slot`.',
   InvalidSplit: 'In `set_split`: more than 8 recipients, duplicate or default recipient wallets, `share_bps == 0`, shares not summing to 10,000, or rewriting recipients while unclaimed balance remains (`accrued > claimed`). In `settle_call` / `settle_metered_call`: `model.has_split` is true but the canonical Split PDA (or SPL escrow) was omitted from remaining accounts. In `claim_split`: `recipient` is not in `split.recipients` or has zero claimable balance.',
+  InvalidBond: 'In `deposit_bond`: `amount_lamports == 0`. In `withdraw_bond`: `amount_lamports == 0` or `amount_lamports > bond.bonded_lamports`. In `refund_call`: a remaining account was passed for slashing that is not the canonical writable `Bond` PDA (`["bond", call.enclave]`) owned by the Voynich program.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -678,6 +704,8 @@ const API_ERRORS = {
   INVALID_SESSION: 'The session parameters, budget, expiry, model scope, or status are invalid.',
   SPLIT_NOT_FOUND: 'This model has no revenue split configured.',
   INVALID_SPLIT: 'The revenue split recipients, share sum, unclaimed balance state, or claim request is invalid.',
+  BOND_NOT_FOUND: 'This enclave has no operator bond account on chain.',
+  INVALID_BOND: 'The operator bond deposit, withdrawal, or remaining account is invalid.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

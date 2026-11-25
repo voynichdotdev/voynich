@@ -135,7 +135,7 @@
     "instruction": "refund_call",
     "arguments": "",
     "signers": "`actor`",
-    "does": "Returns the escrow of a call past its deadline to the caller."
+    "does": "Returns the escrow of a call past its deadline to the caller, and optionally slashes the enclave's Bond PDA to `caller` when passed in remaining accounts."
   },
   {
     "instruction": "publish_measurement",
@@ -220,5 +220,17 @@
     "arguments": "",
     "signers": "`payer`",
     "does": "Permissionlessly pays `accrued - claimed` from a Split PDA (SOL or SPL) directly to `recipient` and sets `claimed = accrued`."
+  },
+  {
+    "instruction": "deposit_bond",
+    "arguments": "`amount_lamports: u64`",
+    "signers": "`operator`",
+    "does": "Creates (if needed) and tops up an enclave's 107-byte Bond PDA (`[\"bond\", enclave]`) with `amount_lamports` of slashable SOL."
+  },
+  {
+    "instruction": "withdraw_bond",
+    "arguments": "`amount_lamports: u64`",
+    "signers": "`operator`",
+    "does": "Withdraws up to `bonded_lamports` of unslashed SOL from an enclave's Bond PDA back to `operator` while preserving rent-exemption."
   }
 ]

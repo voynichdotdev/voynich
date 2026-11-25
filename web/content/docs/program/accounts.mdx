@@ -23,6 +23,7 @@ The `voynich` program is an Anchor program. Its address on a cluster is `program
 | Receipt | PDA `["receipt", call]` | 407 bytes plus `open_answer` (423 bytes for metered calls; 401 or 406 plus `open_answer` legacy) | the settling payer |
 | Session | PDA `["session", caller, delegate, nonce]` | 186 bytes | the caller |
 | Split | PDA `["split", model]` | 526 bytes | the model's owner |
+| Bond | PDA `["bond", enclave]` | 107 bytes | the enclave's operator |
 
 In a seed, `name` is the model's name as UTF-8, an address is its 32 bytes, and `nonce` is 8 bytes little-endian.
 
@@ -131,3 +132,11 @@ Optional per-model owner revenue split, at PDA `["split", model]` (`Split::SPACE
 <Rows data="account-split" columns="field,type,meaning" />
 
 Each `SplitRecipient` holds `wallet: pubkey`, `share_bps: u16`, `accrued: u64`, and `claimed: u64` (up to `MAX_SPLIT_RECIPIENTS = 8` unique non-default wallets summing to `10,000` bps when active). Rounding dust from `floor(owner_amount * share_bps / 10_000)` goes to `recipients[0]` so `sum(accrued) == total_received` to the exact base unit.
+
+## Bond
+
+Optional per-enclave operator SOL bond, at PDA `["bond", enclave]` (`Bond::SPACE = 107` bytes). Created and topped up by `deposit_bond`, withdrawn from by `withdraw_bond`, and optionally slashed on timed-out calls inside `refund_call`.
+
+<Rows data="account-bond" columns="field,type,offset,meaning" />
+
+`bonded_lamports` sits inside the Bond PDA above rent-exemption (`DEFAULT_BOND_SLASH_BPS = 1000`, 10%). When `refund_call` receives the writable canonical `Bond` PDA (`["bond", call.enclave]`) in remaining accounts and `bonded_lamports > 0`, it slashes `min(bonded_lamports, escrow * slash_bps / 10_000)` for SOL calls (or `min(bonded_lamports, 1_000_000)` lamports for SPL calls) directly to `call.caller`, increments `slashed_total` and `missed_calls`, and emits `BondSlashed`.

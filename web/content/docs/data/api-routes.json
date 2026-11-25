@@ -165,6 +165,21 @@
     "does": "Build set_quote as the enclave operator to set or clear a quoted operator share on a model grant"
   },
   {
+    "route": "GET /v1/enclaves/{key}/bond",
+    "operation": "enclaveBond",
+    "does": "Read the operator SOL bond, slash history, and missed call count for an enclave"
+  },
+  {
+    "route": "POST /v1/enclaves/{key}/bond/deposit/build",
+    "operation": "depositBond",
+    "does": "Build deposit_bond as the enclave operator to deposit SOL into the enclave Bond PDA"
+  },
+  {
+    "route": "POST /v1/enclaves/{key}/bond/withdraw/build",
+    "operation": "withdrawBond",
+    "does": "Build withdraw_bond as the enclave operator to withdraw unslashed SOL from the enclave Bond PDA"
+  },
+  {
     "route": "GET /v1/measurements",
     "operation": "measurements",
     "does": "Browse published enclave runtime measurements"

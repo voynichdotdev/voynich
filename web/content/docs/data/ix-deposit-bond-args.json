@@ -1,0 +1,6 @@
+[
+  {
+    "argument": "amount_lamports",
+    "type": "u64"
+  }
+]

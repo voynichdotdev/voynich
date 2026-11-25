@@ -3,7 +3,7 @@ title: Enclaves
 description: The enclave routes of the Voynich HTTP API, with the Enclave, attestation record and Grant objects they return.
 ---
 
-Two routes read enclaves, one builds an operator quote transaction, and four routes read, publish and deprecate on-chain measurement records. An enclave reaches the chain by registering its attestation record with the program, which is told in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation) and, for operators, in [Register and get granted](/docs/operators/register-and-get-granted).
+Two routes read enclaves, one builds an operator quote transaction, three read and manage operator SOL bonds, and four routes read, publish and deprecate on-chain measurement records. An enclave reaches the chain by registering its attestation record with the program, which is told in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation) and, for operators, in [Register and get granted](/docs/operators/register-and-get-granted).
 
 The errors every route shares are in [Overview](/docs/api/overview#on-every-route).
 
@@ -54,6 +54,15 @@ Calls this enclave settled.
 </Field>
 <Field name="attestation" type="object" required>
 The enclave's [attestation record](#attestation-record).
+</Field>
+<Field name="bondedLamports" type="amount">
+Optional current slashable SOL bond held in the enclave's `Bond` PDA above rent-exemption, in lamports.
+</Field>
+<Field name="missedCalls" type="decimal string">
+Optional count of timed-out calls that slashed this enclave's bond via `refund_call`.
+</Field>
+<Field name="slashedTotal" type="amount">
+Optional cumulative lamports slashed from this enclave's bond across timed-out calls.
 </Field>
 </Fields>
 
@@ -203,6 +212,63 @@ Returns a [Build](/docs/api/transactions#build) with `action: "set_quote"` and `
 | `GRANT_REQUIRED` | No active (unrevoked) Grant exists for this model and enclave. |
 | `INVALID_QUOTE` | `operatorShareBps` exceeds `model.operatorShareBps` (`422`). |
 | `UNAUTHORIZED`, `SIMULATION_FAILED` | Signer is not `enclave.operator`. |
+
+## OperatorBond
+
+An enclave's on-chain 107-byte `Bond` PDA (`["bond", enclave]`) backing timed-out calls with slashable SOL.
+
+<Fields>
+<Field name="address" type="address" required>
+The `Bond` PDA address.
+</Field>
+<Field name="enclave" type="address" required>
+The Enclave account backed by this bond.
+</Field>
+<Field name="operator" type="address" required>
+The enclave's operator wallet authorized to deposit and withdraw.
+</Field>
+<Field name="bondedLamports" type="amount" required>
+Current slashable SOL held above rent-exemption, in lamports.
+</Field>
+<Field name="slashedTotal" type="amount" required>
+Cumulative lamports slashed across timed-out calls.
+</Field>
+<Field name="missedCalls" type="decimal string" required>
+Count of timed-out calls that slashed this bond.
+</Field>
+<Field name="slashBps" type="integer, 0 to 10000" required>
+Slash rate in basis points applied to timed-out SOL call escrow (`1000`, 10%).
+</Field>
+<Field name="updatedSlot" type="slot" required>
+The slot of the latest deposit, withdrawal, or slash.
+</Field>
+</Fields>
+
+## `GET /v1/enclaves/{key}/bond`
+
+Reads the [OperatorBond](#operatorbond) for enclave `{key}` (Enclave account address or signing key). Answers `ENCLAVE_NOT_FOUND` if the enclave does not exist, or `BOND_NOT_FOUND` (`404`) if the enclave has no `Bond` account on chain.
+
+## `POST /v1/enclaves/{key}/bond/deposit/build`
+
+Builds [`deposit_bond`](/docs/program/instructions#depositbond) to create (if needed) and top up an enclave's `Bond` PDA with `amountLamports` of slashable SOL.
+
+```http
+POST /v1/enclaves/{key}/bond/deposit/build
+Content-Type: application/json
+
+{
+  "wallet": "<operator address>",
+  "amountLamports": "500000000"
+}
+```
+
+Returns a [Build](/docs/api/transactions#build) with `action: "deposit_bond"` and `addresses: { bond }`. Answers `ENCLAVE_NOT_FOUND`, `INVALID_BOND` (`422`, e.g. `amountLamports == "0"`), `INSUFFICIENT_FUNDS`, or `UNAUTHORIZED` / `SIMULATION_FAILED` if `wallet` is not `enclave.operator`.
+
+## `POST /v1/enclaves/{key}/bond/withdraw/build`
+
+Builds [`withdraw_bond`](/docs/program/instructions#withdrawbond) to withdraw up to `bondedLamports` of unslashed SOL from an enclave's `Bond` PDA back to `operator` while preserving rent-exemption. Body: `{ "wallet": "<operator address>", "amountLamports": "<decimal lamports>" }`.
+
+Returns a [Build](/docs/api/transactions#build) with `action: "withdraw_bond"` and `addresses: { bond }`. Answers `ENCLAVE_NOT_FOUND`, `BOND_NOT_FOUND`, `INVALID_BOND` (`422`, e.g. zero or above `bondedLamports`), or `UNAUTHORIZED` / `SIMULATION_FAILED` if `wallet` is not `enclave.operator`.
 
 ## MeasurementRecord
 

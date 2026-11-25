@@ -34,6 +34,12 @@ The operator wallet pays for the settling transaction:
 
 A call earns when it settles. A call that is not settled by its deadline returns its escrow to the caller.
 
+## Operator bonds and timeout slashing
+
+An operator can back an enclave with a slashable SOL bond held in a 107-byte `Bond` PDA at `["bond", enclave]` via [`deposit_bond`](/docs/program/instructions#depositbond) (`POST /v1/enclaves/{key}/bond/deposit/build` or `voynich.depositBond`) and withdraw any unslashed `bondedLamports` at any time via [`withdraw_bond`](/docs/program/instructions#withdrawbond) (`POST /v1/enclaves/{key}/bond/withdraw/build` or `voynich.withdrawBond`).
+
+When a call assigned to a bonded enclave misses its deadline and [`refund_call`](/docs/program/instructions#refundcall) runs with the canonical `Bond` PDA passed in remaining accounts, the program slashes `min(bonded_lamports, escrow * 1000 / 10_000)` (10% of escrow) for SOL calls, or `min(bonded_lamports, 1_000_000)` lamports for SPL calls, directly to `call.caller`, increments `missed_calls` and `slashed_total`, and emits `BondSlashed`. Unbonded enclaves continue to settle and refund calls normally.
+
 ## Read earnings
 
 <Ways>

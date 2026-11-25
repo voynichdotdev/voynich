@@ -322,7 +322,8 @@ The object the event is about, whole, as its read route returns it.
 | `ready` | On `/v1/events`: `{ status }`, the status of [`GET /health`](#get-health). On a call's stream: the call's [CallAnswer](/docs/api/calls-and-receipts#callanswer), as `GET /v1/calls/{id}/answer` returns it when the stream opens. | First on every connection. |
 | `resync` | `{ reason }`: `reconnected` or `behind`. | See below. |
 | `model.updated` | [Model](/docs/api/models#model) | A model was created, written to, sealed, priced or retired, a grant for it changed, or one of its calls settled. |
-| `enclave.updated` | [Enclave](/docs/api/enclaves#enclave) | An enclave registered or refreshed, a grant to it changed, it settled a call, or its `reachable` changed. |
+| `enclave.updated` | [Enclave](/docs/api/enclaves#enclave) | An enclave registered or refreshed, a grant to it changed, it settled a call, its bond changed, or its `reachable` changed. |
+| `bond.updated` | [OperatorBond](/docs/api/enclaves#operatorbond) | An enclave operator deposited into or withdrew from a `Bond` PDA, or a timed-out call slashed it. |
 | `measurement.updated` | [MeasurementRecord](/docs/api/enclaves#measurementrecord) | A measurement record was published or deprecated on chain. |
 | `policy.updated` | [ModelPolicy](/docs/api/models#modelpolicy) | A model's on-chain Policy PDA was created or updated. |
 | `policy.cleared` | `{ model, policy }` | A model's on-chain Policy PDA was closed and cleared. |

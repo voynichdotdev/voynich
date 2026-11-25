@@ -160,6 +160,16 @@
     "meaning": "The revenue split recipients, share sum, unclaimed balance state, or claim request is invalid."
   },
   {
+    "code": "BOND_NOT_FOUND",
+    "status": "404",
+    "meaning": "This enclave has no operator bond account on chain."
+  },
+  {
+    "code": "INVALID_BOND",
+    "status": "422",
+    "meaning": "The operator bond deposit, withdrawal, or remaining account is invalid."
+  },
+  {
     "code": "GRANT_REQUIRED",
     "status": "409",
     "meaning": "The enclave holds no live grant for the model."

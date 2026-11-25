@@ -160,5 +160,23 @@
     "discriminator": "`ea0b2cb28d8917c1`",
     "emittedBy": "`claim_split`",
     "says": "Accrued split balance (`accrued - claimed`) was paid out to a recipient wallet."
+  },
+  {
+    "event": "BondDeposited",
+    "discriminator": "`d2952fe84880f899`",
+    "emittedBy": "`deposit_bond`",
+    "says": "An enclave operator deposited SOL into the enclave's Bond PDA."
+  },
+  {
+    "event": "BondWithdrawn",
+    "discriminator": "`6fc09ae73a738267`",
+    "emittedBy": "`withdraw_bond`",
+    "says": "An enclave operator withdrew unslashed SOL from the enclave's Bond PDA."
+  },
+  {
+    "event": "BondSlashed",
+    "discriminator": "`3b07fcc3ea9c2a36`",
+    "emittedBy": "`refund_call`",
+    "says": "A timed-out call slashed the enclave's Bond PDA and paid the slash directly to `call.caller`."
   }
 ]

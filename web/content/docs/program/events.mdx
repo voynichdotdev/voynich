@@ -3,7 +3,7 @@ title: Events
 description: Every event the voynich program emits, its fields and how to decode it from a transaction.
 ---
 
-The program emits an event for every change of state. There are 27.
+The program emits an event for every change of state. There are 30.
 
 <Rows data="program-events" columns="event,emittedBy,says,discriminator" />
 
@@ -143,3 +143,15 @@ The fields are the Receipt's, with the Receipt's address as `receipt`, plus opti
 ## SplitClaimed
 
 <Rows data="event-split-claimed" />
+
+## BondDeposited
+
+<Rows data="event-bond-deposited" />
+
+## BondWithdrawn
+
+<Rows data="event-bond-withdrawn" />
+
+## BondSlashed
+
+<Rows data="event-bond-slashed" />

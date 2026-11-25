@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 37 instructions.
+The program has 39 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -269,8 +269,8 @@ Returns the escrow of a call that did not settle by its deadline. Anyone can sen
 
 <Rows data="ix-refund-call" />
 
-- **Checks.** The call is `Open` (`CallNotOpen`). The current slot is past the deadline slot (`CallNotRefundable`). The caller account is the Call's caller (`InvalidRecipient`). For a price in a mint: the escrow is the Call's associated token account and the destination is a token account of the caller's for the mint (`InvalidTokenAccount`).
-- **Effects.** The full escrowed amount (`Call::escrow_amount()`: `price` for `Call`, `ceiling` for `Token`) returns to `caller`. The Call's status is `Refunded`. For a price in a mint, the escrow token account is closed and its rent returns to `caller`. Emits `CallRefunded` with `amount` set to the refunded escrow.
+- **Checks.** The call is `Open` (`CallNotOpen`). The current slot is past the deadline slot (`CallNotRefundable`). The caller account is the Call's caller (`InvalidRecipient`). For a price in a mint: the escrow is the Call's associated token account and the destination is a token account of the caller's for the mint (`InvalidTokenAccount`). If a remaining account is passed for operator bond slashing, it must be the canonical writable `Bond` PDA (`["bond", call.enclave]`) owned by the Voynich program (`InvalidBond`).
+- **Effects.** The full escrowed amount (`Call::escrow_amount()`: `price` for `Call`, `ceiling` for `Token`) returns to `caller`. The Call's status is `Refunded`. For a price in a mint, the escrow token account is closed and its rent returns to `caller`. When the canonical `Bond` PDA is passed in remaining accounts and holds `bonded_lamports > 0`, the program slashes `min(bonded_lamports, escrow * slash_bps / 10_000)` for SOL calls (or `min(bonded_lamports, 1_000_000)` lamports for SPL calls) directly to `caller`, updates `bonded_lamports`, `slashed_total` and `missed_calls`, and emits `BondSlashed`. Emits `CallRefunded` with `amount` set to the refunded escrow.
 
 ## publish_measurement
 
@@ -417,3 +417,25 @@ Permissionlessly transfers `owed = recipient.accrued - recipient.claimed` from a
 
 - **Checks.** `recipient` is listed in `split.recipients` and has `accrued > claimed` (`InvalidSplit`). For an SPL mint, `split_escrow` and `recipient_tokens` match `split.mint` (`InvalidTokenAccount`).
 - **Effects.** Transfers `owed` to `recipient` (or `recipient_tokens`), sets `recipient.claimed = recipient.accrued`, and emits `SplitClaimed`.
+
+## deposit_bond
+
+Creates (if needed) and tops up an enclave's 107-byte `Bond` PDA at `["bond", enclave]` with slashable SOL lamports.
+
+<Rows data="ix-deposit-bond-args" />
+
+<Rows data="ix-deposit-bond" />
+
+- **Checks.** `operator` is `enclave.operator` (`Unauthorized`). `amount_lamports > 0` (`InvalidBond`).
+- **Effects.** Initializes the `Bond` PDA on first deposit with `slash_bps = DEFAULT_BOND_SLASH_BPS` (`1000`, 10%), transfers `amount_lamports` from `operator` into `bond` above rent-exemption, increments `bond.bonded_lamports`, records `updated_slot = clock.slot`, and emits `BondDeposited`.
+
+## withdraw_bond
+
+Withdraws up to `bond.bonded_lamports` of unslashed SOL from an enclave's `Bond` PDA back to `operator` while preserving the account's rent-exemption.
+
+<Rows data="ix-withdraw-bond-args" />
+
+<Rows data="ix-withdraw-bond" />
+
+- **Checks.** `operator` is `enclave.operator` and `bond.operator` (`Unauthorized`). `amount_lamports > 0` and `amount_lamports <= bond.bonded_lamports` (`InvalidBond`).
+- **Effects.** Decrements `bond.bonded_lamports`, transfers `amount_lamports` from `bond` back to `operator`, records `updated_slot = clock.slot`, and emits `BondWithdrawn`.

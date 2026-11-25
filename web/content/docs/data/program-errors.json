@@ -243,5 +243,12 @@
     "hex": "`0x1792`",
     "message": "The revenue split configuration, remaining account, or claim is invalid.",
     "raisedWhen": "In `set_split`: more than 8 recipients, duplicate or default recipient wallets, `share_bps == 0`, shares not summing to 10,000, or rewriting recipients while unclaimed balance remains (`accrued > claimed`). In `settle_call` / `settle_metered_call`: `model.has_split` is true but the canonical Split PDA (or SPL escrow) was omitted from remaining accounts. In `claim_split`: `recipient` is not in `split.recipients` or has zero claimable balance."
+  },
+  {
+    "name": "InvalidBond",
+    "code": "6035",
+    "hex": "`0x1793`",
+    "message": "The operator bond deposit, withdrawal, or remaining account is invalid.",
+    "raisedWhen": "In `deposit_bond`: `amount_lamports == 0`. In `withdraw_bond`: `amount_lamports == 0` or `amount_lamports > bond.bonded_lamports`. In `refund_call`: a remaining account was passed for slashing that is not the canonical writable `Bond` PDA (`[\"bond\", call.enclave]`) owned by the Voynich program."
   }
 ]

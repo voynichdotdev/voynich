@@ -83,4 +83,8 @@ A record lasts for a number of slots set by the attestation program. An enclave 
 
 Before its record expires, the runtime attests again and sends `refresh_enclave`, which copies the renewed record into the Enclave account. A receipt keeps its meaning after the record that backed it expires: what counts is that the record was in force at the slot the call settled.
 
+## Operator bonds
+
+An enclave operator can optionally back an enclave with a slashable SOL bond in a 107-byte `Bond` PDA (`["bond", enclave]`, default `slash_bps = 1000`, 10%). Operators deposit and withdraw unslashed lamports through `deposit_bond` and `withdraw_bond`. If an assigned call passes its deadline without settling and `refund_call` receives the enclave's `Bond` PDA in remaining accounts, the program pays the caller `min(bonded_lamports, escrow * slash_bps / 10_000)` for SOL calls (or `min(bonded_lamports, 1_000_000)` lamports for SPL calls) on top of the refunded escrow, increments `missed_calls` and `slashed_total`, and emits `BondSlashed`.
+
 Running an enclave is in [Operators](/docs/operators/hardware). The exact accounts and checks are in [Program: Instructions](/docs/program/instructions#registerenclave).

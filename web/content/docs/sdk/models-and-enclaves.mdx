@@ -19,6 +19,9 @@ Eight read functions read what the API indexes from the chain (none needs a wall
 | `claimSplit(modelId, recipient?, options?)` | Signs `claim_split` and returns the confirmed `TxStatus`. | [`POST /v1/models/{id}/split/claim/build`](/docs/api/models#post-v1modelsidsplitclaimbuild) |
 | `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
 | `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
+| `getBond(enclaveKey, options?)` | The enclave's `OperatorBond`, or `null` when none exists. | [`GET /v1/enclaves/{key}/bond`](/docs/api/enclaves#get-v1enclaveskeybond) |
+| `depositBond(enclaveKey, amountLamports, options?)` | Signs `deposit_bond` and returns the indexed `OperatorBond`. | [`POST /v1/enclaves/{key}/bond/deposit/build`](/docs/api/enclaves#post-v1enclaveskeybonddepositbuild) |
+| `withdrawBond(enclaveKey, amountLamports, options?)` | Signs `withdraw_bond` and returns the indexed `OperatorBond`. | [`POST /v1/enclaves/{key}/bond/withdraw/build`](/docs/api/enclaves#post-v1enclaveskeybondwithdrawbuild) |
 | `measurements(query?)` | A page of published measurement records. | [`GET /v1/measurements`](/docs/api/enclaves#get-v1measurements) |
 | `measurement(digest)` | One published measurement record by 96-hex SHA-384 digest. | [`GET /v1/measurements/{digest}`](/docs/api/enclaves#get-v1measurementsdigest) |
 | `publishMeasurement(input, options?)` | Signs `publish_measurement` and returns the indexed `MeasurementRecord`. | [`POST /v1/measurements/build`](/docs/api/enclaves#post-v1measurementsbuild) |
@@ -112,6 +115,18 @@ console.log(detail.earnings)
 ```
 
 `enclaves` takes `limit` and `cursor` as `models` does. It lists live and reachable enclaves first; each Enclave's `reachable` and `lastSeen` are told in [Reachability](/docs/api/enclaves#reachability). `enclave` takes an enclave's address or its signing key and returns `{ enclave, grants, receipts, earnings }`. It throws `ENCLAVE_NOT_FOUND` when there is none.
+
+## getBond, depositBond and withdrawBond
+
+```ts
+const bond = await voynich.getBond(enclaveKey)
+
+const topped = await voynich.depositBond(enclaveKey, 500_000_000n)
+const reduced = await voynich.withdrawBond(enclaveKey, 100_000_000n)
+console.log(reduced.bondedLamports, reduced.missedCalls, reduced.slashedTotal)
+```
+
+`getBond(enclaveKey, options?)` reads `GET /v1/enclaves/{key}/bond` and returns `null` on `BOND_NOT_FOUND`. `depositBond(enclaveKey, amountLamports, options?)` and `withdrawBond(enclaveKey, amountLamports, options?)` accept `bigint | number | string` lamports, require the enclave operator's signer (`WALLET_REQUIRED`), submit the built transaction, wait for indexing, and resolve to the updated `OperatorBond`.
 
 ## measurements, publishMeasurement and deprecateMeasurement
 

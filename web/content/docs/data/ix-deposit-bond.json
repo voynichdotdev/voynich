@@ -1,0 +1,50 @@
+[
+  {
+    "account": "operator",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The enclave's operator. Signs, pays the 107-byte Bond PDA's rent on creation, and deposits `amount_lamports`."
+  },
+  {
+    "account": "enclave",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"enclave\", enclave.signing_key]`",
+    "is": "The Enclave backed by this bond."
+  },
+  {
+    "account": "bond",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"bond\", enclave]`",
+    "is": "The Bond PDA at `[\"bond\", enclave]`, created if needed or topped up in place."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "field": "bond",
+    "type": "pubkey"
+  },
+  {
+    "field": "enclave",
+    "type": "pubkey"
+  },
+  {
+    "field": "operator",
+    "type": "pubkey"
+  },
+  {
+    "field": "amount",
+    "type": "u64"
+  },
+  {
+    "field": "bonded_lamports",
+    "type": "u64"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  }
+]

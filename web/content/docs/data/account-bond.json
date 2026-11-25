@@ -1,0 +1,50 @@
+[
+  {
+    "field": "enclave",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Enclave this SOL bond backs."
+  },
+  {
+    "field": "operator",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The enclave operator authorized to deposit into and withdraw from this bond."
+  },
+  {
+    "field": "bonded_lamports",
+    "type": "u64",
+    "offset": "72",
+    "meaning": "Current bonded SOL balance held above rent-exemption in lamports, slashable on timed-out calls."
+  },
+  {
+    "field": "slashed_total",
+    "type": "u64",
+    "offset": "80",
+    "meaning": "Cumulative lamports slashed from this bond across all timed-out calls."
+  },
+  {
+    "field": "missed_calls",
+    "type": "u64",
+    "offset": "88",
+    "meaning": "Count of timed-out calls settled through `refund_call` that slashed this bond."
+  },
+  {
+    "field": "slash_bps",
+    "type": "u16",
+    "offset": "96",
+    "meaning": "Slash rate in basis points applied to a timed-out SOL call's escrow (`DEFAULT_BOND_SLASH_BPS = 1000`, 10%)."
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64",
+    "offset": "98",
+    "meaning": "The slot the bond was last deposited into, withdrawn from, or slashed in."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "106",
+    "meaning": "The PDA bump."
+  }
+]
