@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
+import { computeUptimePct, formatBondSol } from '@/lib/bonds'
 import { formatLatency } from '@/lib/call'
 import { HARDWARE, LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
@@ -75,6 +76,8 @@ export default async function Enclaves({ searchParams }: { searchParams: Promise
               <span>Hardware</span>
               <span>Measurement</span>
               <span>Attestation record</span>
+              <span className={s.right}>Bonded SOL</span>
+              <span className={s.right}>Uptime</span>
               <span className={s.right}>Quoted share</span>
               <span className={s.right}>Median latency</span>
               <span className={s.right}>Calls settled</span>
@@ -83,6 +86,8 @@ export default async function Enclaves({ searchParams }: { searchParams: Promise
             <ul>
               {items.map((e) => {
                 const gs = grantStats.get(e.address)
+                const bonded = e.bondedLamports && BigInt(e.bondedLamports) > 0n
+                const missed = e.missedCalls ?? '0'
                 return (
                 <li key={e.address} className={s.entry}>
                   <div className={s.who}>
@@ -105,6 +110,15 @@ export default async function Enclaves({ searchParams }: { searchParams: Promise
                     ) : (
                       <span className={e.status === 'expired' ? 'bad' : s.quiet}>Expires at slot <span className="mono">{group(e.expiresAtSlot)}</span></span>
                     )}
+                  </div>
+                  <div className={`${s.cell} ${s.right}`}>
+                    <span className={s.cellLabel}>Bonded SOL</span>
+                    <span className={bonded ? `${s.figure} ochre` : s.quiet}>{formatBondSol(e.bondedLamports)}</span>
+                  </div>
+                  <div className={`${s.cell} ${s.right}`}>
+                    <span className={s.cellLabel}>Uptime</span>
+                    <span className={s.figure}>{computeUptimePct(e.callsSettled, missed)}</span>
+                    <span className={s.cellSub}>{group(missed)} missed</span>
                   </div>
                   <div className={`${s.cell} ${s.right}`}><span className={s.cellLabel}>Quoted share</span><span className={gs?.minQuote !== null && gs?.minQuote !== undefined ? s.figure : s.quiet}>{gs?.minQuote !== null && gs?.minQuote !== undefined ? bps(gs.minQuote) : 'Default'}</span></div>
                   <div className={`${s.cell} ${s.right}`}><span className={s.cellLabel}>Median latency</span><span className={gs?.minLatency !== null && gs?.minLatency !== undefined ? s.figure : s.quiet}>{formatLatency(gs?.minLatency)}</span></div>

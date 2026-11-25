@@ -1,9 +1,9 @@
 ---
 title: enclave
-description: voynich enclave register, run, status and quote, the voynich-enclave package they load, every environment variable they read and what each prints.
+description: voynich enclave register, run, status, quote and bond, the voynich-enclave package they load, every environment variable they read and what each prints.
 ---
 
-The four `enclave` commands are the operator's: `register` attests an enclave and registers it, `run` runs the enclave runtime, `status` prints where an enclave stands, and `quote` sets or clears an enclave's quoted operator share on a granted model. This page is the command reference. The operator's path from a machine to earnings is told in [Run the enclave runtime](/docs/operators/run-the-runtime) and [Register and get granted](/docs/operators/register-and-get-granted), and what an enclave is in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
+The five `enclave` commands are the operator's: `register` attests an enclave and registers it, `run` runs the enclave runtime, `status` prints where an enclave stands, `quote` sets or clears an enclave's quoted operator share on a granted model, and `bond` reads, deposits into, or withdraws from an enclave's on-chain SOL `Bond` PDA. This page is the command reference. The operator's path from a machine to earnings is told in [Run the enclave runtime](/docs/operators/run-the-runtime) and [Register and get granted](/docs/operators/register-and-get-granted), and what an enclave is in [Enclaves and attestation](/docs/concepts/enclaves-and-attestation).
 
 ## The runtime package
 
@@ -226,6 +226,31 @@ Optional enclave identifier. When omitted, the CLI looks up enclaves operated by
 </Fields>
 
 Prints `{ "enclave", "model", "operatorShareBps", "transaction", "status" }` as JSON on stdout.
+
+## voynich enclave bond
+
+```bash
+voynich enclave bond show [<enclave-key>] [--enclave <key>]
+voynich enclave bond deposit <lamports> [--enclave <key>]
+voynich enclave bond withdraw <lamports> [--enclave <key>]
+```
+
+Reads, deposits into, or withdraws from an enclave's 107-byte `Bond` PDA (`["bond", enclave]`) via [`deposit_bond`](/docs/program/instructions#depositbond) and [`withdraw_bond`](/docs/program/instructions#withdrawbond). The same from code is [getBond, depositBond and withdrawBond](/docs/sdk/models-and-enclaves#getbond-depositbond-and-withdrawbond).
+
+<Fields>
+<Field name="show [<enclave-key>]" type="subcommand">
+Reads `GET /v1/enclaves/{key}/bond` and prints the `OperatorBond` JSON (`address`, `enclave`, `operator`, `bondedLamports`, `slashedTotal`, `missedCalls`, `slashBps`, `updatedSlot`), or `{ "enclave", "bond": null }` when no bond exists. Needs no wallet when `<enclave-key>` or `--enclave` is given.
+</Field>
+<Field name="deposit <lamports>" type="subcommand">
+Deposits a positive integer number of lamports into the enclave's `Bond` PDA (creating it on first deposit) and prints the indexed `OperatorBond` JSON. Signed by `enclave.operator`.
+</Field>
+<Field name="withdraw <lamports>" type="subcommand">
+Withdraws a positive integer number of lamports (`<= bondedLamports`) back to `enclave.operator` while preserving rent-exemption, and prints the indexed `OperatorBond` JSON.
+</Field>
+<Field name="--enclave" type="enclave address or signing key">
+Optional enclave identifier. When omitted, the CLI looks up enclaves operated by the signing keypair and selects the match automatically when there is exactly one.
+</Field>
+</Fields>
 
 ## Failures
 

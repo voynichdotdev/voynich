@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
+import { DEFAULT_BOND_SLASH_BPS, bondCliCommand, computeUptimePct, formatBondSol, loadEnclaveBond } from '@/lib/bonds'
 import { formatLatency } from '@/lib/call'
 import { HARDWARE } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
@@ -28,10 +29,11 @@ export default async function EnclavePage({ params, searchParams }: Props) {
   const fixture = fixtureFrom(await searchParams)
   const q = fixture ? `?fixture=${fixture}` : ''
   const client = api(fixture)
-  const [r, stats, measurements] = await Promise.all([
+  const [r, stats, measurements, bond] = await Promise.all([
     read(client.enclave(key)),
     read(client.stats()),
     loadMeasurements(client),
+    loadEnclaveBond(client, key),
   ])
 
   if (!r.ok) {
@@ -53,6 +55,13 @@ export default async function EnclavePage({ params, searchParams }: Props) {
   const { enclave: e, grants, receipts, earnings } = r.data
   const rec = e.attestation
   const expired = e.status === 'expired'
+  const bondedLamports = bond?.bondedLamports ?? e.bondedLamports ?? '0'
+  const slashedTotal = bond?.slashedTotal ?? e.slashedTotal ?? '0'
+  const missedCalls = bond?.missedCalls ?? e.missedCalls ?? '0'
+  const slashBps = bond?.slashBps ?? DEFAULT_BOND_SLASH_BPS
+  const hasBond = BigInt(bondedLamports) > 0n
+  const uptime = computeUptimePct(e.callsSettled, missedCalls)
+  const depositCmd = bondCliCommand('deposit', e.address)
 
   return (
     <div className="container page">
@@ -72,6 +81,9 @@ export default async function EnclavePage({ params, searchParams }: Props) {
           <div><dt>Hardware</dt><dd>{hardware(e.hardwareType)}</dd></div>
           <div><dt>Models held</dt><dd className="mono">{group(e.modelsHeld)}</dd></div>
           <div><dt>Calls settled</dt><dd className="mono">{group(e.callsSettled)}</dd></div>
+          <div><dt>Bonded SOL</dt><dd className={hasBond ? 'mono ochre' : 'mono'}>{formatBondSol(bondedLamports)}</dd></div>
+          <div><dt>Uptime</dt><dd className="mono">{uptime}</dd></div>
+          <div><dt>Missed calls</dt><dd className="mono">{group(missedCalls)}</dd></div>
         </dl>
       </header>
 
@@ -119,6 +131,32 @@ export default async function EnclavePage({ params, searchParams }: Props) {
         </section>
 
         <div className={s.side}>
+          <section id="bond" className="panel" aria-labelledby="bond-heading">
+            <div className="panel-head">
+              <h2 id="bond-heading">Operator bond</h2>
+              {hasBond ? <span className={s.bondBadge}>Bonded</span> : <span className="t-small dim">Unbonded</span>}
+            </div>
+            <div className="panel-body">
+              {hasBond ? (
+                <Amount value={{ amount: bondedLamports, decimals: 9, symbol: 'SOL' }} size="m" />
+              ) : (
+                <p className="t-small dim">No SOL bonded yet. Operators stake SOL here to back calls with automatic timeout compensation.</p>
+              )}
+              <dl className={s.bondFacts}>
+                <dt>Timeout slash</dt><dd className="mono">{bps(slashBps)}</dd>
+                <dt>Uptime</dt><dd className="mono">{uptime}</dd>
+                <dt>Missed calls</dt><dd className="mono">{group(missedCalls)}</dd>
+                <dt>Slashed total</dt><dd><Amount value={{ amount: slashedTotal, decimals: 9, symbol: 'SOL' }} /></dd>
+                {bond ? (
+                  <>
+                    <dt>Bond account</dt><dd><Hash value={bond.address} chars={6} label="bond account" /></dd>
+                  </>
+                ) : null}
+              </dl>
+              <code className={`mono ${s.bondCli}`}>{depositCmd}</code>
+            </div>
+          </section>
+
           <section className="panel" aria-labelledby="earnings">
             <div className="panel-head"><h2 id="earnings">Earnings</h2><span className="t-small dim">operator share, by mint</span></div>
             <div className="panel-body">

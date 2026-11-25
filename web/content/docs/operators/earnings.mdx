@@ -36,9 +36,11 @@ A call earns when it settles. A call that is not settled by its deadline returns
 
 ## Operator bonds and timeout slashing
 
-An operator can back an enclave with a slashable SOL bond held in a 107-byte `Bond` PDA at `["bond", enclave]` via [`deposit_bond`](/docs/program/instructions#depositbond) (`POST /v1/enclaves/{key}/bond/deposit/build` or `voynich.depositBond`) and withdraw any unslashed `bondedLamports` at any time via [`withdraw_bond`](/docs/program/instructions#withdrawbond) (`POST /v1/enclaves/{key}/bond/withdraw/build` or `voynich.withdrawBond`).
+An operator can back an enclave with a slashable SOL bond held in a 107-byte `Bond` PDA at `["bond", enclave]` via [`deposit_bond`](/docs/program/instructions#depositbond) (`voynich enclave bond deposit <lamports>`, `POST /v1/enclaves/{key}/bond/deposit/build`, or `voynich.depositBond`) and withdraw any unslashed `bondedLamports` at any time via [`withdraw_bond`](/docs/program/instructions#withdrawbond) (`voynich enclave bond withdraw <lamports>`, `POST /v1/enclaves/{key}/bond/withdraw/build`, or `voynich.withdrawBond`). Check a bond's current state with [`voynich enclave bond show`](/docs/cli/enclave#voynich-enclave-bond).
 
-When a call assigned to a bonded enclave misses its deadline and [`refund_call`](/docs/program/instructions#refundcall) runs with the canonical `Bond` PDA passed in remaining accounts, the program slashes `min(bonded_lamports, escrow * 1000 / 10_000)` (10% of escrow) for SOL calls, or `min(bonded_lamports, 1_000_000)` lamports for SPL calls, directly to `call.caller`, increments `missed_calls` and `slashed_total`, and emits `BondSlashed`. Unbonded enclaves continue to settle and refund calls normally.
+When a call assigned to a bonded enclave misses its deadline and [`refund_call`](/docs/program/instructions#refundcall) runs with the canonical `Bond` PDA passed in remaining accounts, the program slashes `min(bonded_lamports, escrow * 1000 / 10_000)` (10% of escrow) for SOL calls, or `min(bonded_lamports, 1_000_000)` lamports for SPL calls, directly to `call.caller`, increments `missed_calls` and `slashed_total`, and emits `BondSlashed`. The protocol's `crank` checks `bondPda(call.enclave)` on chain during its expired-call refund sweep and attaches the writable `Bond` PDA automatically whenever `bondedLamports > 0`. Unbonded enclaves continue to settle and refund calls normally.
+
+On the site, `/enclaves` and `/models/<name>` display each enclave's live **Bonded SOL**, **Missed calls**, and **Uptime** alongside its quoted share and median latency, and `/enclaves/<key>` shows the full bond breakdown (bonded SOL, 10% timeout slash rate, slashed total, missed calls, uptime, and CLI command).
 
 ## Read earnings
 

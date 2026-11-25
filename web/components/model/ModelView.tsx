@@ -9,6 +9,7 @@ import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelSplit, ModelVers
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
+import { computeUptimePct, formatBondSol } from '@/lib/bonds'
 import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
@@ -400,11 +401,13 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
           {!enclaves.ok ? <div className={`panel-body ${s.fail}`}><Failed title="The enclaves did not load" message={enclaves.message} retry={<button type="button" className="btn" data-size="s" onClick={() => void refresh()}>Try again</button>} /></div>
             : enclaves.data.items.length === 0 ? <div className="panel-body"><Empty title="No enclave holds this model yet">An enclave answers calls once the owner grants it the model key.</Empty></div>
             : (
-              <ul className={s.list} style={{ '--cols': 'minmax(0, 1.15fr) minmax(0, 0.7fr) minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(0, 0.8fr) minmax(0, 0.7fr)' } as React.CSSProperties}>
-                <li className={s.listHead} aria-hidden="true"><span>Enclave</span><span>Hardware</span><span>Measurement</span><span className={s.num}>Quoted share</span><span className={s.num}>Median latency</span><span>Grant</span></li>
+              <ul className={s.list} style={{ '--cols': 'minmax(0, 1.05fr) minmax(0, 0.65fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 0.78fr) minmax(0, 0.75fr) minmax(0, 0.65fr)' } as React.CSSProperties}>
+                <li className={s.listHead} aria-hidden="true"><span>Enclave</span><span>Hardware</span><span>Measurement</span><span className={s.num}>Bond &amp; uptime</span><span className={s.num}>Quoted share</span><span className={s.num}>Median latency</span><span>Grant</span></li>
                 {enclaves.data.items.map(({ enclave, grant }) => {
                   const share = effectiveShareBps(grant, model.operatorShareBps)
                   const discounted = grant.quotedOperatorShareBps !== null && grant.quotedOperatorShareBps !== undefined && grant.quotedOperatorShareBps < model.operatorShareBps
+                  const hasBond = enclave.bondedLamports && BigInt(enclave.bondedLamports) > 0n
+                  const uptime = computeUptimePct(enclave.callsSettled, enclave.missedCalls)
                   return (
                     <li key={grant.address} className={s.row}>
                       <span data-label="Enclave"><Hash value={enclave.signingKey} chars={4} href={`/enclaves/${enclave.address}${q}`} label="enclave address" /></span>
@@ -412,6 +415,10 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
                       <span data-label="Measurement">
                         <Hash value={enclave.measurement} chars={4} label="measurement" />
                         <MeasurementSource record={findMeasurement(measurements, enclave.measurement)} compact />
+                      </span>
+                      <span data-label="Bond & uptime" className={`mono ${s.num}`}>
+                        <span className={hasBond ? 'ochre' : 'dim'}>{formatBondSol(enclave.bondedLamports)}</span>
+                        <span className="t-small dim" style={{ display: 'block' }}>{uptime}</span>
                       </span>
                       <span data-label="Quoted share" className={`mono ${s.num}`} title={discounted ? `Quoted below model ceiling (${bps(model.operatorShareBps)})` : `Model ceiling (${bps(model.operatorShareBps)})`}>
                         {bps(share)}{discounted ? <span className={s.programBadge} style={{ marginLeft: 6 }}>Quoted</span> : null}

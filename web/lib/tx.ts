@@ -96,6 +96,12 @@ export function errorMessage(e: unknown): string {
   if (code === 'INVALID_SPLIT') {
     return x?.body?.error?.message || 'Split shares must be unique recipients summing to 100%.'
   }
+  if (code === 'BOND_NOT_FOUND') {
+    return x?.body?.error?.message || 'No operator bond account exists for this enclave.'
+  }
+  if (code === 'INVALID_BOND') {
+    return x?.body?.error?.message || 'Bond amount must be positive and within the available bonded balance.'
+  }
   if (x?.body?.error?.message) return x.body.error.message
   if (e instanceof TypeError) return 'The API did not answer. Check the connection and try again.'
   if (x?.name === 'ZodError') return 'The API answered in a form this site does not read. Reload the page and try again.'

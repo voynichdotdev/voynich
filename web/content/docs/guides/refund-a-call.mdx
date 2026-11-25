@@ -80,7 +80,7 @@ const { receipt, verification } = await voynich.settle(callAddress, {
 
 ## Refunds nobody takes
 
-The protocol's crank sends `refund_call` for calls that pass their deadline, so an expired call is refunded without the caller doing anything. Taking the refund by hand is for a caller who wants it at once.
+The protocol's crank sends `refund_call` for calls that pass their deadline, so an expired call is refunded without the caller doing anything. When the assigned enclave holds an active on-chain `Bond` PDA (`bondedLamports > 0`), the crank automatically attaches the writable `Bond` PDA in `remainingAccounts`, so `refund_call` pays `escrow + timeout slash` (`10%` of SOL escrow, or up to `1,000,000` lamports for SPL calls) directly to `call.caller`. Taking the refund by hand is for a caller who wants it at once.
 
 ## Failures
 

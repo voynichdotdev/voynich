@@ -10,6 +10,7 @@ import { ADAPTER_MAGIC, ADAPTER_VERSION, applyOnnxAdapter, decodeAdapter, encode
 import { ciphertextMerkleRoot, decryptCallOutput, encryptCallOutput, fromHex, generateEncryptionKeyPair, merkleRootFromLeaves, openWeightsChunk, pieceMessage, sealWeights, sha256, signPiece, signReceipt, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece } from 'voynich/crypto'
 import { decodeModelBaseBytes as sdkDecodeModelBaseBytes, decodeReceiptAccount as sdkDecodeReceiptAccount } from 'voynich/program'
 import { fetchBountyAfterSettle, parseSolToLamports, refreshBounties } from '@/lib/bounties'
+import { DEFAULT_BOND_SLASH_BPS, bondCliCommand, computeUptimePct, formatBondSol, loadEnclaveBond } from '@/lib/bonds'
 import { STREAM_PIECES_MAX_ENTRIES, STREAM_PIECES_STORAGE_KEY, STREAM_PIECES_TTL_MS, decodeOpenAnswer, decodeOutput, effectiveShareBps, eligibleEnclaves, follow, followStream, formatLatency, getSavedStreamPiece, loadLastPieceFromApi, loadSavedStreamPieces, parseCeiling, parseTensor, pickEnclave, removeSavedStreamPiece, saveStreamPiece, selectEnclave, settleMeteredStream, verifyBrowserStreamPiece, type CallState } from '@/lib/call'
 import { explorerUrl, siteUrl } from '@/lib/env'
 import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
@@ -3012,5 +3013,63 @@ test('Build 12 Step 2: revenue split validation, formatting, CLI command, API he
   const ownerPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/OwnerPanel.tsx'), 'utf8')
   for (const sym of ['Revenue split', 'Save split', 'Clear split', 'Add recipient', 'splitSetCliCommand', 'client.setSplit']) {
     assert.ok(ownerPanelSrc.includes(sym), `OwnerPanel must include ${sym}`)
+  }
+})
+
+test('Build 13 Step 2: operator bond helpers, uptime calculation, CLI command, error mapping, and /enclaves + /models/[id] UI wiring', async () => {
+  assert.equal(DEFAULT_BOND_SLASH_BPS, 1000)
+
+  assert.equal(formatBondSol(null), 'Unbonded')
+  assert.equal(formatBondSol(undefined), 'Unbonded')
+  assert.equal(formatBondSol('0'), 'Unbonded')
+  assert.equal(formatBondSol('100000000'), '0.1 SOL')
+  assert.equal(formatBondSol('1250000000'), '1.25 SOL')
+
+  assert.equal(computeUptimePct('0', '0'), '100%')
+  assert.equal(computeUptimePct('42', '0'), '100%')
+  assert.equal(computeUptimePct('9', '1'), '90%')
+  assert.equal(computeUptimePct('199', '1'), '99.5%')
+
+  const enclaveKey = Keypair.generate().publicKey.toBase58()
+  assert.equal(bondCliCommand('show', enclaveKey), `voynich enclave bond show ${enclaveKey}`)
+  assert.equal(bondCliCommand('deposit', enclaveKey, '200000000'), `voynich enclave bond deposit 200000000 --enclave ${enclaveKey}`)
+  assert.equal(bondCliCommand('withdraw', enclaveKey, '50000000'), `voynich enclave bond withdraw 50000000 --enclave ${enclaveKey}`)
+
+  const sampleBond = {
+    address: Keypair.generate().publicKey.toBase58(),
+    enclave: enclaveKey,
+    operator: Keypair.generate().publicKey.toBase58(),
+    bondedLamports: '100000000',
+    slashedTotal: '1000000',
+    missedCalls: '1',
+    slashBps: 1000,
+    updatedSlot: '473800000',
+  }
+  const okClient = {
+    enclaveBond: async () => sampleBond,
+  } as unknown as Parameters<typeof loadEnclaveBond>[0]
+  const missingClient = {
+    enclaveBond: async () => { throw { status: 404, code: 'BOND_NOT_FOUND' } },
+  } as unknown as Parameters<typeof loadEnclaveBond>[0]
+
+  assert.deepEqual(await loadEnclaveBond(okClient, enclaveKey), sampleBond)
+  assert.equal(await loadEnclaveBond(missingClient, enclaveKey), null)
+
+  assert.ok(errorMessage({ body: { error: { code: 'BOND_NOT_FOUND' } } }).includes('bond'))
+  assert.ok(errorMessage({ body: { error: { code: 'INVALID_BOND' } } }).includes('Bond amount'))
+
+  const enclavesPageSrc = fs.readFileSync(path.join(ROOT, 'app/enclaves/page.tsx'), 'utf8')
+  for (const sym of ['Bonded SOL', 'Uptime', 'formatBondSol', 'computeUptimePct', 'missed']) {
+    assert.ok(enclavesPageSrc.includes(sym), `/enclaves must include ${sym}`)
+  }
+
+  const enclaveDetailSrc = fs.readFileSync(path.join(ROOT, 'app/enclaves/[key]/page.tsx'), 'utf8')
+  for (const sym of ['Operator bond', 'Timeout slash', 'Slashed total', 'Missed calls', 'loadEnclaveBond', 'bondCliCommand']) {
+    assert.ok(enclaveDetailSrc.includes(sym), `/enclaves/[key] must include ${sym}`)
+  }
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['formatBondSol', 'computeUptimePct', 'Bond &amp; uptime']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
   }
 })
