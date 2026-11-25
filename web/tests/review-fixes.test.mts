@@ -16,6 +16,7 @@ import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
 import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
 import { SESSION_DELEGATES_KEY, findActiveBrowserSession, loadAccountSessions, loadSessionDelegate, removeSessionDelegate, saveSessionDelegate, submitDelegateBuild } from '@/lib/sessions'
+import { SPLIT_LIMITS, claimModelSplit, formatSplitPct, loadModelSplit, pctToBps, setModelSplit, splitEquals, splitSetCliCommand, splitToDraft, totalUnclaimedLamports, validateSplitDraft } from '@/lib/splits'
 import { effectiveModelVersion, fallbackModelVersions, loadModelVersions, matchReceiptVersion, upgradeCliCommand } from '@/lib/versions'
 import {
   ATTACH_WEIGHTS_BATCH, CIPHER_CHUNK_BYTES, INITIAL_CREATE_WEIGHTS, MAX_WEIGHTS, SEAL_RANGE_CHUNKS, WEIGHTS_CAPACITY, WRITE_BYTES, WRITE_PARALLEL,
@@ -2853,5 +2854,163 @@ test('Build 11 Step 2: browser session delegate storage, active session matching
   const accountViewSrc = fs.readFileSync(path.join(ROOT, 'components/account/AccountView.tsx'), 'utf8')
   for (const sym of ['Active sessions', 'Close & reclaim', 'loadAccountSessions', 'closeBrowserSession']) {
     assert.ok(accountViewSrc.includes(sym), `AccountView must include ${sym}`)
+  }
+})
+
+test('Build 12 Step 2: revenue split validation, formatting, CLI command, API helpers, and ModelView/OwnerPanel UI wiring', async () => {
+  assert.equal(SPLIT_LIMITS.maxRecipients, 8)
+  assert.equal(SPLIT_LIMITS.totalBps, 10000)
+
+  assert.equal(pctToBps('50'), 5000)
+  assert.equal(pctToBps('33.33'), 3333)
+  assert.equal(pctToBps('0'), null)
+  assert.equal(pctToBps('100.01'), null)
+  assert.equal(pctToBps('abc'), null)
+  assert.equal(formatSplitPct(5000), '50%')
+  assert.equal(formatSplitPct(3333), '33.33%')
+
+  const w1 = Keypair.generate().publicKey.toBase58()
+  const w2 = Keypair.generate().publicKey.toBase58()
+  const w3 = Keypair.generate().publicKey.toBase58()
+
+  const ok = validateSplitDraft([
+    { wallet: w1, sharePct: '50' },
+    { wallet: w2, sharePct: '30' },
+    { wallet: w3, sharePct: '20' },
+  ])
+  assert.equal(ok.ok, true)
+  if (ok.ok) {
+    assert.equal(ok.totalBps, 10000)
+    assert.deepEqual(ok.recipients, [
+      { wallet: w1, shareBps: 5000 },
+      { wallet: w2, shareBps: 3000 },
+      { wallet: w3, shareBps: 2000 },
+    ])
+  }
+
+  // Rejects bad sum, duplicate recipient, bad address, and > 8 recipients
+  const badSum = validateSplitDraft([
+    { wallet: w1, sharePct: '50' },
+    { wallet: w2, sharePct: '40' },
+  ])
+  assert.equal(badSum.ok, false)
+  if (!badSum.ok) assert.ok(badSum.error.includes('90%'))
+
+  const dup = validateSplitDraft([
+    { wallet: w1, sharePct: '50' },
+    { wallet: w1, sharePct: '50' },
+  ])
+  assert.equal(dup.ok, false)
+
+  const badAddr = validateSplitDraft([{ wallet: 'not-a-pubkey', sharePct: '100' }])
+  assert.equal(badAddr.ok, false)
+
+  const tooMany = validateSplitDraft(
+    Array.from({ length: 9 }, () => ({ wallet: Keypair.generate().publicKey.toBase58(), sharePct: '11' })),
+  )
+  assert.equal(tooMany.ok, false)
+
+  const sampleSplit = {
+    address: Keypair.generate().publicKey.toBase58(),
+    model: Keypair.generate().publicKey.toBase58(),
+    authority: w1,
+    mint: null,
+    active: true,
+    totalReceived: '10000000',
+    recipients: [
+      { wallet: w1, shareBps: 5000, accrued: '5000000', claimed: '2000000', claimable: '3000000' },
+      { wallet: w2, shareBps: 3000, accrued: '3000000', claimed: '0', claimable: '3000000' },
+      { wallet: w3, shareBps: 2000, accrued: '2000000', claimed: '2000000', claimable: '0' },
+    ],
+    updatedSlot: '420000',
+  }
+  assert.equal(totalUnclaimedLamports(sampleSplit), 6000000n)
+  assert.deepEqual(splitToDraft(sampleSplit), [
+    { wallet: w1, sharePct: '50' },
+    { wallet: w2, sharePct: '30' },
+    { wallet: w3, sharePct: '20' },
+  ])
+  assert.equal(
+    splitEquals(sampleSplit, [
+      { wallet: w1, shareBps: 5000 },
+      { wallet: w2, shareBps: 3000 },
+      { wallet: w3, shareBps: 2000 },
+    ]),
+    true,
+  )
+  assert.equal(
+    splitEquals(sampleSplit, [
+      { wallet: w1, shareBps: 6000 },
+      { wallet: w2, shareBps: 4000 },
+    ]),
+    false,
+  )
+  assert.equal(
+    splitSetCliCommand('sketch-32', [
+      { wallet: w1, shareBps: 5000 },
+      { wallet: w2, shareBps: 5000 },
+    ]),
+    `voynich model split set sketch-32 --recipient ${w1}:5000 --recipient ${w2}:5000`,
+  )
+  assert.equal(splitSetCliCommand('sketch-32', []), 'voynich model split set sketch-32 --clear')
+
+  // loadModelSplit skips RPC when hasSplit === false and fetches when true
+  let fetched = 0
+  const mockClient = {
+    modelSplit: async () => {
+      fetched++
+      return sampleSplit
+    },
+    setSplit: async (_m: string, body: { wallet: string; recipients: unknown[] }) => ({
+      id: `set-${body.recipients.length}`,
+      action: 'set_split' as const,
+      transactionBase64: 'AAAA',
+      blockhash: 'BH',
+      lastValidBlockHeight: 100,
+      cosigned: false,
+      requiredSigners: [body.wallet],
+      fixture: true,
+      addresses: { split: sampleSplit.address },
+    }),
+    claimSplit: async (_m: string, body: { wallet: string; recipient?: string }) => ({
+      id: `claim-${body.recipient ?? body.wallet}`,
+      action: 'claim_split' as const,
+      transactionBase64: 'AAAA',
+      blockhash: 'BH',
+      lastValidBlockHeight: 100,
+      cosigned: false,
+      requiredSigners: [body.wallet],
+      fixture: true,
+      addresses: { split: sampleSplit.address },
+    }),
+    submitTransaction: async (input: { buildId: string }) => ({ id: input.buildId, status: 'confirmed' as const }),
+    transaction: async (id: string) => ({ id, status: 'confirmed' as const }),
+  } as unknown as Parameters<typeof loadModelSplit>[0]
+
+  assert.equal(await loadModelSplit(mockClient, { address: sampleSplit.model, hasSplit: false }), null)
+  assert.equal(fetched, 0)
+  const loaded = await loadModelSplit(mockClient, { address: sampleSplit.model, hasSplit: true })
+  assert.equal(loaded?.address, sampleSplit.address)
+  assert.equal(fetched, 1)
+
+  const setRes = await setModelSplit(mockClient, sampleSplit.model, w1, [{ wallet: w1, shareBps: 10000 }])
+  assert.equal(setRes.status, 'confirmed')
+  const claimRes = await claimModelSplit(mockClient, sampleSplit.model, w1, w2)
+  assert.equal(claimRes.status, 'confirmed')
+
+  assert.ok(errorMessage({ body: { error: { code: 'SPLIT_NOT_FOUND' } } }).includes('revenue split'))
+  assert.ok(errorMessage({ body: { error: { code: 'INVALID_SPLIT' } } }).includes('100%'))
+
+  const pageSrc = fs.readFileSync(path.join(ROOT, 'app/models/[id]/page.tsx'), 'utf8')
+  assert.ok(pageSrc.includes('loadModelSplit') && pageSrc.includes('split'))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['Revenue split', 'claimModelSplit', 'formatSplitPct', 'Unclaimed', 'Claim', 'loadModelSplit']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+
+  const ownerPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/OwnerPanel.tsx'), 'utf8')
+  for (const sym of ['Revenue split', 'Save split', 'Clear split', 'Add recipient', 'splitSetCliCommand', 'client.setSplit']) {
+    assert.ok(ownerPanelSrc.includes(sym), `OwnerPanel must include ${sym}`)
   }
 })

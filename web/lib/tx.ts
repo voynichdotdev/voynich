@@ -90,6 +90,12 @@ export function errorMessage(e: unknown): string {
   if (code === 'RATE_LIMITED') {
     return x?.body?.error?.message || 'Rate ceiling reached for this wallet. Wait for the current slot window to pass, then try again.'
   }
+  if (code === 'SPLIT_NOT_FOUND') {
+    return x?.body?.error?.message || 'No revenue split account exists for this model.'
+  }
+  if (code === 'INVALID_SPLIT') {
+    return x?.body?.error?.message || 'Split shares must be unique recipients summing to 100%.'
+  }
   if (x?.body?.error?.message) return x.body.error.message
   if (e instanceof TypeError) return 'The API did not answer. Check the connection and try again.'
   if (x?.name === 'ZodError') return 'The API answered in a form this site does not read. Reload the page and try again.'

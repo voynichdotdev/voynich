@@ -161,6 +161,44 @@ const history = await voynich.listVersions('text-1m')
 
 On the site, `/models/<name>` displays the active version badge and the **Version history** timeline (`v1..vN`, status, weights hash, size, and published slot), and `/receipts/<id>` shows the matched model revision.
 
+## Configure a revenue split
+
+A model owner can split `owner_amount` across up to 8 recipient wallets (`shareBps` summing to `10,000`) through an on-chain `Split` PDA (`["split", model]`). Enclaves automatically attach the `Split` PDA during settlement, and any wallet can trigger a permissionless claim for a recipient with unclaimed balance.
+
+<Ways>
+<Way label="Site">
+
+On `/models/<name>`, the **Owner** panel lets the owner configure recipient wallets and basis-point shares (summing to `10,000`) or clear the split. When active, `/models/<name>` displays the **Revenue split** bar and recipient table with accrued/unclaimed balances and a one-press **Claim** button for each recipient with claimable funds.
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich model split set text-1m \
+  --recipient <walletA>:5000 \
+  --recipient <walletB>:3000 \
+  --recipient <walletC>:2000
+
+voynich model split show text-1m
+voynich model split claim text-1m --recipient <walletB>
+```
+
+</Way>
+<Way label="SDK">
+
+```ts
+await voynich.setSplit('text-1m', [
+  { wallet: walletA, shareBps: 5000 },
+  { wallet: walletB, shareBps: 3000 },
+  { wallet: walletC, shareBps: 2000 },
+])
+
+await voynich.claimSplit('text-1m', walletB)
+```
+
+</Way>
+</Ways>
+
 ## Retire the model
 
 Retiring closes the model to new calls and new grants. Calls that are open settle until their deadline and refund after it. The ciphertext and every receipt stay on chain.

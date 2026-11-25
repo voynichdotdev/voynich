@@ -67,8 +67,8 @@ npm run verify:build --workspace voynich-enclave
 `verify:build` runs clean builds across isolated directories, checks for zero host-specific paths, and prints the bundle `measurement` (SHA-384) and `recipeHash` (SHA-256 over `enclave/Dockerfile`, `enclave/build.mjs`, `enclave/package.json`, and `package-lock.json`).
 
 For this source tree:
-- `measurement`: `f9536af2c59acce24521e2c59e7e98a653ba6eade42969f5ac0b8d482140a72ae4fc6a6f7dc0779b4dc902e9173c99cc`
-- `recipeHash`: `4a9d02797da7d99021d98f342e7dc9e925e7b9892d98931e295197265bbd3361`
+- `measurement`: `ff7e93338b3959d16ff75f4c8325e954ab0c2723a431faae492dc1bbd34253b6961d0d0f1c3865793a43ae82c91197aa`
+- `recipeHash`: `6634f2d8a2cc3a4d211b6c3ec06cc873886725b523d4df34daaf08928b647653`
 
 ### Run the web app locally
 

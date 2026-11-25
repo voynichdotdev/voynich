@@ -5,17 +5,20 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelVersions, ReceiptsPage } from '@voynich/contract'
+import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelSplit, ModelVersions, ReceiptsPage } from '@voynich/contract'
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
 import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
+import { play } from '@/lib/sound'
+import { claimModelSplit, formatSplitPct, loadModelSplit, totalUnclaimedLamports } from '@/lib/splits'
+import { errorMessage } from '@/lib/tx'
 import { effectiveModelVersion, fallbackModelVersions, loadModelVersions } from '@/lib/versions'
 import { wallet } from '@/lib/wallet'
 import { useWallet } from '@/src/engines/wallet/react'
-import { State, TileStrip } from '@/components/tile/Tile'
+import { State, StateTile, TileStrip } from '@/components/tile/Tile'
 import { MeasurementSource } from '@/components/ui/MeasurementSource'
 import { Amount, Empty, Explorer, Failed, Hash, Size, Stat } from '@/components/ui/kit'
 import { CallPanel } from './CallPanel'
@@ -26,8 +29,20 @@ import s from './model-view.module.css'
 type Props = {
   fixture: string | null
   asOwner: boolean
-  initial: { model: Model; enclaves: Read<GrantedEnclaves>; receipts: Read<ReceiptsPage>; measurements?: MeasurementMap; policy?: ModelPolicy | null; versions?: ModelVersions | null }
+  initial: {
+    model: Model
+    enclaves: Read<GrantedEnclaves>
+    receipts: Read<ReceiptsPage>
+    measurements?: MeasurementMap
+    policy?: ModelPolicy | null
+    split?: ModelSplit | null
+    versions?: ModelVersions | null
+  }
 }
+
+const SPLIT_STEPS = [14, 11, 8, 6, 13, 9, 7, 5] as const
+
+type ClaimTx = { wallet: string; stage: 'signing' | 'confirming' | 'done' | 'failed'; message?: string }
 
 export function ModelView({ fixture, asOwner, initial }: Props) {
   const w = useWallet(wallet)
@@ -36,8 +51,10 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
   const [receipts, setReceipts] = useState(initial.receipts)
   const [measurements, setMeasurements] = useState<MeasurementMap>(initial.measurements ?? {})
   const [policy, setPolicy] = useState<ModelPolicy | null>(initial.policy ?? null)
+  const [modelSplit, setModelSplit] = useState<ModelSplit | null>(initial.split ?? null)
   const [versions, setVersions] = useState<ModelVersions | null>(initial.versions ?? null)
   const [config, setConfig] = useState<Config | null>(null)
+  const [claimTx, setClaimTx] = useState<ClaimTx | null>(null)
   const id = initial.model.address
   const q = fixture ? `?fixture=${fixture}` : ''
 
@@ -56,7 +73,12 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
     setReceipts(r)
     setMeasurements(ms)
     if (vs) setVersions(vs)
-    setPolicy(await loadModelPolicy(client, nextModel))
+    const [nextPolicy, nextSplit] = await Promise.all([
+      loadModelPolicy(client, nextModel),
+      loadModelSplit(client, nextModel),
+    ])
+    setPolicy(nextPolicy)
+    setModelSplit(nextSplit)
   }, [fixture, id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // After a confirmation the API's read follows the chain by a moment: read now and once more shortly after.
@@ -98,6 +120,11 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
           <div className={s.split}>
             {split.map((p) => <span key={p.name} style={{ flexGrow: Math.max(p.bps, 1400) }}><span className="t-label">{p.name}</span> <span className="mono">{bps(p.bps)}</span></span>)}
           </div>
+          {modelSplit?.active && modelSplit.recipients.length > 0 ? (
+            <p className="t-small dim" style={{ marginTop: 8 }}>
+              Owner share routes to <a href="#revenue-split" className="link">{modelSplit.recipients.length} {modelSplit.recipients.length === 1 ? 'recipient' : 'recipients'}</a>.
+            </p>
+          ) : null}
           <Link href={LINKS.token} className={`link t-small ${s.fees}`} data-arrow>Fees and the token</Link>
         </dd>
         <dt className={s.wide}>Allowed measurements</dt>
@@ -203,8 +230,131 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
 
         {isOwner ? (
           <div className={s.full}>
-            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} currentVersion={activeVersion} onChanged={refreshSoon} />
+            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} split={modelSplit} currentVersion={activeVersion} onChanged={refreshSoon} />
           </div>
+        ) : null}
+
+        {modelSplit && modelSplit.recipients.length > 0 ? (
+          <section id="revenue-split" className={`panel ${s.full}`} aria-labelledby="revenue-split-heading">
+            <div className="panel-head">
+              <div className={s.splitHeadMeta}>
+                <h2 id="revenue-split-heading">Revenue split</h2>
+                <span className={s.kindBadge}>{modelSplit.active ? 'Active' : 'Cleared'}</span>
+                <Hash value={modelSplit.address} chars={6} label="split account" />
+              </div>
+              <span className="t-small dim">
+                Total routed: <Amount value={{ ...model.price, amount: modelSplit.totalReceived }} />
+              </span>
+            </div>
+            <div className={s.splitStripWrap}>
+              <TileStrip
+                parts={modelSplit.recipients.map((r, idx) => ({
+                  share: r.shareBps / 10000,
+                  step: SPLIT_STEPS[idx % SPLIT_STEPS.length]!,
+                }))}
+                cells={48}
+                height={14}
+              />
+              <div className={s.splitLegend}>
+                {modelSplit.recipients.map((r) => (
+                  <span key={r.wallet} className={s.splitLegendItem}>
+                    <span className="mono">{short(r.wallet, 4)}</span>
+                    <span className="mono ochre">{formatSplitPct(r.shareBps)}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <ul
+              className={s.list}
+              style={{ '--cols': 'minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 0.8fr)' } as React.CSSProperties}
+            >
+              <li className={s.listHead} aria-hidden="true">
+                <span>Recipient</span>
+                <span>Share</span>
+                <span className={s.num}>Accrued</span>
+                <span className={s.num}>Claimed</span>
+                <span className={s.num}>Unclaimed</span>
+                <span className={s.num}>Action</span>
+              </li>
+              {modelSplit.recipients.map((r) => {
+                const unclaimed = BigInt(r.claimable)
+                const busy = claimTx?.stage === 'signing' || claimTx?.stage === 'confirming'
+                const claimingThis = busy && claimTx?.wallet === r.wallet
+                const payer = w.status === 'connected' ? w.address : config?.fixture ? r.wallet : null
+                const canClaim = unclaimed > 0n && !!payer && !busy
+                return (
+                  <li key={r.wallet} className={s.row}>
+                    <span data-label="Recipient" className={s.callerCell}>
+                      <Hash value={r.wallet} chars={6} label="recipient wallet" />
+                      {w.status === 'connected' && w.address === r.wallet ? <span className={s.programBadge}>You</span> : null}
+                    </span>
+                    <span data-label="Share" className={s.splitShareCell}>
+                      <span className="mono">{formatSplitPct(r.shareBps)}</span>
+                      <span className={s.splitBarTrack} aria-hidden="true">
+                        <span className={s.splitBarFill} style={{ width: `${Math.min(100, r.shareBps / 100)}%` }} />
+                      </span>
+                    </span>
+                    <span data-label="Accrued" className={s.num}>
+                      <Amount value={{ ...model.price, amount: r.accrued }} />
+                    </span>
+                    <span data-label="Claimed" className={s.num}>
+                      <Amount value={{ ...model.price, amount: r.claimed }} />
+                    </span>
+                    <span data-label="Unclaimed" className={s.num}>
+                      <Amount value={{ ...model.price, amount: r.claimable }} />
+                    </span>
+                    <span data-label="Action" className={`${s.num} ${s.splitActionCell}`}>
+                      <button
+                        type="button"
+                        className="btn"
+                        data-kind={unclaimed > 0n ? 'primary' : undefined}
+                        data-size="s"
+                        disabled={!canClaim}
+                        data-pending={claimingThis || undefined}
+                        onClick={() => {
+                          if (!payer || unclaimed <= 0n || busy) return
+                          setClaimTx({ wallet: r.wallet, stage: 'signing' })
+                          void claimModelSplit(api(fixture), model.address, payer, r.wallet, (stage) => {
+                            setClaimTx({ wallet: r.wallet, stage })
+                          })
+                            .then(() => {
+                              play('grant')
+                              setClaimTx({ wallet: r.wallet, stage: 'done', message: `Claimed for ${short(r.wallet, 4)}.` })
+                              refreshSoon()
+                            })
+                            .catch((err) => {
+                              play('failed')
+                              setClaimTx({ wallet: r.wallet, stage: 'failed', message: errorMessage(err) })
+                            })
+                        }}
+                      >
+                        {claimingThis ? (claimTx.stage === 'signing' ? 'Signing' : 'Confirming') : 'Claim'}
+                      </button>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+            <div className={s.splitFoot}>
+              {claimTx ? (
+                <p className={s.txLine} role="status" aria-live="polite">
+                  <StateTile state={claimTx.stage === 'done' ? 'passed' : claimTx.stage === 'failed' ? 'failed' : 'pending'} />
+                  <span className={claimTx.stage === 'failed' ? 'bad' : claimTx.stage === 'done' ? 'ochre' : 'sub'}>
+                    {claimTx.stage === 'signing'
+                      ? 'Awaiting signature'
+                      : claimTx.stage === 'confirming'
+                        ? 'Confirming claim'
+                        : claimTx.message}
+                  </span>
+                </p>
+              ) : totalUnclaimedLamports(modelSplit) > 0n && w.status !== 'connected' && !config?.fixture ? (
+                <span className="t-small dim">Connect any wallet to submit a permissionless claim.</span>
+              ) : (
+                <span className="t-small dim">Permissionless claims transfer accrued owner share directly to each recipient wallet.</span>
+              )}
+              <span className="t-small dim">Updated slot <span className="mono">{group(modelSplit.updatedSlot)}</span></span>
+            </div>
+          </section>
         ) : null}
 
         <section className={`panel ${live ? s.full : s.cipher}`} aria-labelledby="ciphertext">

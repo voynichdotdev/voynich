@@ -5,7 +5,7 @@ description: voynich models and voynich enclaves, the two list commands, with ev
 
 Two commands list what is on chain: `voynich models` lists sealed models and `voynich enclaves` lists registered enclaves. Both read public state through the API and need no wallet. The same from code is [Models and enclaves](/docs/sdk/models-and-enclaves).
 
-Three more commands change a model as its owner: [`voynich model price`](#voynich-model-price), [`voynich model policy`](#voynich-model-policy) and [`voynich model retire`](#voynich-model-retire), plus [`voynich model versions`](#voynich-model-versions) and [`voynich model upgrade`](#voynich-model-upgrade) for versioned releases.
+Three more commands change a model as its owner: [`voynich model price`](#voynich-model-price), [`voynich model policy`](#voynich-model-policy) and [`voynich model retire`](#voynich-model-retire), plus [`voynich model split`](#voynich-model-split) for revenue splits and [`voynich model versions`](#voynich-model-versions) and [`voynich model upgrade`](#voynich-model-upgrade) for versioned releases.
 
 ## voynich models
 
@@ -355,6 +355,29 @@ Signs `clear_policy` as the model's owner, closing the `Policy` PDA and returnin
 | `VALIDATION_ERROR`, `INVALID_POLICY` | The API's message | Duplicate addresses/regions, out-of-range counts, or mismatched zero/positive rate limits. |
 | `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner. |
 
+## voynich model split
+
+Reads, sets, deactivates, or claims from a model's on-chain revenue `Split` PDA (`["split", model]`). The same from code is [getSplit, setSplit and claimSplit](/docs/sdk/models-and-enclaves#getsplit-setsplit-and-claimsplit).
+
+```bash
+voynich model split show <model>
+voynich model split set <model> --recipient <wallet:bps> [--recipient <wallet:bps> ...]
+voynich model split set <model> --clear
+voynich model split claim <model> [--recipient <wallet>]
+```
+
+<Fields>
+<Field name="show <model>" type="read">
+Reads `GET /v1/models/{id}/split` (no wallet required). Prints the `ModelSplit` JSON, or `{ "model": "<model>", "split": null }` when no split is configured.
+</Field>
+<Field name="set <model>" type="owner write">
+Signs `set_split` as the model's owner and prints the indexed `ModelSplit`. Pass 1 to 8 repeatable `--recipient <wallet:bps>` flags summing to `10000` bps, or `--clear` (mutually exclusive with `--recipient`) to deactivate the split.
+</Field>
+<Field name="claim <model>" type="permissionless write">
+Signs `claim_split` to pay `accrued - claimed` directly to `--recipient <wallet>` (defaults to the signing keypair's public key when omitted) and prints the confirmation status.
+</Field>
+</Fields>
+
 ## voynich model versions
 
 ```bash
@@ -414,7 +437,7 @@ It prints the status of the transaction: `id`, `status` and `signature`.
 | `SIMULATION_FAILED` | The API's message | The wallet is not the model's owner. |
 | `TRANSACTION_FAILED`, `TRANSACTION_EXPIRED` | The failure's own message, or `The transaction did not land.` | `retire_model` was refused, or did not land before its blockhash expired. |
 
-`voynich model` followed by another word fails with `Use model price, model policy, model versions, model upgrade, model retire, or model revoke.` The last of them, `voynich model revoke`, is on [grant](/docs/cli/grant#voynich-model-revoke).
+`voynich model` followed by another word fails with `Use model price, model policy, model split, model versions, model upgrade, model retire, or model revoke.` The last of them, `voynich model revoke`, is on [grant](/docs/cli/grant#voynich-model-revoke).
 
 ## Failures
 

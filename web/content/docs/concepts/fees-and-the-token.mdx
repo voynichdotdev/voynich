@@ -41,7 +41,7 @@ Shares are in basis points: 10,000 is the whole price.
 
 The owner, the operator, the fee recipient and both shares are fixed in the call when it opens, so a call settles on the terms it opened with. The three amounts are written into the receipt.
 
-When a model owner attaches an on-chain [`Split`](/docs/program/accounts#split) PDA (`set_split`, up to 8 recipients summing to 10,000 basis points), `settle_call` and `settle_metered_call` route `owner_amount` into the `Split` PDA instead of directly to `owner`, crediting each recipient's `accrued` share (`floor(owner_amount * share_bps / 10,000)` with any rounding dust to `recipients[0]`). Any wallet can then call `claim_split` to release a recipient's unclaimed balance directly to their wallet.
+When a model owner attaches an on-chain [`Split`](/docs/program/accounts#split) PDA (`set_split`, up to 8 recipients summing to 10,000 basis points), enclaves automatically attach the `Split` PDA during `settle_call` and `settle_metered_call` so `owner_amount` routes into the `Split` PDA instead of directly to `owner`, crediting each recipient's `accrued` share (`floor(owner_amount * share_bps / 10,000)` with any rounding dust to `recipients[0]`). Any wallet can then call `claim_split` (or press **Claim** under **Revenue split** on `/models/<name>`) to release a recipient's unclaimed balance directly to their wallet.
 
 ## What else a call costs
 

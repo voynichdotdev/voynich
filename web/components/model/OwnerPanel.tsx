@@ -3,12 +3,13 @@
 // What the model's owner does from its page: set the price and the operator's share, grant an enclave, retire.
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { fromBase64, toBase64, type Build, type Enclave, type GrantedEnclave, type Model, type ModelPolicy, type PriceUnit } from '@voynich/contract'
+import { fromBase64, toBase64, type Build, type Enclave, type GrantedEnclave, type Model, type ModelPolicy, type ModelSplit, type PriceUnit } from '@voynich/contract'
 import { wrapKey } from 'voynich/crypto'
 import { api, read } from '@/lib/api'
 import { bps, hardware, short, units } from '@/lib/format'
 import { loadModelKey, openKeyFile, parseKeyFile, saveModelKey, setVaultPassword, unlockVault, useVault, type SealedKeyFile } from '@/lib/keys'
 import { policyEquals, policyToDraft, validatePolicyDraft, type PolicyDraft } from '@/lib/policy'
+import { SPLIT_LIMITS, formatSplitPct, splitEquals, splitSetCliCommand, splitToDraft, validateSplitDraft, type SplitRowDraft } from '@/lib/splits'
 import { effectiveModelVersion, upgradeCliCommand } from '@/lib/versions'
 import { play } from '@/lib/sound'
 import { errorMessage, send } from '@/lib/tx'
@@ -58,9 +59,9 @@ function toBase(text: string, decimals: number): string | null {
   return (BigInt(m[1]!) * 10n ** BigInt(decimals) + BigInt(frac.padEnd(decimals, '0') || '0')).toString()
 }
 
-type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; currentVersion?: number; onChanged: () => void }
+type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; split?: ModelSplit | null; currentVersion?: number; onChanged: () => void }
 
-export function OwnerPanel({ model, fixture, signer, grants, policy = null, currentVersion, onChanged }: Props) {
+export function OwnerPanel({ model, fixture, signer, grants, policy = null, split = null, currentVersion, onChanged }: Props) {
   const client = api(fixture)
   const protocol = model.protocolShareBps ?? 0
   const activeVersion = currentVersion ?? effectiveModelVersion(model)
@@ -159,6 +160,32 @@ export function OwnerPanel({ model, fixture, signer, grants, policy = null, curr
   const policyCheck = validatePolicyDraft(policyDraft)
   const policyErrs = policyCheck.ok ? {} : policyCheck.errors
   const policySame = policyCheck.ok && policyEquals(policy, policyCheck.body)
+
+  // ---- revenue split
+  const [splitRows, setSplitRows] = useState<SplitRowDraft[]>(() => splitToDraft(split, model.owner))
+  const [splitAction, setSplitAction] = useState<'save' | 'clear'>('save')
+  const [splitCopied, setSplitCopied] = useState(false)
+  const splitTx = useTx(fixture, onChanged)
+  const splitKey = split
+    ? `${split.address}:${split.updatedSlot}:${split.active}:${split.recipients.map((r) => `${r.wallet}:${r.shareBps}`).join(',')}`
+    : 'none'
+  useEffect(() => {
+    setSplitRows(splitToDraft(split, model.owner))
+  }, [splitKey, model.owner]) // eslint-disable-line react-hooks/exhaustive-deps
+  const splitCheck = validateSplitDraft(splitRows)
+  const splitSame = splitCheck.ok && splitEquals(split, splitCheck.recipients)
+  const splitCliCmd = splitSetCliCommand(
+    model.name,
+    splitCheck.ok
+      ? splitCheck.recipients
+      : split && split.active && split.recipients.length > 0
+        ? split.recipients.map((r) => ({ wallet: r.wallet, shareBps: r.shareBps }))
+        : [{ wallet: model.owner, shareBps: 10000 }],
+  )
+  const updateSplitRow = (index: number, patch: Partial<SplitRowDraft>) => {
+    setSplitRows((prev) => prev.map((row, idx) => (idx === index ? { ...row, ...patch } : row)))
+    splitTx.clear()
+  }
 
   return (
     <section className={`panel ${s.owner}`} aria-labelledby="owner">
@@ -416,6 +443,123 @@ export function OwnerPanel({ model, fixture, signer, grants, policy = null, curr
           </button>
           {policyTx.tx.stage === 'idle' && policySame ? <span className="t-small dim">Change a value to save policy.</span> : null}
           <TxLine tx={policyTx.tx} done={policyAction === 'clear' ? 'Policy cleared' : 'Policy saved'} />
+        </div>
+      </form>
+
+      <form
+        id="owner-split"
+        className={s.policySection}
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!splitCheck.ok || splitSame) return
+          setSplitAction('save')
+          void splitTx.run(() => client.setSplit(model.address, { wallet: signer, recipients: splitCheck.recipients }))
+        }}
+      >
+        <div className={s.policyHead}>
+          <h3 className="t-h3">Revenue split</h3>
+          <span className="t-small dim">
+            Divide the owner share across up to {SPLIT_LIMITS.maxRecipients} wallets summing to 100%. Current total:{' '}
+            <span className={`mono ${splitCheck.totalBps === SPLIT_LIMITS.totalBps ? 'ochre' : 'bad'}`}>
+              {formatSplitPct(splitCheck.totalBps)}
+            </span>
+          </span>
+        </div>
+        <div className={s.splitRows}>
+          {splitRows.map((row, index) => (
+            <div key={index} className={s.splitEditorRow}>
+              <input
+                aria-label={`Recipient ${index + 1} wallet`}
+                className="input mono"
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="Recipient Solana wallet address"
+                value={row.wallet}
+                onChange={(e) => updateSplitRow(index, { wallet: e.target.value })}
+              />
+              <div className="input-row">
+                <input
+                  aria-label={`Recipient ${index + 1} share percent`}
+                  className="input mono"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="50"
+                  value={row.sharePct}
+                  onChange={(e) => updateSplitRow(index, { sharePct: e.target.value })}
+                />
+                <span className="suffix">%</span>
+              </div>
+              <button
+                type="button"
+                className="btn"
+                data-size="s"
+                disabled={splitRows.length <= 1 || splitTx.busy}
+                onClick={() => {
+                  setSplitRows((prev) => prev.filter((_, idx) => idx !== index))
+                  splitTx.clear()
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+        {!splitCheck.ok ? <span className="err" role="alert">{splitCheck.error}</span> : null}
+        <div className={s.ownerAct}>
+          <button
+            type="button"
+            className="btn"
+            data-size="s"
+            disabled={splitRows.length >= SPLIT_LIMITS.maxRecipients || splitTx.busy}
+            onClick={() => {
+              setSplitRows((prev) => [...prev, { wallet: '', sharePct: '' }])
+              splitTx.clear()
+            }}
+          >
+            Add recipient
+          </button>
+          <button
+            type="submit"
+            className="btn"
+            data-kind="primary"
+            data-size="s"
+            disabled={!splitCheck.ok || splitSame || splitTx.busy}
+            data-pending={(splitTx.busy && splitAction === 'save') || undefined}
+          >
+            Save split
+          </button>
+          <button
+            type="button"
+            className="btn"
+            data-kind="danger"
+            data-size="s"
+            disabled={!split?.active || splitTx.busy}
+            data-pending={(splitTx.busy && splitAction === 'clear') || undefined}
+            onClick={() => {
+              setSplitAction('clear')
+              void splitTx.run(() => client.setSplit(model.address, { wallet: signer, recipients: [] }))
+            }}
+          >
+            Clear split
+          </button>
+          {splitTx.tx.stage === 'idle' && splitSame ? <span className="t-small dim">Change a recipient or share to update.</span> : null}
+          <TxLine tx={splitTx.tx} done={splitAction === 'clear' ? 'Split cleared' : 'Split saved'} />
+        </div>
+        <div className={s.upgradeRow}>
+          <code className={`mono ${s.upgradeCode}`}>{splitCliCmd}</code>
+          <button
+            type="button"
+            className="btn"
+            data-size="s"
+            onClick={() => {
+              void navigator.clipboard?.writeText(splitCliCmd)
+              setSplitCopied(true)
+              setTimeout(() => setSplitCopied(false), 1800)
+            }}
+          >
+            {splitCopied ? 'Copied' : 'Copy command'}
+          </button>
         </div>
       </form>
 

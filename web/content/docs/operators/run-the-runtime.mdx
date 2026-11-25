@@ -264,6 +264,8 @@ When a model has `hasPolicy = true`, the runtime fetches its `Policy` PDA (`["po
 
 When a granted model's on-chain `currentVersion` or `ciphertextSha256` advances via `publish_version`, the runtime re-fetches and decrypts the new `Weights` accounts using the existing `Grant` wrapped key and the model's new `noncePrefix`, swaps the loaded session atomically in memory (`model.reloaded`), and defers releasing the previous `InferenceSession` until all in-flight calls settle. Incoming `POST /v1/calls/:call/input` requests also trigger an on-demand reload if the on-chain revision moved ahead between grant scans.
 
+When settling a call (`settle_call` or `settle_metered_call`) on a model with an active revenue split (`hasSplit = true`), the runtime automatically appends the writable `Split` PDA (`["split", model]`) and, for SPL mints, the writable `split_escrow` ATA (created idempotently if needed) to `remainingAccounts` after any registered `callback_program` accounts.
+
 ### GET /v1/calls/:call/answer
 
 Returns the state of the answer:

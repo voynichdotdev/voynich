@@ -111,6 +111,21 @@ a.row:focus-visible { outline-offset: -2px; }
 .policyArea { min-height: 76px; font-size: 12px; line-height: 1.45; }
 .upgradeRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .upgradeCode { flex: 1; min-width: 220px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-tile); font-size: 12px; color: var(--text); overflow-x: auto; white-space: nowrap; }
+.splitHeadMeta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.splitStripWrap { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.splitLegend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--text-2); }
+.splitLegendItem { display: inline-flex; align-items: center; gap: 6px; }
+.splitShareCell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.splitBarTrack { flex: 1; max-width: 96px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-tile); overflow: hidden; }
+.splitBarFill { height: 100%; background: var(--ochre); }
+.splitActionCell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.splitFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--line); }
+.splitRows { display: flex; flex-direction: column; gap: 8px; }
+.splitEditorRow { display: grid; grid-template-columns: minmax(0, 1fr) 128px auto; gap: 8px; align-items: center; }
+@media (max-width: 639px) {
+  .splitEditorRow { grid-template-columns: minmax(0, 1fr) 104px auto; }
+  .splitActionCell { justify-content: flex-start; }
+}
 @media (max-width: 899px) {
   .policyGrid { grid-template-columns: minmax(0, 1fr); }
 }
