@@ -232,5 +232,11 @@
     "arguments": "`amount_lamports: u64`",
     "signers": "`operator`",
     "does": "Withdraws up to `bonded_lamports` of unslashed SOL from an enclave's Bond PDA back to `operator` while preserving rent-exemption."
+  },
+  {
+    "instruction": "publish_benchmark",
+    "arguments": "`args: PublishBenchmarkArgs`",
+    "signers": "`publisher`",
+    "does": "Permissionlessly creates an 843-byte Benchmark PDA (`[\"benchmark\", model, name]`) verifying 1 to 16 canonical Receipt PDAs for `model` in remaining accounts."
   }
 ]

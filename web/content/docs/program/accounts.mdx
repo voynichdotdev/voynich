@@ -24,6 +24,7 @@ The `voynich` program is an Anchor program. Its address on a cluster is `program
 | Session | PDA `["session", caller, delegate, nonce]` | 186 bytes | the caller |
 | Split | PDA `["split", model]` | 526 bytes | the model's owner |
 | Bond | PDA `["bond", enclave]` | 107 bytes | the enclave's operator |
+| Benchmark | PDA `["benchmark", model, name]` | 843 bytes | the publisher (permissionless) |
 
 In a seed, `name` is the model's name as UTF-8, an address is its 32 bytes, and `nonce` is 8 bytes little-endian.
 
@@ -140,3 +141,11 @@ Optional per-enclave operator SOL bond, at PDA `["bond", enclave]` (`Bond::SPACE
 <Rows data="account-bond" columns="field,type,offset,meaning" />
 
 `bonded_lamports` sits inside the Bond PDA above rent-exemption (`DEFAULT_BOND_SLASH_BPS = 1000`, 10%). When `refund_call` receives the writable canonical `Bond` PDA (`["bond", call.enclave]`) in remaining accounts and `bonded_lamports > 0`, it slashes `min(bonded_lamports, escrow * slash_bps / 10_000)` for SOL calls (or `min(bonded_lamports, 1_000_000)` lamports for SPL calls) directly to `call.caller`, increments `slashed_total` and `missed_calls`, and emits `BondSlashed`.
+
+## Benchmark
+
+Immutable per-model verifiable benchmark score, at PDA `["benchmark", model, name]` (`Benchmark::SPACE = 843` bytes). Created permissionlessly by `publish_benchmark` by any wallet (owner or third-party evaluator).
+
+<Rows data="account-benchmark" columns="field,type,meaning" />
+
+`name` is a 1 to 32 byte ASCII slug (`[a-z0-9-]`), `dataset_uri` is 1 to 160 bytes (`https://`, `http://`, `ipfs://`, or `hf://`, no whitespace or control characters), `score_bps` equals `floor(passed_count * 10_000 / sample_count)`, and `receipts` lists 1 to 16 unique canonical `Receipt` PDAs verified on chain against `model` across all Receipt eras during `publish_benchmark`.

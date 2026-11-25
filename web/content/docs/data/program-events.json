@@ -178,5 +178,11 @@
     "discriminator": "`3b07fcc3ea9c2a36`",
     "emittedBy": "`refund_call`",
     "says": "A timed-out call slashed the enclave's Bond PDA and paid the slash directly to `call.caller`."
+  },
+  {
+    "event": "BenchmarkPublished",
+    "discriminator": "`c2e2f4f677a5c427`",
+    "emittedBy": "`publish_benchmark`",
+    "says": "A verifiable receipt-backed Benchmark PDA was published for a model."
   }
 ]

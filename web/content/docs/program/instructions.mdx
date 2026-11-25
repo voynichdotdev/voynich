@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 39 instructions.
+The program has 40 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -439,3 +439,16 @@ Withdraws up to `bond.bonded_lamports` of unslashed SOL from an enclave's `Bond`
 
 - **Checks.** `operator` is `enclave.operator` and `bond.operator` (`Unauthorized`). `amount_lamports > 0` and `amount_lamports <= bond.bonded_lamports` (`InvalidBond`).
 - **Effects.** Decrements `bond.bonded_lamports`, transfers `amount_lamports` from `bond` back to `operator`, records `updated_slot = clock.slot`, and emits `BondWithdrawn`.
+
+## publish_benchmark
+
+Permissionlessly creates an immutable 843-byte `Benchmark` PDA at `["benchmark", model, name]` anchoring a verifiable evaluation score backed by 1 to 16 canonical `Receipt` PDAs passed in remaining accounts.
+
+<Rows data="ix-publish-benchmark-args" />
+
+<Rows data="ix-publish-benchmark" />
+
+Remaining accounts must carry the exact `Receipt` accounts listed in `args.receipts`, in the same order.
+
+- **Checks.** `name` is a 1 to 32 byte ASCII slug (`[a-z0-9-]`), `dataset_uri` is 1 to 160 bytes starting with `https://`, `http://`, `ipfs://`, or `hf://` with no whitespace or control characters, `sample_count > 0`, `passed_count <= sample_count`, `score_bps == floor(passed_count * 10_000 / sample_count)`, `1 <= receipts.len() <= 16` with all unique pubkeys, `remaining_accounts.len() == receipts.len()`, and each remaining account `i` matches `receipts[i]`, is owned by the Voynich program, has `data.len() >= 72`, starts with `Receipt::DISCRIMINATOR`, records `model.key()` at bytes `40..72`, and derives canonically from `["receipt", data[8..40]]` across all Receipt eras (`InvalidBenchmark`).
+- **Effects.** Initializes the `Benchmark` PDA recording `model_version = model.effective_version()` and `published_slot = clock.slot`, and emits `BenchmarkPublished`.

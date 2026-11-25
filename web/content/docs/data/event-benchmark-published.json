@@ -1,0 +1,50 @@
+[
+  {
+    "field": "benchmark",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "publisher",
+    "type": "pubkey"
+  },
+  {
+    "field": "name",
+    "type": "string"
+  },
+  {
+    "field": "model_version",
+    "type": "u32"
+  },
+  {
+    "field": "dataset_sha256",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "dataset_uri",
+    "type": "string"
+  },
+  {
+    "field": "sample_count",
+    "type": "u32"
+  },
+  {
+    "field": "passed_count",
+    "type": "u32"
+  },
+  {
+    "field": "score_bps",
+    "type": "u16"
+  },
+  {
+    "field": "receipts",
+    "type": "Vec<pubkey>"
+  },
+  {
+    "field": "published_slot",
+    "type": "u64"
+  }
+]

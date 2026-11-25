@@ -186,7 +186,7 @@ The pages for each group of routes list the codes each route adds to these.
 | Routes | Page |
 | --- | --- |
 | `/health`, `/openapi.json`, `/v1/config`, `/rpc`, `/v1/events`, `/v1/calls/{id}/events` | This page |
-| `/v1/models...` | [Models](/docs/api/models) |
+| `/v1/models...`, `/v1/benchmarks` | [Models](/docs/api/models) |
 | `/v1/enclaves...`, `/v1/measurements...` | [Enclaves](/docs/api/enclaves) |
 | `/v1/calls/build`, `/v1/calls/{id}`, `/v1/calls/{id}/answer`, `/v1/calls/{id}/pieces`, `/v1/calls/{id}/stream`, `/v1/calls/{id}/stop`, `/v1/calls/{id}/settle/build`, `/v1/calls/{id}/refund/build`, `/v1/receipts/{id}` | [Calls and receipts](/docs/api/calls-and-receipts) |
 | `/v1/bounties...` | [Bounties](/docs/api/bounties) |
@@ -330,6 +330,7 @@ The object the event is about, whole, as its read route returns it.
 | `version.published` | `ModelVersion` | A new `ModelVersion` was published and flipped live on a model. |
 | `session.updated` | `Session` | A caller Session PDA was opened, debited, or closed. |
 | `split.updated` | `ModelSplit` | A model's revenue Split PDA was updated, credited, or claimed. |
+| `benchmark.published` | [BenchmarkRecord](/docs/api/models#benchmarkrecord) | A verifiable receipt-backed Benchmark PDA was published for a model. |
 | `call.updated` | [Call](/docs/api/calls-and-receipts#call) | A call opened, settled or was refunded. |
 | `call.piece` | [StreamPiece](/docs/api/calls-and-receipts#streampiece) | The enclave signed and emitted one encrypted output piece on a per-token stream. |
 | `call.stream.done` | [CallStreamDone](/docs/api/calls-and-receipts#callstreamdone) | A per-token piece stream completed or failed. |

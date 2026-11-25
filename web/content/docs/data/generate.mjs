@@ -224,6 +224,20 @@ const FIELDS = {
     updated_slot: 'The slot the bond was last deposited into, withdrawn from, or slashed in.',
     bump: 'The PDA bump.',
   },
+  Benchmark: {
+    model: 'The Model evaluated by this benchmark.',
+    publisher: 'The wallet that published this receipt-backed benchmark and paid its rent.',
+    name: 'Benchmark slug, 1 to 32 bytes: lowercase letters and digits in groups joined by single hyphens.',
+    model_version: 'The model\'s `effective_version()` at the slot the benchmark was published.',
+    dataset_sha256: '32-byte SHA-256 hash of the evaluation dataset.',
+    dataset_uri: 'Dataset location URI (`https://`, `http://`, `ipfs://`, or `hf://`), 1 to 160 bytes with no whitespace or control characters.',
+    sample_count: 'Total evaluation samples run (`> 0`).',
+    passed_count: 'Samples passed (`<= sample_count`).',
+    score_bps: 'Score in basis points, enforced on chain to equal `floor(passed_count * 10_000 / sample_count)`.',
+    receipts: '1 to 16 unique canonical `Receipt` PDA addresses verified on chain against `model` during `publish_benchmark`.',
+    published_slot: 'The slot the benchmark was published in.',
+    bump: 'The PDA bump.',
+  },
 }
 
 const accounts = idl.accounts.map((account) => {
@@ -290,6 +304,7 @@ const SAYS = {
   claim_split: 'Permissionlessly pays `accrued - claimed` from a Split PDA (SOL or SPL) directly to `recipient` and sets `claimed = accrued`.',
   deposit_bond: 'Creates (if needed) and tops up an enclave\'s 107-byte Bond PDA (`["bond", enclave]`) with `amount_lamports` of slashable SOL.',
   withdraw_bond: 'Withdraws up to `bonded_lamports` of unslashed SOL from an enclave\'s Bond PDA back to `operator` while preserving rent-exemption.',
+  publish_benchmark: 'Permissionlessly creates an 843-byte Benchmark PDA (`["benchmark", model, name]`) verifying 1 to 16 canonical Receipt PDAs for `model` in remaining accounts.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -518,6 +533,10 @@ const ACCOUNTS = {
     enclave: 'The Enclave backed by this bond.',
     bond: 'The Bond PDA at `["bond", enclave]` debited by `amount_lamports`.',
   },
+  publish_benchmark: {
+    publisher: 'Any wallet (owner or third-party evaluator) publishing the benchmark and paying the 843-byte Benchmark PDA\'s rent.',
+    benchmark: 'The Benchmark PDA at `["benchmark", model, name]`, created here.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -592,6 +611,7 @@ const EVENTS = {
   BondDeposited: ['deposit_bond', 'An enclave operator deposited SOL into the enclave\'s Bond PDA.'],
   BondWithdrawn: ['withdraw_bond', 'An enclave operator withdrew unslashed SOL from the enclave\'s Bond PDA.'],
   BondSlashed: ['refund_call', 'A timed-out call slashed the enclave\'s Bond PDA and paid the slash directly to `call.caller`.'],
+  BenchmarkPublished: ['publish_benchmark', 'A verifiable receipt-backed Benchmark PDA was published for a model.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -641,6 +661,7 @@ const RAISED = {
   InvalidSession: 'In `open_session`: `budget == 0`, `ttl_slots == 0`, or `delegate` is the default address. In `open_session_call` / `open_session_metered_call`: the session is closed, expired, mismatched on `mint` or `model`, or lacks remaining `budget - spent`. In `close_session`: the session is already closed, or a non-caller tried to close it before `expires_at_slot`.',
   InvalidSplit: 'In `set_split`: more than 8 recipients, duplicate or default recipient wallets, `share_bps == 0`, shares not summing to 10,000, or rewriting recipients while unclaimed balance remains (`accrued > claimed`). In `settle_call` / `settle_metered_call`: `model.has_split` is true but the canonical Split PDA (or SPL escrow) was omitted from remaining accounts. In `claim_split`: `recipient` is not in `split.recipients` or has zero claimable balance.',
   InvalidBond: 'In `deposit_bond`: `amount_lamports == 0`. In `withdraw_bond`: `amount_lamports == 0` or `amount_lamports > bond.bonded_lamports`. In `refund_call`: a remaining account was passed for slashing that is not the canonical writable `Bond` PDA (`["bond", call.enclave]`) owned by the Voynich program.',
+  InvalidBenchmark: 'In `publish_benchmark`: invalid slug `name` (outside 1 to 32 bytes), invalid `dataset_uri` (outside 1 to 160 bytes or bad scheme/whitespace), `sample_count == 0`, `passed_count > sample_count`, `score_bps != floor(passed_count * 10_000 / sample_count)`, `receipts` empty, > 16, or duplicated, or a remaining account that is not a canonical `Receipt` PDA owned by the Voynich program for `model`.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -706,6 +727,8 @@ const API_ERRORS = {
   INVALID_SPLIT: 'The revenue split recipients, share sum, unclaimed balance state, or claim request is invalid.',
   BOND_NOT_FOUND: 'This enclave has no operator bond account on chain.',
   INVALID_BOND: 'The operator bond deposit, withdrawal, or remaining account is invalid.',
+  BENCHMARK_NOT_FOUND: 'No benchmark record matches this model and name.',
+  INVALID_BENCHMARK: 'The benchmark name, dataset, score, or receipt proofs are invalid.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

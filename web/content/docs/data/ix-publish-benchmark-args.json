@@ -1,0 +1,30 @@
+[
+  {
+    "argument": "name",
+    "type": "string"
+  },
+  {
+    "argument": "dataset_sha256",
+    "type": "[u8; 32]"
+  },
+  {
+    "argument": "dataset_uri",
+    "type": "string"
+  },
+  {
+    "argument": "sample_count",
+    "type": "u32"
+  },
+  {
+    "argument": "passed_count",
+    "type": "u32"
+  },
+  {
+    "argument": "score_bps",
+    "type": "u16"
+  },
+  {
+    "argument": "receipts",
+    "type": "Vec<pubkey>"
+  }
+]

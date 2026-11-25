@@ -1,0 +1,74 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model evaluated by this benchmark."
+  },
+  {
+    "field": "publisher",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The wallet that published this receipt-backed benchmark and paid its rent."
+  },
+  {
+    "field": "name",
+    "type": "string",
+    "offset": "72",
+    "meaning": "Benchmark slug, 1 to 32 bytes: lowercase letters and digits in groups joined by single hyphens."
+  },
+  {
+    "field": "model_version",
+    "type": "u32",
+    "offset": "",
+    "meaning": "The model's `effective_version()` at the slot the benchmark was published."
+  },
+  {
+    "field": "dataset_sha256",
+    "type": "[u8; 32]",
+    "offset": "",
+    "meaning": "32-byte SHA-256 hash of the evaluation dataset."
+  },
+  {
+    "field": "dataset_uri",
+    "type": "string",
+    "offset": "",
+    "meaning": "Dataset location URI (`https://`, `http://`, `ipfs://`, or `hf://`), 1 to 160 bytes with no whitespace or control characters."
+  },
+  {
+    "field": "sample_count",
+    "type": "u32",
+    "offset": "",
+    "meaning": "Total evaluation samples run (`> 0`)."
+  },
+  {
+    "field": "passed_count",
+    "type": "u32",
+    "offset": "",
+    "meaning": "Samples passed (`<= sample_count`)."
+  },
+  {
+    "field": "score_bps",
+    "type": "u16",
+    "offset": "",
+    "meaning": "Score in basis points, enforced on chain to equal `floor(passed_count * 10_000 / sample_count)`."
+  },
+  {
+    "field": "receipts",
+    "type": "Vec<pubkey>",
+    "offset": "",
+    "meaning": "1 to 16 unique canonical `Receipt` PDA addresses verified on chain against `model` during `publish_benchmark`."
+  },
+  {
+    "field": "published_slot",
+    "type": "u64",
+    "offset": "",
+    "meaning": "The slot the benchmark was published in."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "",
+    "meaning": "The PDA bump."
+  }
+]

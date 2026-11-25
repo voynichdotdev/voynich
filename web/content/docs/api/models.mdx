@@ -1028,6 +1028,66 @@ Builds [`claim_split`](/docs/program/instructions#claimsplit): permissionlessly 
 
 Body (`ClaimSplitRequest`): `{ wallet, recipient? }` (`wallet` pays the tx fee; `recipient` defaults to `wallet`). Returns a Build with `action: "claim_split"` and `addresses: { model, split }`. Answers `SPLIT_NOT_FOUND` (`404`) or `INVALID_SPLIT` (`422`) when nothing is claimable.
 
+## BenchmarkRecord
+
+An on-chain 843-byte `Benchmark` PDA (`["benchmark", model, name]`) anchoring a receipt-backed evaluation score for a model.
+
+<Fields>
+<Field name="address" type="address" required>
+The `Benchmark` PDA address.
+</Field>
+<Field name="model" type="address" required>
+The evaluated Model's address.
+</Field>
+<Field name="modelName" type="string or null">
+The model's slug name when indexed.
+</Field>
+<Field name="publisher" type="address" required>
+The wallet (owner or third-party evaluator) that published this benchmark.
+</Field>
+<Field name="name" type="string (1 to 32 bytes)" required>
+Benchmark slug (`[a-z0-9-]`), unique per model.
+</Field>
+<Field name="modelVersion" type="integer" required>
+The model's `effective_version()` at publication.
+</Field>
+<Field name="datasetSha256" type="hash (64 hex chars)" required>
+SHA-256 of the evaluation dataset.
+</Field>
+<Field name="datasetUri" type="string (1 to 160 bytes)" required>
+Dataset URI (`https://`, `http://`, `ipfs://`, or `hf://`).
+</Field>
+<Field name="sampleCount" type="integer (> 0)" required>
+Total evaluation samples run.
+</Field>
+<Field name="passedCount" type="integer (>= 0)" required>
+Samples passed (`<= sampleCount`).
+</Field>
+<Field name="scoreBps" type="integer (0 to 10000)" required>
+Score in basis points (`floor(passedCount * 10000 / sampleCount)`).
+</Field>
+<Field name="receipts" type="array of 1 to 16 addresses" required>
+Unique canonical `Receipt` PDA addresses verified on chain against `model`.
+</Field>
+<Field name="publishedSlot" type="slot" required>
+The slot the benchmark was published in.
+</Field>
+</Fields>
+
+## `GET /v1/benchmarks`
+
+Lists verifiable receipt-backed benchmarks across all models (`BenchmarksPage`). Accepts `cursor`, `limit` ([Pagination](/docs/api/overview#pagination)), and optional filters `model` (name or address) and `name` (benchmark slug).
+
+## `GET /v1/models/{id}/benchmarks`
+
+Lists all published `BenchmarkRecord` entries for model `{id}` (`BenchmarksPage`). Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
+
+## `POST /v1/models/{id}/benchmarks/build`
+
+Builds [`publish_benchmark`](/docs/program/instructions#publishbenchmark) to anchor a receipt-backed evaluation score for model `{id}` on chain. Permissionless: any wallet may publish.
+
+Body (`PublishBenchmarkRequest`): `{ wallet, name, datasetSha256, datasetUri, sampleCount, passedCount, scoreBps?, receipts }` (`scoreBps` defaults to `Math.floor((passedCount * 10000) / sampleCount)`). Returns a [Build](/docs/api/transactions#build) with `action: "publish_benchmark"` and `addresses: { model, benchmark }`. Answers `MODEL_NOT_FOUND`, `INVALID_BENCHMARK` (`422`), or `INSUFFICIENT_FUNDS`.
+
 ## Read next
 
 <Cards>

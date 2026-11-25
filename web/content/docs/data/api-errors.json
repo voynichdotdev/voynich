@@ -170,6 +170,16 @@
     "meaning": "The operator bond deposit, withdrawal, or remaining account is invalid."
   },
   {
+    "code": "BENCHMARK_NOT_FOUND",
+    "status": "404",
+    "meaning": "No benchmark record matches this model and name."
+  },
+  {
+    "code": "INVALID_BENCHMARK",
+    "status": "422",
+    "meaning": "The benchmark name, dataset, score, or receipt proofs are invalid."
+  },
+  {
     "code": "GRANT_REQUIRED",
     "status": "409",
     "meaning": "The enclave holds no live grant for the model."

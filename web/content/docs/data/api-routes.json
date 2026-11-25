@@ -125,6 +125,21 @@
     "does": "Build claim_split to withdraw accrued split revenue to a recipient wallet"
   },
   {
+    "route": "GET /v1/benchmarks",
+    "operation": "benchmarks",
+    "does": "Browse verifiable receipt-backed benchmark scores across all models"
+  },
+  {
+    "route": "GET /v1/models/{id}/benchmarks",
+    "operation": "modelBenchmarks",
+    "does": "List verifiable receipt-backed benchmarks published for a model"
+  },
+  {
+    "route": "POST /v1/models/{id}/benchmarks/build",
+    "operation": "publishBenchmark",
+    "does": "Build publish_benchmark to anchor a receipt-backed evaluation score for a model on chain"
+  },
+  {
     "route": "GET /v1/models/{id}/versions",
     "operation": "modelVersions",
     "does": "List published and uploading versions for a model, newest first"

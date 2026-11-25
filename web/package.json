@@ -18,7 +18,7 @@
     "@noble/hashes": "^2.4.0",
     "@solana-mobile/wallet-standard-mobile": "^0.7.1",
     "@solana/web3.js": "^1.99.0",
-    "@voynich/contract": "file:vendor/voynich-contract-0.1.32.tgz",
+    "@voynich/contract": "file:vendor/voynich-contract-0.1.33.tgz",
     "@wallet-standard/app": "^1.1.1",
     "@wallet-standard/base": "^1.1.1",
     "gsap": "^3.15.1",
@@ -28,7 +28,7 @@
     "react-dom": "^19.3.1",
     "remark-gfm": "^4.0.1",
     "shiki": "^4.6.0",
-    "voynich": "file:vendor/voynich-0.2.46.tgz",
+    "voynich": "file:vendor/voynich-0.2.47.tgz",
     "zod": "^4.6.7"
   },
   "devDependencies": {

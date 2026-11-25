@@ -1,0 +1,50 @@
+[
+  {
+    "account": "publisher",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Any wallet (owner or third-party evaluator) publishing the benchmark and paying the 843-byte Benchmark PDA's rent."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "benchmark",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"benchmark\", model, args.name]`",
+    "is": "The Benchmark PDA at `[\"benchmark\", model, name]`, created here."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]
