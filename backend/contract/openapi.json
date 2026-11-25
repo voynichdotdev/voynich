@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Voynich API",
-    "version": "0.1.32",
+    "version": "0.1.33",
     "description": "Public reads and unsigned transaction builds. No sessions or login. MODE=fixture serves isolated in-memory fixture sessions selected by X-Fixture-Session. Amounts and slots are decimal strings. Null mint means native SOL. Example fixture monetary values are not launch configuration."
   },
   "servers": [
@@ -87,6 +87,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -317,6 +319,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -547,6 +551,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -777,6 +783,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -1042,6 +1050,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -1280,6 +1290,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -1540,6 +1552,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -1778,6 +1792,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2037,6 +2053,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2268,6 +2286,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2509,6 +2529,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -2758,6 +2780,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -3007,6 +3031,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -3256,6 +3282,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -3504,6 +3532,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -3753,6 +3783,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4001,6 +4033,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4250,6 +4284,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4498,6 +4534,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4746,6 +4784,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -4984,6 +5024,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -5232,6 +5274,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -5480,6 +5524,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -5718,6 +5764,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -5966,6 +6014,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -6004,6 +6054,801 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ClaimSplitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Build"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/benchmarks": {
+      "get": {
+        "operationId": "benchmarks",
+        "summary": "Browse verifiable receipt-backed benchmark scores across all models",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 12,
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 44
+                },
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                }
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BenchmarksPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models/{id}/benchmarks": {
+      "get": {
+        "operationId": "modelBenchmarks",
+        "summary": "List verifiable receipt-backed benchmarks published for a model",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModelId"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 12,
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BenchmarksPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models/{id}/benchmarks/build": {
+      "post": {
+        "operationId": "publishBenchmark",
+        "summary": "Build publish_benchmark to anchor a receipt-backed evaluation score for a model on chain",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModelId"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishBenchmarkRequest"
               }
             }
           }
@@ -6214,6 +7059,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -6452,6 +7299,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -6700,6 +7549,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -6948,6 +7799,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7196,6 +8049,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7457,6 +8312,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7695,6 +8552,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -7933,6 +8792,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -8181,6 +9042,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -8419,6 +9282,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -8667,6 +9532,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -8940,6 +9807,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -9178,6 +10047,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -9408,6 +10279,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -9656,6 +10529,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -9905,6 +10780,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -10143,6 +11020,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -10374,6 +11253,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -10622,6 +11503,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -10861,6 +11744,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -11109,6 +11994,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -11347,6 +12234,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -11586,6 +12475,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -11835,6 +12726,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12083,6 +12976,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12377,6 +13272,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12615,6 +13512,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -12845,6 +13744,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -13093,6 +13994,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -13341,6 +14244,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -13589,6 +14494,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -13837,6 +14744,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -14075,6 +14984,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -14305,6 +15216,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -14553,6 +15466,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -14801,6 +15716,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -15042,6 +15959,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -15291,6 +16210,8 @@
                 "INVALID_SPLIT",
                 "BOND_NOT_FOUND",
                 "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
                 "GRANT_REQUIRED",
                 "INVALID_QUOTE",
                 "INVALID_VERSION",
@@ -16716,6 +17637,8 @@
                             "INVALID_SPLIT",
                             "BOND_NOT_FOUND",
                             "INVALID_BOND",
+                            "BENCHMARK_NOT_FOUND",
+                            "INVALID_BENCHMARK",
                             "GRANT_REQUIRED",
                             "INVALID_QUOTE",
                             "INVALID_VERSION",
@@ -17016,7 +17939,8 @@
           "set_split",
           "claim_split",
           "deposit_bond",
-          "withdraw_bond"
+          "withdraw_bond",
+          "publish_benchmark"
         ]
       },
       "AnswerMode": {
@@ -17069,6 +17993,8 @@
                   "INVALID_SPLIT",
                   "BOND_NOT_FOUND",
                   "INVALID_BOND",
+                  "BENCHMARK_NOT_FOUND",
+                  "INVALID_BENCHMARK",
                   "GRANT_REQUIRED",
                   "INVALID_QUOTE",
                   "INVALID_VERSION",
@@ -17477,6 +18403,288 @@
           "manifest",
           "sizeBytes",
           "noncePrefix"
+        ],
+        "additionalProperties": false
+      },
+      "BenchmarkQuery": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "maxLength": 12,
+            "pattern": "^[0-9]+$"
+          },
+          "limit": {
+            "default": 24,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        },
+        "required": [
+          "limit"
+        ],
+        "additionalProperties": false
+      },
+      "BenchmarkRecord": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "model": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "modelName": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "publisher": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "modelVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "datasetSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "datasetUri": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "sampleCount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "passedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "scoreBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "receipts": {
+            "minItems": 1,
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 44
+            }
+          },
+          "publishedSlot": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "address",
+          "model",
+          "publisher",
+          "name",
+          "modelVersion",
+          "datasetSha256",
+          "datasetUri",
+          "sampleCount",
+          "passedCount",
+          "scoreBps",
+          "receipts",
+          "publishedSlot"
+        ],
+        "additionalProperties": false
+      },
+      "BenchmarkUri": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 160
+      },
+      "BenchmarksPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 44
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 44
+                },
+                "modelName": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 32,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "publisher": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 44
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                },
+                "modelVersion": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "datasetSha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "datasetUri": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "sampleCount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "passedCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "scoreBps": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                "receipts": {
+                  "minItems": 1,
+                  "maxItems": 16,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  }
+                },
+                "publishedSlot": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "address",
+                "model",
+                "publisher",
+                "name",
+                "modelVersion",
+                "datasetSha256",
+                "datasetUri",
+                "sampleCount",
+                "passedCount",
+                "scoreBps",
+                "receipts",
+                "publishedSlot"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "page": {
+            "type": "object",
+            "properties": {
+              "nextCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "hasMore": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "nextCursor",
+              "hasMore"
+            ],
+            "additionalProperties": false
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "asOf"
         ],
         "additionalProperties": false
       },
@@ -18227,7 +19435,8 @@
               "set_split",
               "claim_split",
               "deposit_bond",
-              "withdraw_bond"
+              "withdraw_bond",
+              "publish_benchmark"
             ]
           },
           "requiredSigners": {
@@ -18313,6 +19522,11 @@
                 "maxLength": 44
               },
               "bond": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              "benchmark": {
                 "type": "string",
                 "minLength": 32,
                 "maxLength": 44
@@ -18600,6 +19814,8 @@
                       "INVALID_SPLIT",
                       "BOND_NOT_FOUND",
                       "INVALID_BOND",
+                      "BENCHMARK_NOT_FOUND",
+                      "INVALID_BENCHMARK",
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
@@ -18924,6 +20140,8 @@
                           "INVALID_SPLIT",
                           "BOND_NOT_FOUND",
                           "INVALID_BOND",
+                          "BENCHMARK_NOT_FOUND",
+                          "INVALID_BENCHMARK",
                           "GRANT_REQUIRED",
                           "INVALID_QUOTE",
                           "INVALID_VERSION",
@@ -19101,6 +20319,8 @@
                       "INVALID_SPLIT",
                       "BOND_NOT_FOUND",
                       "INVALID_BOND",
+                      "BENCHMARK_NOT_FOUND",
+                      "INVALID_BENCHMARK",
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
@@ -19200,6 +20420,8 @@
               "INVALID_SPLIT",
               "BOND_NOT_FOUND",
               "INVALID_BOND",
+              "BENCHMARK_NOT_FOUND",
+              "INVALID_BENCHMARK",
               "GRANT_REQUIRED",
               "INVALID_QUOTE",
               "INVALID_VERSION",
@@ -19371,6 +20593,8 @@
                       "INVALID_SPLIT",
                       "BOND_NOT_FOUND",
                       "INVALID_BOND",
+                      "BENCHMARK_NOT_FOUND",
+                      "INVALID_BENCHMARK",
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
@@ -19563,6 +20787,8 @@
                       "INVALID_SPLIT",
                       "BOND_NOT_FOUND",
                       "INVALID_BOND",
+                      "BENCHMARK_NOT_FOUND",
+                      "INVALID_BENCHMARK",
                       "GRANT_REQUIRED",
                       "INVALID_QUOTE",
                       "INVALID_VERSION",
@@ -21200,6 +22426,8 @@
           "INVALID_SPLIT",
           "BOND_NOT_FOUND",
           "INVALID_BOND",
+          "BENCHMARK_NOT_FOUND",
+          "INVALID_BENCHMARK",
           "GRANT_REQUIRED",
           "INVALID_QUOTE",
           "INVALID_VERSION",
@@ -26707,6 +27935,8 @@
                                       "INVALID_SPLIT",
                                       "BOND_NOT_FOUND",
                                       "INVALID_BOND",
+                                      "BENCHMARK_NOT_FOUND",
+                                      "INVALID_BENCHMARK",
                                       "GRANT_REQUIRED",
                                       "INVALID_QUOTE",
                                       "INVALID_VERSION",
@@ -26884,6 +28114,8 @@
                                   "INVALID_SPLIT",
                                   "BOND_NOT_FOUND",
                                   "INVALID_BOND",
+                                  "BENCHMARK_NOT_FOUND",
+                                  "INVALID_BENCHMARK",
                                   "GRANT_REQUIRED",
                                   "INVALID_QUOTE",
                                   "INVALID_VERSION",
@@ -27984,6 +29216,8 @@
                               "INVALID_SPLIT",
                               "BOND_NOT_FOUND",
                               "INVALID_BOND",
+                              "BENCHMARK_NOT_FOUND",
+                              "INVALID_BENCHMARK",
                               "GRANT_REQUIRED",
                               "INVALID_QUOTE",
                               "INVALID_VERSION",
@@ -28297,6 +29531,8 @@
                               "INVALID_SPLIT",
                               "BOND_NOT_FOUND",
                               "INVALID_BOND",
+                              "BENCHMARK_NOT_FOUND",
+                              "INVALID_BENCHMARK",
                               "GRANT_REQUIRED",
                               "INVALID_QUOTE",
                               "INVALID_VERSION",
@@ -29706,6 +30942,129 @@
               },
               "type": {
                 "type": "string",
+                "const": "benchmark.published"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "modelName": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 32,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "publisher": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  },
+                  "modelVersion": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "datasetSha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "datasetUri": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "sampleCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "passedCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "scoreBps": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "receipts": {
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 32,
+                      "maxLength": 44
+                    }
+                  },
+                  "publishedSlot": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "address",
+                  "model",
+                  "publisher",
+                  "name",
+                  "modelVersion",
+                  "datasetSha256",
+                  "datasetUri",
+                  "sampleCount",
+                  "passedCount",
+                  "scoreBps",
+                  "receipts",
+                  "publishedSlot"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "timestamp",
+              "type",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "type": {
+                "type": "string",
                 "const": "transaction.updated"
               },
               "data": {
@@ -29825,6 +31184,66 @@
         "type": "string",
         "maxLength": 32,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "PublishBenchmarkRequest": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "datasetSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "datasetUri": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "sampleCount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "passedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "scoreBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "receipts": {
+            "minItems": 1,
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 44
+            }
+          }
+        },
+        "required": [
+          "wallet",
+          "name",
+          "datasetSha256",
+          "datasetUri",
+          "sampleCount",
+          "passedCount",
+          "receipts"
+        ],
+        "additionalProperties": false
       },
       "PublishMeasurementRequest": {
         "type": "object",

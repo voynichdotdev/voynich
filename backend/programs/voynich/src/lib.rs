@@ -55,4 +55,5 @@ pub mod voynich {
     pub fn claim_split(ctx: Context<ClaimSplit>) -> Result<()> { handlers::claim_split(ctx) }
     pub fn deposit_bond(ctx: Context<DepositBond>, amount_lamports: u64) -> Result<()> { handlers::deposit_bond(ctx, amount_lamports) }
     pub fn withdraw_bond(ctx: Context<WithdrawBond>, amount_lamports: u64) -> Result<()> { handlers::withdraw_bond(ctx, amount_lamports) }
+    pub fn publish_benchmark<'info>(ctx: Context<'_, '_, 'info, 'info, PublishBenchmark<'info>>, args: PublishBenchmarkArgs) -> Result<()> { handlers::publish_benchmark(ctx, args) }
 }

@@ -1520,6 +1520,87 @@ pub fn withdraw_bond(ctx: Context<WithdrawBond>, amount_lamports: u64) -> Result
     Ok(())
 }
 
+pub fn publish_benchmark<'info>(ctx: Context<'_, '_, 'info, 'info, PublishBenchmark<'info>>, args: PublishBenchmarkArgs) -> Result<()> {
+    let name_bytes = args.name.as_bytes();
+    require!(
+        !name_bytes.is_empty()
+            && name_bytes.len() <= MAX_BENCHMARK_NAME
+            && !name_bytes.starts_with(b"-")
+            && !name_bytes.ends_with(b"-")
+            && !args.name.contains("--")
+            && name_bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-'),
+        VoynichError::InvalidBenchmark
+    );
+    require!(args.dataset_sha256 != [0u8; 32], VoynichError::InvalidBenchmark);
+    require!(
+        !args.dataset_uri.is_empty()
+            && args.dataset_uri.len() <= MAX_BENCHMARK_URI
+            && !args.dataset_uri.bytes().any(|b| b.is_ascii_whitespace() || b.is_ascii_control())
+            && (args.dataset_uri.starts_with("https://")
+                || args.dataset_uri.starts_with("http://")
+                || args.dataset_uri.starts_with("ipfs://")
+                || args.dataset_uri.starts_with("hf://")),
+        VoynichError::InvalidBenchmark
+    );
+    require!(args.sample_count > 0 && args.passed_count <= args.sample_count, VoynichError::InvalidBenchmark);
+    let expected_bps = ((u64::from(args.passed_count) * 10_000) / u64::from(args.sample_count)) as u16;
+    require!(args.score_bps == expected_bps, VoynichError::InvalidBenchmark);
+    require!(
+        !args.receipts.is_empty() && args.receipts.len() <= MAX_BENCHMARK_RECEIPTS,
+        VoynichError::InvalidBenchmark
+    );
+    for i in 0..args.receipts.len() {
+        for j in (i + 1)..args.receipts.len() {
+            require!(args.receipts[i] != args.receipts[j], VoynichError::InvalidBenchmark);
+        }
+    }
+    require!(ctx.remaining_accounts.len() == args.receipts.len(), VoynichError::InvalidBenchmark);
+    let model_key = ctx.accounts.model.key();
+    let model_bytes = model_key.to_bytes();
+    for (index, acc) in ctx.remaining_accounts.iter().enumerate() {
+        require_keys_eq!(acc.key(), args.receipts[index], VoynichError::InvalidBenchmark);
+        require_keys_eq!(*acc.owner, crate::ID, VoynichError::InvalidBenchmark);
+        let data = acc.try_borrow_data()?;
+        require!(data.len() >= 72, VoynichError::InvalidBenchmark);
+        require!(&data[0..8] == Receipt::DISCRIMINATOR, VoynichError::InvalidBenchmark);
+        require!(&data[40..72] == model_bytes.as_slice(), VoynichError::InvalidBenchmark);
+        let (expected_pda, _) = Pubkey::find_program_address(&[b"receipt", &data[8..40]], &crate::ID);
+        require_keys_eq!(expected_pda, acc.key(), VoynichError::InvalidBenchmark);
+    }
+
+    let slot = Clock::get()?.slot;
+    let model_version = ctx.accounts.model.effective_version();
+    let benchmark = &mut ctx.accounts.benchmark;
+    benchmark.model = model_key;
+    benchmark.publisher = ctx.accounts.publisher.key();
+    benchmark.name = args.name.clone();
+    benchmark.model_version = model_version;
+    benchmark.dataset_sha256 = args.dataset_sha256;
+    benchmark.dataset_uri = args.dataset_uri.clone();
+    benchmark.sample_count = args.sample_count;
+    benchmark.passed_count = args.passed_count;
+    benchmark.score_bps = args.score_bps;
+    benchmark.receipts = args.receipts.clone();
+    benchmark.published_slot = slot;
+    benchmark.bump = ctx.bumps.benchmark;
+
+    emit_cpi!(BenchmarkPublished {
+        benchmark: benchmark.key(),
+        model: model_key,
+        publisher: benchmark.publisher,
+        name: args.name,
+        model_version,
+        dataset_sha256: args.dataset_sha256,
+        dataset_uri: args.dataset_uri,
+        sample_count: args.sample_count,
+        passed_count: args.passed_count,
+        score_bps: args.score_bps,
+        receipts: args.receipts,
+        published_slot: slot,
+    });
+    Ok(())
+}
+
 pub fn publish_measurement(
     ctx: Context<PublishMeasurement>,
     digest: [u8; 48],

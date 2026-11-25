@@ -2550,4 +2550,87 @@ test('Voynich program flows on the supplied local validator', { timeout: 240_000
     const finalBond = decodeBondAccount((await connection.getAccountInfo(bondKey, 'confirmed'))!.data)
     assert.equal(finalBond.bondedLamports.toString(), (initialDeposit - expectedSlash - withdrawAmount).toString())
   })
+
+  await t.test('Build 14 Step 1: Benchmark PDA publish_benchmark with real settled Receipts, rejecting fake/wrong-model/duplicate receipts and mismatched score_bps', async () => {
+    const { BENCHMARK_SPACE, benchmarkPda, decodeBenchmarkAccount } = await import('../sdk/src/program.js')
+    await refresh(first)
+    const benchModel = await createModel('bench-model')
+    await uploadAndSeal(benchModel)
+    await execute([await ownerGrant(benchModel, first)], [owner])
+
+    const otherModel = await createModel('bench-other')
+    await uploadAndSeal(otherModel)
+    await execute([await ownerGrant(otherModel, first)], [owner])
+
+    // Settle 2 real calls on benchModel and 1 real call on otherModel
+    const settleOn = async (m: TestModel) => {
+      const c = await open(m)
+      const outputHash = sha256(utf8(`bench-out-${c.nonce}`))
+      const sig = signReceipt(first.signing.secretKey.subarray(0, 32), c.address.toBytes(), c.inputHash, outputHash)
+      const verifyIx = Ed25519Program.createInstructionWithPublicKey({
+        publicKey: first.signing.publicKey.toBytes(),
+        message: receiptMessage(c.address.toBytes(), c.inputHash, outputHash),
+        signature: sig,
+      })
+      const receiptAddr = pda(voynich.programId, utf8('receipt'), c.address.toBytes())
+      const settleIx = await voynich.methods.settleCall([...outputHash], [...sig], 0, Buffer.alloc(0)).accountsStrict({
+        payer: admin.publicKey, config, model: m.address, enclave: first.address, attestationRecord: first.record,
+        call: c.address, receipt: receiptAddr, caller: caller.publicKey, owner: owner.publicKey, operator: first.operator.publicKey,
+        feeRecipient: feeRecipient.publicKey, instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        escrowTokens: null, ownerTokens: null, operatorTokens: null, protocolTokens: null, callerTokens: null, tokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()
+      await execute([verifyIx, settleIx], [])
+      return receiptAddr
+    }
+
+    const r1 = await settleOn(benchModel)
+    const r2 = await settleOn(benchModel)
+    const wrongModelReceipt = await settleOn(otherModel)
+
+    const evaluator = Keypair.generate()
+    await execute([SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: evaluator.publicKey, lamports: 50_000_000 })], [])
+    const datasetSha = [...sha256(utf8('bench-dataset-v1'))]
+    const datasetUri = 'https://voynich.dev/datasets/bench-v1.jsonl'
+
+    const tryPublish = (name: string, sampleCount: number, passedCount: number, scoreBps: number, receipts: PublicKey[], remaining: PublicKey[]) => {
+      const benchKey = benchmarkPda(benchModel.address, name, voynich.programId)
+      return voynich.methods.publishBenchmark({
+        name, datasetSha256: datasetSha, datasetUri, sampleCount, passedCount, scoreBps, receipts,
+      }).accountsStrict({
+        publisher: evaluator.publicKey, model: benchModel.address, benchmark: benchKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).remainingAccounts(remaining.map(pubkey => ({ pubkey, isWritable: false, isSigner: false }))).instruction()
+    }
+
+    // 1. Mismatched score_bps -> InvalidBenchmark
+    await assert.rejects(execute([await tryPublish('bad-score', 10, 9, 8000, [r1], [r1])], [evaluator]), /InvalidBenchmark/)
+
+    // 2. Duplicate receipt -> InvalidBenchmark
+    await assert.rejects(execute([await tryPublish('dup-receipt', 2, 2, 10000, [r1, r1], [r1, r1])], [evaluator]), /InvalidBenchmark/)
+
+    // 3. Fake (unowned) receipt pubkey -> InvalidBenchmark
+    const fakeReceipt = Keypair.generate().publicKey
+    await assert.rejects(execute([await tryPublish('fake-receipt', 1, 1, 10000, [fakeReceipt], [fakeReceipt])], [evaluator]), /InvalidBenchmark/)
+
+    // 4. Receipt from another model -> InvalidBenchmark
+    await assert.rejects(execute([await tryPublish('wrong-model', 1, 1, 10000, [wrongModelReceipt], [wrongModelReceipt])], [evaluator]), /InvalidBenchmark/)
+
+    // 5. Permissionless publish by third-party evaluator with 2 real receipts succeeds!
+    const benchKey = benchmarkPda(benchModel.address, 'eval-v1', voynich.programId)
+    await execute([await tryPublish('eval-v1', 2, 2, 10000, [r1, r2], [r1, r2])], [evaluator])
+
+    const info = await connection.getAccountInfo(benchKey, 'confirmed')
+    assert.equal(info?.data.length, BENCHMARK_SPACE)
+    const decoded = decodeBenchmarkAccount(info!.data)
+    assert(decoded.model.equals(benchModel.address))
+    assert(decoded.publisher.equals(evaluator.publicKey))
+    assert.equal(decoded.name, 'eval-v1')
+    assert.equal(decoded.modelVersion, 1)
+    assert.equal(decoded.sampleCount, 2)
+    assert.equal(decoded.passedCount, 2)
+    assert.equal(decoded.scoreBps, 10000)
+    assert.equal(decoded.receipts.length, 2)
+    assert(decoded.receipts[0]!.equals(r1))
+    assert(decoded.receipts[1]!.equals(r2))
+  })
 })

@@ -673,6 +673,31 @@ export function createApply(attestationProgramId: string) {
           }
           break
         }
+        case 'benchmarkpublished': {
+          const address = text(data, 'benchmark')
+          const modelAddress = text(data, 'model')
+          const value = {
+            address,
+            modelAddress,
+            publisher: text(data, 'publisher'),
+            name: text(data, 'name'),
+            modelVersion: number(data, 'modelVersion'),
+            datasetSha256: hex(data, 'datasetSha256'),
+            datasetUri: text(data, 'datasetUri'),
+            sampleCount: number(data, 'sampleCount'),
+            passedCount: number(data, 'passedCount'),
+            scoreBps: number(data, 'scoreBps'),
+            receipts: ((data.receipts as string[]) ?? []).map(String) as unknown as Prisma.InputJsonValue,
+            publishedSlot: slot(data, 'publishedSlot'),
+          }
+          await tx.benchmark.upsert({
+            where: { address },
+            create: value,
+            update: value,
+          })
+          await notify(tx, 'benchmark.published', address)
+          break
+        }
       }
     }
   }

@@ -61,6 +61,9 @@ export function splitPda(model: Key, programId: Key = PROGRAM_ID): PublicKey {
 export function bondPda(enclave: Key, programId: Key = PROGRAM_ID): PublicKey {
   return pda(key(programId), utf8('bond'), key(enclave).toBytes())
 }
+export function benchmarkPda(model: Key, name: string, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('benchmark'), key(model).toBytes(), utf8(name))
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -76,6 +79,7 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     session: (caller: Key, delegate: Key, nonce: bigint | number | string) => sessionPda(caller, delegate, nonce, programId),
     split: (model: Key) => splitPda(model, programId),
     bond: (enclave: Key) => bondPda(enclave, programId),
+    benchmark: (model: Key, name: string) => benchmarkPda(model, name, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -124,6 +128,7 @@ export const SESSION_SPACE = 186
 export const SPLIT_SPACE = 526
 export const BOND_SPACE = 107
 export const DEFAULT_BOND_SLASH_BPS = 1000
+export const BENCHMARK_SPACE = 843
 export const DEFAULT_MAX_OPEN_ANSWER_BYTES = 1024
 
 const matchesDisc = (data: Uint8Array, label: string) => {
@@ -1242,5 +1247,109 @@ export async function buildWithdrawBondTx(params: {
   const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
   return new VersionedTransaction(
     new TransactionMessage({ payerKey: operator, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export type DecodedBenchmarkAccount = {
+  model: PublicKey
+  publisher: PublicKey
+  name: string
+  modelVersion: number
+  datasetSha256: string
+  datasetUri: string
+  sampleCount: number
+  passedCount: number
+  scoreBps: number
+  receipts: PublicKey[]
+  publishedSlot: BN
+  bump: number
+}
+
+export function decodeBenchmarkAccount(data: Uint8Array): DecodedBenchmarkAccount {
+  if (!matchesDisc(data, 'account:Benchmark') || data.length < 8 + 64 + 4) {
+    throw new Error('Invalid Benchmark account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const need = (n: number) => {
+    if (offset + n > data.length) throw new Error('Truncated Benchmark account data')
+  }
+  const readU32 = () => { need(4); const v = view.getUint32(offset, true); offset += 4; return v }
+  const readString = () => {
+    const len = readU32()
+    need(len)
+    const text = utf8Decoder.decode(data.subarray(offset, offset + len))
+    offset += len
+    return text
+  }
+  need(64)
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const publisher = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const name = readString()
+  const modelVersion = readU32()
+  need(32)
+  const datasetSha256 = toHex(data.subarray(offset, offset + 32)); offset += 32
+  const datasetUri = readString()
+  const sampleCount = readU32()
+  const passedCount = readU32()
+  need(2)
+  const scoreBps = view.getUint16(offset, true); offset += 2
+  const receiptCount = readU32()
+  if (receiptCount > 16) throw new Error(`Invalid Benchmark receipts length: ${receiptCount}`)
+  need(receiptCount * 32 + 9)
+  const receipts: PublicKey[] = []
+  for (let i = 0; i < receiptCount; i++) {
+    receipts.push(new PublicKey(data.subarray(offset, offset + 32)))
+    offset += 32
+  }
+  const publishedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const bump = data[offset++]!
+  return { model, publisher, name, modelVersion, datasetSha256, datasetUri, sampleCount, passedCount, scoreBps, receipts, publishedSlot, bump }
+}
+
+export async function buildPublishBenchmarkTx(params: {
+  connection: Connection
+  publisher: Key
+  model: Key
+  name: string
+  datasetSha256: string | Uint8Array
+  datasetUri: string
+  sampleCount: number
+  passedCount: number
+  scoreBps?: number
+  receipts: Key[]
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const publisher = key(params.publisher)
+  const model = key(params.model)
+  const benchmark = benchmarkPda(model, params.name, programId)
+  const shaBytes = typeof params.datasetSha256 === 'string' ? fromHex(params.datasetSha256) : params.datasetSha256
+  const receiptKeys = params.receipts.map(key)
+  const scoreBps = params.scoreBps ?? Math.floor((params.passedCount * 10000) / params.sampleCount)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .publishBenchmark({
+      name: params.name,
+      datasetSha256: [...shaBytes],
+      datasetUri: params.datasetUri,
+      sampleCount: params.sampleCount,
+      passedCount: params.passedCount,
+      scoreBps,
+      receipts: receiptKeys,
+    })
+    .accountsStrict({
+      publisher,
+      model,
+      benchmark,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: publisher, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
   )
 }

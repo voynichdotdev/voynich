@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BN, BOND_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BENCHMARK_SPACE, BN, BOND_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -982,6 +982,37 @@ export function builders(runtime: ChainRuntime) {
         })
         .instruction()
       return ledger.build('withdraw_bond', operator, [instruction], { bond: bond.toBase58() }, 0n)
+    },
+    async publishBenchmark(id: string, body: c.PublishBenchmarkRequest) {
+      const row = await model(id)
+      const publisher = publicKey(body.wallet)
+      const benchmark = a.benchmark(row.key, body.name)
+      if (await runtime.rpc.connection.getAccountInfo(benchmark, 'confirmed')) {
+        fail('INVALID_BENCHMARK', `Benchmark "${body.name}" already exists for this model.`, { stage: 'build' })
+      }
+      const scoreBps = body.scoreBps ?? Math.floor((body.passedCount * 10000) / body.sampleCount)
+      const receiptKeys = body.receipts.map(publicKey)
+      const rent = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(BENCHMARK_SPACE))
+      const instruction = await voynich.methods
+        .publishBenchmark({
+          name: body.name,
+          datasetSha256: [...fromHex(body.datasetSha256)],
+          datasetUri: body.datasetUri,
+          sampleCount: body.sampleCount,
+          passedCount: body.passedCount,
+          scoreBps,
+          receipts: receiptKeys,
+        })
+        .accountsStrict({
+          publisher,
+          model: row.key,
+          benchmark,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
+        .instruction()
+      return ledger.build('publish_benchmark', publisher, [instruction], { model: row.key.toBase58(), benchmark: benchmark.toBase58() }, rent)
     },
   }
 }

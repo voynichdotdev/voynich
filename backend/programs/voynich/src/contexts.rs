@@ -421,3 +421,13 @@ pub struct WithdrawBond<'info> {
     #[account(mut, seeds = [b"bond", enclave.key().as_ref()], bump = bond.bump, has_one = enclave @ VoynichError::InvalidBond, has_one = operator @ VoynichError::Unauthorized)] pub bond: Box<Account<'info, Bond>>,
     pub system_program: Program<'info, System>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(args: PublishBenchmarkArgs)]
+pub struct PublishBenchmark<'info> {
+    #[account(mut)] pub publisher: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
+    #[account(init, payer = publisher, space = Benchmark::SPACE, seeds = [b"benchmark", model.key().as_ref(), args.name.as_bytes()], bump)] pub benchmark: Box<Account<'info, Benchmark>>,
+    pub system_program: Program<'info, System>,
+}

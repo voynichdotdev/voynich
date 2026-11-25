@@ -6238,3 +6238,119 @@ test('Build 13 Step 2: crank Bond remainingAccounts attachment on expired refund
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 14 Step 1: Benchmark PDA helpers, decodeBenchmarkAccount, buildPublishBenchmarkTx, fixture routes, and SDK listBenchmarks/publishBenchmark', async () => {
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const { BENCHMARK_SPACE, addresses, benchmarkPda, buildPublishBenchmarkTx, decodeBenchmarkAccount } = await import('../sdk/src/program.js')
+  const { PublishBenchmarkRequest } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { sha256, toHex, utf8 } = await import('voynich/crypto')
+  const { createVoynich } = await import('../sdk/src/client.js')
+  const { buildApp } = await import('../src/app.js')
+
+  assert.equal(BENCHMARK_SPACE, 843)
+  const modelKey = Keypair.generate().publicKey
+  const publisherKey = Keypair.generate().publicKey
+  const r1 = Keypair.generate().publicKey
+  const r2 = Keypair.generate().publicKey
+  assert(benchmarkPda(modelKey, 'quickdraw-100').equals(addresses().benchmark(modelKey, 'quickdraw-100')))
+
+  // 1. decodeBenchmarkAccount round-trip
+  const nameBytes = utf8('quickdraw-100')
+  const uriBytes = utf8('https://voynich.dev/datasets/quickdraw-100.jsonl')
+  const datasetSha = sha256(utf8('quickdraw-100-v1'))
+  const buf = Buffer.alloc(BENCHMARK_SPACE)
+  Buffer.from(sha256(utf8('account:Benchmark')).subarray(0, 8)).copy(buf, 0)
+  let off = 8
+  modelKey.toBuffer().copy(buf, off); off += 32
+  publisherKey.toBuffer().copy(buf, off); off += 32
+  buf.writeUInt32LE(nameBytes.length, off); off += 4
+  Buffer.from(nameBytes).copy(buf, off); off += nameBytes.length
+  buf.writeUInt32LE(2, off); off += 4 // modelVersion
+  Buffer.from(datasetSha).copy(buf, off); off += 32
+  buf.writeUInt32LE(uriBytes.length, off); off += 4
+  Buffer.from(uriBytes).copy(buf, off); off += uriBytes.length
+  buf.writeUInt32LE(10, off); off += 4 // sampleCount
+  buf.writeUInt32LE(9, off); off += 4 // passedCount
+  buf.writeUInt16LE(9000, off); off += 2 // scoreBps
+  buf.writeUInt32LE(2, off); off += 4 // receipts.len()
+  r1.toBuffer().copy(buf, off); off += 32
+  r2.toBuffer().copy(buf, off); off += 32
+  buf.writeBigUInt64LE(474500000n, off); off += 8
+  buf[off++] = 252
+
+  const decoded = decodeBenchmarkAccount(buf)
+  assert(decoded.model.equals(modelKey))
+  assert(decoded.publisher.equals(publisherKey))
+  assert.equal(decoded.name, 'quickdraw-100')
+  assert.equal(decoded.modelVersion, 2)
+  assert.equal(decoded.datasetSha256, toHex(datasetSha))
+  assert.equal(decoded.datasetUri, 'https://voynich.dev/datasets/quickdraw-100.jsonl')
+  assert.equal(decoded.sampleCount, 10)
+  assert.equal(decoded.passedCount, 9)
+  assert.equal(decoded.scoreBps, 9000)
+  assert.equal(decoded.receipts.length, 2)
+  assert(decoded.receipts[0]!.equals(r1))
+  assert.equal(decoded.publishedSlot.toString(), '474500000')
+  assert.equal(decoded.bump, 252)
+
+  // 2. buildPublishBenchmarkTx offline
+  const dummyConn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const tx = await buildPublishBenchmarkTx({
+    connection: dummyConn,
+    publisher: publisherKey,
+    model: modelKey,
+    name: 'quickdraw-100',
+    datasetSha256: datasetSha,
+    datasetUri: 'https://voynich.dev/datasets/quickdraw-100.jsonl',
+    sampleCount: 10,
+    passedCount: 9,
+    receipts: [r1, r2],
+    recentBlockhash: Keypair.generate().publicKey.toBase58(),
+  })
+  assert.equal(tx.message.compiledInstructions.length, 1)
+
+  // 3. Schema rejects mismatched scoreBps and duplicate receipts
+  assert.equal(PublishBenchmarkRequest.safeParse({
+    wallet: publisherKey.toBase58(), name: 'eval-1', datasetSha256: toHex(datasetSha),
+    datasetUri: 'https://example.com/d.jsonl', sampleCount: 10, passedCount: 9, scoreBps: 8000, receipts: [r1.toBase58()],
+  }).success, false)
+  assert.equal(PublishBenchmarkRequest.safeParse({
+    wallet: publisherKey.toBase58(), name: 'eval-1', datasetSha256: toHex(datasetSha),
+    datasetUri: 'https://example.com/d.jsonl', sampleCount: 10, passedCount: 9, receipts: [r1.toBase58(), r1.toBase58()],
+  }).success, false)
+
+  // 4. Fixture API + SDK publishBenchmark / listModelBenchmarks / listBenchmarks
+  const app = buildApp()
+  const publisherWallet = {
+    publicKey: new PublicKey(FIXTURE.caller),
+    async signTransaction(vtx: import('@solana/web3.js').VersionedTransaction) { return vtx },
+  }
+  const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', 'benchmark-test-session')
+    return app.request(new Request(req, { headers }))
+  }) as typeof fetch
+  const sdk = createVoynich({ apiUrl: 'http://localhost', signer: publisherWallet, fetch: fetchFixture, pollMs: 5 })
+
+  const published = await sdk.publishBenchmark('sketch-32', {
+    name: 'sketch-eval-v1',
+    datasetSha256: toHex(datasetSha),
+    datasetUri: 'https://voynich.dev/datasets/sketch-eval-v1.jsonl',
+    sampleCount: 10,
+    passedCount: 9,
+    receipts: [FIXTURE.receipt],
+  })
+  assert.equal(published.name, 'sketch-eval-v1')
+  assert.equal(published.scoreBps, 9000)
+  assert.equal(published.modelName, 'sketch-32')
+
+  const modelList = await sdk.listModelBenchmarks('sketch-32')
+  assert.equal(modelList.items.length, 1)
+  assert.equal(modelList.items[0]!.name, 'sketch-eval-v1')
+
+  const globalList = await sdk.listBenchmarks({ name: 'sketch-eval-v1' })
+  assert.equal(globalList.items.length, 1)
+  assert.equal(globalList.items[0]!.scoreBps, 9000)
+})

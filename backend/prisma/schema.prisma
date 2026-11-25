@@ -91,6 +91,7 @@ model Model {
   indexingIssue       String?
   policy              ModelPolicy?
   split               Split?
+  benchmarks          Benchmark[]
   versions            ModelVersion[]
   weights             Weights[]
   grants              Grant[]
@@ -536,4 +537,25 @@ model Bond {
 
   @@index([operator])
   @@map("bonds")
+}
+
+model Benchmark {
+  address       String @id @db.VarChar(44)
+  modelAddress  String @db.VarChar(44)
+  model         Model  @relation(fields: [modelAddress], references: [address])
+  publisher     String @db.VarChar(44)
+  name          String @db.VarChar(32)
+  modelVersion  Int
+  datasetSha256 String @db.Char(64)
+  datasetUri    String @db.VarChar(160)
+  sampleCount   Int
+  passedCount   Int
+  scoreBps      Int
+  receipts      Json
+  publishedSlot BigInt
+
+  @@unique([modelAddress, name])
+  @@index([scoreBps(sort: Desc), publishedSlot(sort: Desc)])
+  @@index([modelAddress, publishedSlot(sort: Desc)])
+  @@map("benchmarks")
 }

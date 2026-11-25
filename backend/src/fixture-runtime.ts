@@ -38,6 +38,7 @@ export class FixtureState {
   readonly policies = new Map<string, ModelPolicy>()
   readonly splits = new Map<string, import('@voynich/contract').ModelSplit>()
   readonly bonds = new Map<string, import('@voynich/contract').OperatorBond>()
+  benchmarks: import('@voynich/contract').BenchmarkRecord[] = []
   readonly versions = new Map<string, import('@voynich/contract').ModelVersion[]>()
   readonly stagedVersions = new Map<string, { version: number; address: string; weights: string[]; sizeBytes: number; noncePrefix: string; manifest: import('@voynich/contract').Manifest; base: import('@voynich/contract').ModelBase | null; bytes: Uint8Array; sealedChunks: number }>()
   readonly sessions = new Map<string, import('@voynich/contract').Session>()

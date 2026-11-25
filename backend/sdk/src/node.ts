@@ -62,6 +62,9 @@ const voynich = {
   getBond: async (...args: Parameters<Voynich['getBond']>) => (await load()).getBond(...args),
   depositBond: async (...args: Parameters<Voynich['depositBond']>) => (await load(true)).depositBond(...args),
   withdrawBond: async (...args: Parameters<Voynich['withdrawBond']>) => (await load(true)).withdrawBond(...args),
+  listBenchmarks: async (...args: Parameters<Voynich['listBenchmarks']>) => (await load()).listBenchmarks(...args),
+  listModelBenchmarks: async (...args: Parameters<Voynich['listModelBenchmarks']>) => (await load()).listModelBenchmarks(...args),
+  publishBenchmark: async (...args: Parameters<Voynich['publishBenchmark']>) => (await load(true)).publishBenchmark(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

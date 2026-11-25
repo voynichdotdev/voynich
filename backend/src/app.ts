@@ -87,6 +87,19 @@ export function buildApp() {
     if (!split) fail('SPLIT_NOT_FOUND', 'No revenue split is configured for this model.')
     return c.json(split)
   })
+  app.get('/v1/benchmarks', c => {
+    const state = c.get('fixture'); const q = readQuery(c, s.BenchmarkQuery, queryKeys)
+    let items = [...state.benchmarks]
+    if (q.model) items = items.filter(b => b.model === q.model || b.modelName === q.model)
+    if (q.name) items = items.filter(b => b.name === q.name)
+    items.sort((a, b) => b.scoreBps - a.scoreBps || Number(BigInt(b.publishedSlot) - BigInt(a.publishedSlot)))
+    return c.json(s.paginate(items, q))
+  })
+  app.get('/v1/models/:id/benchmarks', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const items = state.benchmarks.filter(b => b.model === model.address)
+    return c.json(s.paginate(items, readQuery(c, s.PageQuery, queryKeys)))
+  })
   app.get('/v1/models/:id/versions', c => {
     const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
     const existing = state.versions.get(model.address)
@@ -638,6 +651,33 @@ export function buildApp() {
   app.post('/v1/calls/:id/settle/build', async c => {
     const state = c.get('fixture'); const call = state.call(readParam(c, 'id', s.Address)); const body = await readJson(c, s.SettleCallRequest)
     return c.json(state.settleMetered(call, body))
+  })
+  app.post('/v1/models/:id/benchmarks/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.PublishBenchmarkRequest)
+    if (state.benchmarks.some(b => b.model === model.address && b.name === body.name)) {
+      fail('INVALID_BENCHMARK', `Benchmark "${body.name}" already exists for this model.`, { stage: 'build' })
+    }
+    const scoreBps = body.scoreBps ?? Math.floor((body.passedCount * 10000) / body.sampleCount)
+    const address = fixtureAddress(`benchmark:${model.address}:${body.name}`)
+    const record: s.BenchmarkRecord = {
+      address,
+      model: model.address,
+      modelName: model.name,
+      publisher: body.wallet,
+      name: body.name,
+      modelVersion: model.currentVersion ?? 1,
+      datasetSha256: body.datasetSha256,
+      datasetUri: body.datasetUri,
+      sampleCount: body.sampleCount,
+      passedCount: body.passedCount,
+      scoreBps,
+      receipts: body.receipts,
+      publishedSlot: String(state.slot),
+    }
+    return c.json(state.build('publish_benchmark', [body.wallet], { model: model.address, benchmark: address }, () => {
+      state.benchmarks.unshift(record)
+      state.emit('benchmark.published', record)
+    }))
   })
   app.post('/v1/enclaves/:key/bond/deposit/build', async c => {
     const state = c.get('fixture'); const enclave = state.enclave(readParam(c, 'key', s.Address)); const body = await readJson(c, s.DepositBondRequest)

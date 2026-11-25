@@ -3,7 +3,7 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.32'
+export const CONTRACT_VERSION = '0.1.33'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
@@ -11,6 +11,7 @@ export const errors = defineErrors({
   POLICY_NOT_FOUND: 404, INVALID_POLICY: 422, POLICY_CALLER_DENIED: 403, POLICY_OPERATOR_DENIED: 403, POLICY_REQUIRED: 409,
   SPLIT_NOT_FOUND: 404, INVALID_SPLIT: 422,
   BOND_NOT_FOUND: 404, INVALID_BOND: 422,
+  BENCHMARK_NOT_FOUND: 404, INVALID_BENCHMARK: 422,
   GRANT_REQUIRED: 409, INVALID_QUOTE: 422, INVALID_VERSION: 422, SESSION_NOT_FOUND: 404, INVALID_SESSION: 422, CALL_NOT_FOUND: 404, CALL_NOT_OPEN: 409,
   CALL_NOT_REFUNDABLE: 409, CALL_DEADLINE_PASSED: 409, RECEIPT_NOT_FOUND: 404,
   INPUT_HASH_MISMATCH: 422, INVALID_ENVELOPE: 422, UPLOAD_INCOMPLETE: 409,
@@ -47,6 +48,9 @@ export const MAX_POLICY_REGIONS = 8 as const
 export const MAX_POLICY_REGION_LEN = 16 as const
 export const MAX_SPLIT_RECIPIENTS = 8 as const
 export const DEFAULT_BOND_SLASH_BPS = 1000 as const
+export const MAX_BENCHMARK_NAME = 32 as const
+export const MAX_BENCHMARK_URI = 160 as const
+export const MAX_BENCHMARK_RECEIPTS = 16 as const
 export const PROGRAM_LIMITS = { modelNameBytes: 32, weightsAccounts: MAX_WEIGHTS, measurements: 8, manifestBytes: 4096, endpointBytes: 256, weightsHeaderBytes: 56, maxOpenAnswerBytes: 4096, writeChunkBytes: WRITE_CHUNK_BYTES, maxUploadKeys: MAX_UPLOAD_KEYS, sealRangeChunks: SEAL_RANGE_CHUNKS, modelAccountBytes: MODEL_ACCOUNT_BYTES, baseFormatBytes: MAX_BASE_FORMAT, baseSourceBytes: MAX_BASE_SOURCE, sourceRepoBytes: MAX_SOURCE_REPO, commitShaBytes: MAX_COMMIT_SHA, measurementVersionBytes: MAX_MEASUREMENT_VERSION, policyCallers: MAX_POLICY_CALLERS, policyOperators: MAX_POLICY_OPERATORS, policyRegions: MAX_POLICY_REGIONS, policyRegionBytes: MAX_POLICY_REGION_LEN, splitRecipients: MAX_SPLIT_RECIPIENTS } as const
 export const AnswerMode = z.enum(['sealed', 'open'])
 export const PriceUnit = z.enum(['call', 'token'])
@@ -318,6 +322,30 @@ export const OperatorBond = z.strictObject({
   slashBps: z.int().min(0).max(10000),
   updatedSlot: U64,
 })
+export const BenchmarkUri = z.string().min(1).max(MAX_BENCHMARK_URI).refine(
+  (value) => !/[\s\x00-\x1f\x7f]/.test(value) && /^(?:https?:\/\/|ipfs:\/\/|hf:\/\/)/.test(value),
+  'Dataset URI must use https://, http://, ipfs://, or hf:// with no whitespace or control characters.',
+)
+export const BenchmarkRecord = z.strictObject({
+  address: Address,
+  model: Address,
+  modelName: Slug.nullable().optional(),
+  publisher: Address,
+  name: Slug,
+  modelVersion: z.int().positive(),
+  datasetSha256: Hash,
+  datasetUri: BenchmarkUri,
+  sampleCount: z.int().positive(),
+  passedCount: z.int().nonnegative(),
+  scoreBps: z.int().min(0).max(10000),
+  receipts: z.array(Address).min(1).max(MAX_BENCHMARK_RECEIPTS),
+  publishedSlot: U64,
+})
+export const BenchmarksPage = page(BenchmarkRecord)
+export const BenchmarkQuery = PageQuery.extend({
+  model: ModelId.optional(),
+  name: Slug.optional(),
+})
 
 export const WalletRequest = z.strictObject({ wallet: Address })
 const CreateModelBase = z.strictObject({ wallet: Address, uploadKey: Address, uploadKeys: z.array(Address).min(1).max(MAX_UPLOAD_KEYS).optional(), weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS).optional(), name: Slug, manifest: Manifest, sizeBytes: z.int().positive(), plaintextSizeBytes: z.int().positive(), cipher: CipherHeader, price: Money, priceUnit: PriceUnit.optional(), operatorShareBps: z.int().min(0).max(10000), allowedMeasurements: z.array(Measurement).min(1).max(8), uploadFundingLamports: U64, base: ModelBase.optional() })
@@ -436,8 +464,29 @@ export const WithdrawBondRequest = z.strictObject({
   wallet: Address,
   amountLamports: U64.refine((value) => BigInt(value) > 0n, 'amountLamports must be positive.'),
 })
-export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split', 'deposit_bond', 'withdraw_bond'])
-export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional(), bond: Address.optional() }) })
+export const PublishBenchmarkRequest = z.strictObject({
+  wallet: Address,
+  name: Slug,
+  datasetSha256: Hash.refine((value) => !/^0{64}$/.test(value), 'datasetSha256 must be non-zero.'),
+  datasetUri: BenchmarkUri,
+  sampleCount: z.int().positive(),
+  passedCount: z.int().nonnegative(),
+  scoreBps: z.int().min(0).max(10000).optional(),
+  receipts: z.array(Address).min(1).max(MAX_BENCHMARK_RECEIPTS),
+}).superRefine((value, ctx) => {
+  if (value.passedCount > value.sampleCount) {
+    ctx.addIssue({ code: 'custom', path: ['passedCount'], message: 'passedCount cannot exceed sampleCount.' })
+  }
+  const expected = Math.floor((value.passedCount * 10000) / value.sampleCount)
+  if (value.scoreBps !== undefined && value.scoreBps !== expected) {
+    ctx.addIssue({ code: 'custom', path: ['scoreBps'], message: `scoreBps must equal floor(passedCount * 10000 / sampleCount) = ${expected}.` })
+  }
+  if (new Set(value.receipts).size !== value.receipts.length) {
+    ctx.addIssue({ code: 'custom', path: ['receipts'], message: 'receipts must contain distinct receipt addresses.' })
+  }
+})
+export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split', 'deposit_bond', 'withdraw_bond', 'publish_benchmark'])
+export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional(), bond: Address.optional(), benchmark: Address.optional() }) })
 export const TxFailure = z.strictObject({ stage: z.enum(['build', 'wallet-rejected', 'wallet-changed', 'simulation', 'send', 'confirm']), message: z.string(), nextStep: z.string().optional(), retryable: z.boolean(), program: z.strictObject({ address: Address, code: z.int().nullable(), name: z.string().nullable() }).optional() })
 export const TxStatus = z.strictObject({ id: z.string(), status: z.enum(['built', 'submitted', 'unconfirmed', 'confirmed', 'finalized', 'failed', 'expired']), signature: Signature.optional(), error: TxFailure.nullish() })
 export const TxSubmission = z.discriminatedUnion('mode', [z.strictObject({ mode: z.literal('relay'), buildId: z.string(), signedTransactionBase64: Base64, idempotencyKey: z.string().min(1).max(128) }), z.strictObject({ mode: z.literal('wallet-sent'), buildId: z.string(), signature: Signature, idempotencyKey: z.string().min(1).max(128) })])
@@ -459,6 +508,7 @@ export const ProgramEvent = z.discriminatedUnion('type', [
   z.strictObject({ ...eventFields, type: z.literal('session.updated'), data: Session }),
   z.strictObject({ ...eventFields, type: z.literal('split.updated'), data: ModelSplit }),
   z.strictObject({ ...eventFields, type: z.literal('bond.updated'), data: OperatorBond }),
+  z.strictObject({ ...eventFields, type: z.literal('benchmark.published'), data: BenchmarkRecord }),
   z.strictObject({ ...eventFields, type: z.literal('transaction.updated'), data: TxStatus }),
 ])
 
@@ -567,6 +617,10 @@ export type ClaimSplitRequest = z.output<typeof ClaimSplitRequest>
 export type OperatorBond = z.output<typeof OperatorBond>
 export type DepositBondRequest = z.output<typeof DepositBondRequest>
 export type WithdrawBondRequest = z.output<typeof WithdrawBondRequest>
+export type BenchmarkRecord = z.output<typeof BenchmarkRecord>
+export type BenchmarksPage = z.output<typeof BenchmarksPage>
+export type BenchmarkQuery = z.output<typeof BenchmarkQuery>
+export type PublishBenchmarkRequest = z.output<typeof PublishBenchmarkRequest>
 export type VersionStatus = z.output<typeof VersionStatus>
 export type ModelVersion = z.output<typeof ModelVersion>
 export type ModelVersions = z.output<typeof ModelVersions>

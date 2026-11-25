@@ -2540,6 +2540,124 @@ export type Voynich = {
       ]
     },
     {
+      "name": "publishBenchmark",
+      "discriminator": [
+        193,
+        61,
+        7,
+        139,
+        15,
+        170,
+        132,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "publisher",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "benchmark",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  110,
+                  99,
+                  104,
+                  109,
+                  97,
+                  114,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "arg",
+                "path": "args.name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "publishBenchmarkArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "publishMeasurement",
       "discriminator": [
         86,
@@ -5056,6 +5174,19 @@ export type Voynich = {
   ],
   "accounts": [
     {
+      "name": "benchmark",
+      "discriminator": [
+        57,
+        252,
+        33,
+        54,
+        113,
+        141,
+        233,
+        247
+      ]
+    },
+    {
       "name": "bond",
       "discriminator": [
         224,
@@ -5213,6 +5344,19 @@ export type Voynich = {
     }
   ],
   "events": [
+    {
+      "name": "benchmarkPublished",
+      "discriminator": [
+        194,
+        226,
+        244,
+        246,
+        119,
+        165,
+        196,
+        39
+      ]
+    },
     {
       "name": "bondDeposited",
       "discriminator": [
@@ -5784,6 +5928,11 @@ export type Voynich = {
       "code": 6035,
       "name": "invalidBond",
       "msg": "The operator bond deposit, withdrawal, or remaining account is invalid."
+    },
+    {
+      "code": 6036,
+      "name": "invalidBenchmark",
+      "msg": "The benchmark name, dataset, score, or receipt proofs are invalid."
     }
   ],
   "types": [
@@ -5832,6 +5981,132 @@ export type Voynich = {
                 }
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "benchmark",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "publisher",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "modelVersion",
+            "type": "u32"
+          },
+          {
+            "name": "datasetSha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "datasetUri",
+            "type": "string"
+          },
+          {
+            "name": "sampleCount",
+            "type": "u32"
+          },
+          {
+            "name": "passedCount",
+            "type": "u32"
+          },
+          {
+            "name": "scoreBps",
+            "type": "u16"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "publishedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "benchmarkPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "benchmark",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "publisher",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "modelVersion",
+            "type": "u32"
+          },
+          {
+            "name": "datasetSha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "datasetUri",
+            "type": "string"
+          },
+          {
+            "name": "sampleCount",
+            "type": "u32"
+          },
+          {
+            "name": "passedCount",
+            "type": "u32"
+          },
+          {
+            "name": "scoreBps",
+            "type": "u16"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "publishedSlot",
+            "type": "u64"
           }
         ]
       }
@@ -7883,6 +8158,49 @@ export type Voynich = {
           },
           {
             "name": "token"
+          }
+        ]
+      }
+    },
+    {
+      "name": "publishBenchmarkArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "datasetSha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "datasetUri",
+            "type": "string"
+          },
+          {
+            "name": "sampleCount",
+            "type": "u32"
+          },
+          {
+            "name": "passedCount",
+            "type": "u32"
+          },
+          {
+            "name": "scoreBps",
+            "type": "u16"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "vec": "pubkey"
+            }
           }
         ]
       }
@@ -11041,6 +11359,124 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "publish_benchmark",
+      "discriminator": [
+        193,
+        61,
+        7,
+        139,
+        15,
+        170,
+        132,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "publisher",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "benchmark",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  110,
+                  99,
+                  104,
+                  109,
+                  97,
+                  114,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "arg",
+                "path": "args.name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "PublishBenchmarkArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "publish_measurement",
       "discriminator": [
         86,
@@ -13557,6 +13993,19 @@ export const IDL: Voynich = {
   ],
   "accounts": [
     {
+      "name": "Benchmark",
+      "discriminator": [
+        57,
+        252,
+        33,
+        54,
+        113,
+        141,
+        233,
+        247
+      ]
+    },
+    {
       "name": "Bond",
       "discriminator": [
         224,
@@ -13714,6 +14163,19 @@ export const IDL: Voynich = {
     }
   ],
   "events": [
+    {
+      "name": "BenchmarkPublished",
+      "discriminator": [
+        194,
+        226,
+        244,
+        246,
+        119,
+        165,
+        196,
+        39
+      ]
+    },
     {
       "name": "BondDeposited",
       "discriminator": [
@@ -14285,6 +14747,11 @@ export const IDL: Voynich = {
       "code": 6035,
       "name": "InvalidBond",
       "msg": "The operator bond deposit, withdrawal, or remaining account is invalid."
+    },
+    {
+      "code": 6036,
+      "name": "InvalidBenchmark",
+      "msg": "The benchmark name, dataset, score, or receipt proofs are invalid."
     }
   ],
   "types": [
@@ -14333,6 +14800,132 @@ export const IDL: Voynich = {
                 }
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Benchmark",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "publisher",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "model_version",
+            "type": "u32"
+          },
+          {
+            "name": "dataset_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "dataset_uri",
+            "type": "string"
+          },
+          {
+            "name": "sample_count",
+            "type": "u32"
+          },
+          {
+            "name": "passed_count",
+            "type": "u32"
+          },
+          {
+            "name": "score_bps",
+            "type": "u16"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "published_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BenchmarkPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "benchmark",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "publisher",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "model_version",
+            "type": "u32"
+          },
+          {
+            "name": "dataset_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "dataset_uri",
+            "type": "string"
+          },
+          {
+            "name": "sample_count",
+            "type": "u32"
+          },
+          {
+            "name": "passed_count",
+            "type": "u32"
+          },
+          {
+            "name": "score_bps",
+            "type": "u16"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "published_slot",
+            "type": "u64"
           }
         ]
       }
@@ -16384,6 +16977,49 @@ export const IDL: Voynich = {
           },
           {
             "name": "Token"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PublishBenchmarkArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "dataset_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "dataset_uri",
+            "type": "string"
+          },
+          {
+            "name": "sample_count",
+            "type": "u32"
+          },
+          {
+            "name": "passed_count",
+            "type": "u32"
+          },
+          {
+            "name": "score_bps",
+            "type": "u16"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "vec": "pubkey"
+            }
           }
         ]
       }

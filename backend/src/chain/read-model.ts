@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { PublicKey, type Connection } from '@solana/web3.js'
-import { decodeManifest, type AttestationRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Receipt, type ModelQuery } from '@voynich/contract'
+import { decodeManifest, type AttestationRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Receipt, type ModelQuery } from '@voynich/contract'
 import { toBase64 } from 'voynich/crypto'
 import { fail } from './errors.js'
 
@@ -382,5 +382,54 @@ export class ReadModel {
     const row = await this.db.bond.findUnique({ where: { enclaveAddress: resolved.address } })
     if (!row) fail('BOND_NOT_FOUND', 'No operator bond is configured for this enclave.')
     return this.bondRow(row)
+  }
+  benchmarkRow(row: Prisma.BenchmarkGetPayload<{ include: { model: { select: { name: true } } } }>): BenchmarkRecord {
+    return {
+      address: row.address,
+      model: row.modelAddress,
+      modelName: row.model.name,
+      publisher: row.publisher,
+      name: row.name,
+      modelVersion: row.modelVersion,
+      datasetSha256: row.datasetSha256,
+      datasetUri: row.datasetUri,
+      sampleCount: row.sampleCount,
+      passedCount: row.passedCount,
+      scoreBps: row.scoreBps,
+      receipts: (row.receipts as string[]) ?? [],
+      publishedSlot: String(row.publishedSlot),
+    }
+  }
+  async benchmark(address: string): Promise<BenchmarkRecord> {
+    const row = await this.db.benchmark.findUnique({ where: { address }, include: { model: { select: { name: true } } } })
+    if (!row) fail('BENCHMARK_NOT_FOUND', 'This benchmark was not found.')
+    return this.benchmarkRow(row)
+  }
+  async benchmarks(query: BenchmarkQuery) {
+    let modelAddress: string | undefined
+    if (query.model) {
+      const resolved = await this.db.model.findFirst({ where: { OR: [{ address: query.model }, { name: query.model }] }, select: { address: true } })
+      modelAddress = resolved?.address ?? query.model
+    }
+    const rows = await this.db.benchmark.findMany({
+      where: { ...(modelAddress ? { modelAddress } : {}), ...(query.name ? { name: query.name } : {}) },
+      orderBy: [{ scoreBps: 'desc' }, { publishedSlot: 'desc' }, { address: 'asc' }],
+      include: { model: { select: { name: true } } },
+      skip: Number(query.cursor ?? 0),
+      take: query.limit + 1,
+    })
+    return page(rows.map(row => this.benchmarkRow(row)), query)
+  }
+  async modelBenchmarks(id: string, query: Page) {
+    const resolved = await this.db.model.findFirst({ where: { OR: [{ address: id }, { name: id }] }, select: { address: true } })
+    if (!resolved) fail('MODEL_NOT_FOUND', 'This model was not found.')
+    const rows = await this.db.benchmark.findMany({
+      where: { modelAddress: resolved.address },
+      orderBy: [{ publishedSlot: 'desc' }, { address: 'asc' }],
+      include: { model: { select: { name: true } } },
+      skip: Number(query.cursor ?? 0),
+      take: query.limit + 1,
+    })
+    return page(rows.map(row => this.benchmarkRow(row)), query)
   }
 }

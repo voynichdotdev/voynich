@@ -437,6 +437,51 @@ impl Bond {
     pub const SPACE: usize = 8 + 32 * 2 + 8 * 4 + 2 + 1;
 }
 
+pub const MAX_BENCHMARK_NAME: usize = 32;
+pub const MAX_BENCHMARK_URI: usize = 160;
+pub const MAX_BENCHMARK_RECEIPTS: usize = 16;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct PublishBenchmarkArgs {
+    pub name: String,
+    pub dataset_sha256: [u8; 32],
+    pub dataset_uri: String,
+    pub sample_count: u32,
+    pub passed_count: u32,
+    pub score_bps: u16,
+    pub receipts: Vec<Pubkey>,
+}
+
+#[account]
+pub struct Benchmark {
+    pub model: Pubkey,
+    pub publisher: Pubkey,
+    pub name: String,
+    pub model_version: u32,
+    pub dataset_sha256: [u8; 32],
+    pub dataset_uri: String,
+    pub sample_count: u32,
+    pub passed_count: u32,
+    pub score_bps: u16,
+    pub receipts: Vec<Pubkey>,
+    pub published_slot: u64,
+    pub bump: u8,
+}
+impl Benchmark {
+    pub const SPACE: usize = 8
+        + 32 * 2
+        + (4 + MAX_BENCHMARK_NAME)
+        + 4
+        + 32
+        + (4 + MAX_BENCHMARK_URI)
+        + 4
+        + 4
+        + 2
+        + (4 + 32 * MAX_BENCHMARK_RECEIPTS)
+        + 8
+        + 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -768,5 +813,27 @@ mod tests {
         b.try_serialize(&mut buf).unwrap();
         assert_eq!(Bond::SPACE, 107);
         assert_eq!(buf.len(), Bond::SPACE);
+    }
+
+    #[test]
+    fn worst_case_benchmark_fits_within_space() {
+        let b = Benchmark {
+            model: Pubkey::new_unique(),
+            publisher: Pubkey::new_unique(),
+            name: "a".repeat(MAX_BENCHMARK_NAME),
+            model_version: u32::MAX,
+            dataset_sha256: [7u8; 32],
+            dataset_uri: format!("https://{}", "b".repeat(MAX_BENCHMARK_URI - 8)),
+            sample_count: u32::MAX,
+            passed_count: u32::MAX,
+            score_bps: 10_000,
+            receipts: (0..MAX_BENCHMARK_RECEIPTS).map(|_| Pubkey::new_unique()).collect(),
+            published_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut buf = Vec::new();
+        b.try_serialize(&mut buf).unwrap();
+        assert_eq!(Benchmark::SPACE, 843);
+        assert_eq!(buf.len(), Benchmark::SPACE);
     }
 }
