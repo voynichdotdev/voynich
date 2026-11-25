@@ -1,6 +1,6 @@
 import { Connection, Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { IdlAccounts } from '@coral-xyz/anchor'
-import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AccountSessions, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelVersion, type ModelVersions, type Money, type PriceUnit, type Receipt, type ReceiptView, type Session, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
+import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AccountSessions, type AnswerMode, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type ModelVersion, type ModelVersions, type Money, type PriceUnit, type Receipt, type ReceiptView, type Session, type SplitRecipientInput, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
 import { decodeAdapter } from './adapter.js'
 import { CIPHER_CHUNK_BYTES, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER, ciphertextHash, decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, openWeightsChunk, sealWeights, sha256, signSealDerivation, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, verifyReceipt, wrapKey, type SealDerivationSigner, type WeightsCipherHeader } from './crypto.js'
 import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeGrantAccount, decodeModelBaseBytes, decodeModelVersionAccount, decodeReceiptAccount, decodeWeightsHeader, modelVersionPda, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
@@ -1578,6 +1578,38 @@ export function createVoynich(options: VoynichOptions) {
     const wallet = signer()
     return send(await api.clearPolicy(modelId, { wallet: wallet.publicKey.toBase58() }, { signal: opts.signal }), [], undefined, opts.signal)
   }
+  async function getSplit(modelId: string, opts: { signal?: AbortSignal } = {}): Promise<ModelSplit | null> {
+    try {
+      return await api.modelSplit(modelId, { signal: opts.signal })
+    } catch (error) {
+      if (error instanceof ApiClientError && error.code === 'SPLIT_NOT_FOUND') return null
+      throw error
+    }
+  }
+  async function setSplit(modelId: string, recipients: SplitRecipientInput[], opts: { signal?: AbortSignal } = {}): Promise<ModelSplit> {
+    const wallet = signer()
+    await send(await api.setSplit(modelId, { wallet: wallet.publicKey.toBase58(), recipients }, { signal: opts.signal }), [], undefined, opts.signal)
+    return indexed(
+      () => api.modelSplit(modelId, { signal: opts.signal }),
+      'SPLIT_NOT_FOUND',
+      value => value.active === (recipients.length > 0),
+      opts.signal,
+    )
+  }
+  async function claimSplit(modelId: string, recipient?: string, opts: { signal?: AbortSignal } = {}): Promise<ModelSplit> {
+    const wallet = signer()
+    const target = recipient ?? wallet.publicKey.toBase58()
+    await send(await api.claimSplit(modelId, { wallet: wallet.publicKey.toBase58(), ...(recipient ? { recipient } : {}) }, { signal: opts.signal }), [], undefined, opts.signal)
+    return indexed(
+      () => api.modelSplit(modelId, { signal: opts.signal }),
+      'SPLIT_NOT_FOUND',
+      value => {
+        const entry = value.recipients.find(r => r.wallet === target)
+        return !entry || entry.claimable === '0'
+      },
+      opts.signal,
+    )
+  }
   async function setQuote(
     enclaveKey: string,
     modelId: string,
@@ -1818,6 +1850,6 @@ export function createVoynich(options: VoynichOptions) {
       close: (closeOpts?: { signal?: AbortSignal }) => closeSession(address, closeOpts),
     }
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>

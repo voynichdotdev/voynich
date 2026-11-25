@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BN, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeSessionAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BN, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -54,9 +54,11 @@ export function decodeModelAccountForBuilder(voynich: ChainRuntime['programs']['
     if (priceUnitOffset !== null && priceUnitOffset < data.length) {
       const invalidPriceUnit = data[priceUnitOffset] !== 0 && data[priceUnitOffset] !== 1
       const invalidHasPolicy = priceUnitOffset + 1 < data.length && data[priceUnitOffset + 1] !== 0 && data[priceUnitOffset + 1] !== 1
-      if (invalidPriceUnit || invalidHasPolicy) {
+      const invalidHasSplit = priceUnitOffset + 6 < data.length && data[priceUnitOffset + 6] !== 0 && data[priceUnitOffset + 6] !== 1
+      if (invalidPriceUnit || invalidHasPolicy || invalidHasSplit) {
         const patched = Buffer.from(data)
-        patched.fill(0, invalidPriceUnit ? priceUnitOffset : priceUnitOffset + 1)
+        const start = invalidPriceUnit ? priceUnitOffset : invalidHasPolicy ? priceUnitOffset + 1 : priceUnitOffset + 6
+        patched.fill(0, start)
         return voynich.coder.accounts.decode('model', patched)
       }
     }
@@ -358,7 +360,9 @@ export function builders(runtime: ChainRuntime) {
       const receipt = a.receipt(call)
       const token = !chainCall.priceMint.equals(PublicKey.default)
       const ata = (owner: PublicKey) => getAssociatedTokenAddressSync(chainCall.priceMint, owner, true)
-      const uniqueOwners = token ? [...new Map([chainCall.owner, chainCall.operator, chainCall.feeRecipient, chainCall.caller].map(o => [o.toBase58(), o])).values()] : []
+      const hasSplit = Boolean((row.value as { hasSplit?: boolean }).hasSplit)
+      const splitKey = hasSplit ? a.split(chainCall.model) : null
+      const uniqueOwners = token ? [...new Map([chainCall.owner, chainCall.operator, chainCall.feeRecipient, chainCall.caller, ...(splitKey ? [splitKey] : [])].map(o => [o.toBase58(), o])).values()] : []
       const prepare = uniqueOwners.map(o => createAssociatedTokenAccountIdempotentInstruction(wallet, ata(o), o, chainCall.priceMint))
       let requiredLamports = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(RECEIPT_METERED_SPACE))
       if (uniqueOwners.length) {
@@ -379,6 +383,12 @@ export function builders(runtime: ChainRuntime) {
             ...chainCall.callbackAccounts.map(account => ({ pubkey: account.pubkey, isWritable: account.isWritable, isSigner: false })),
           ]
         : []
+      const splitRemaining = splitKey
+        ? [
+            { pubkey: splitKey, isWritable: true, isSigner: false },
+            ...(token ? [{ pubkey: ata(splitKey), isWritable: true, isSigner: false }] : []),
+          ]
+        : []
       // buildUnsignedV0 prepends exactly 2 ComputeBudget instructions (setComputeUnitLimit, setComputeUnitPrice).
       const ed25519IxIndex = 2 + prepare.length
       const settleIx = await voynich.methods
@@ -393,7 +403,7 @@ export function builders(runtime: ChainRuntime) {
           callerTokens: token ? ata(chainCall.caller) : null, tokenProgram: token ? TOKEN_PROGRAM_ID : null,
           systemProgram: SystemProgram.programId, ...events,
         })
-        .remainingAccounts(callbackRemaining)
+        .remainingAccounts([...callbackRemaining, ...splitRemaining])
         .instruction()
       return ledger.build('settle_metered_call', wallet, [...prepare, verifyIx, settleIx], { model: chainCall.model.toBase58(), call: id, receipt: receipt.toBase58() }, requiredLamports)
     },
@@ -838,6 +848,76 @@ export function builders(runtime: ChainRuntime) {
         ? await voynich.methods.openSessionMeteredCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null, bn(escrowAmount)).accountsStrict(accounts).remainingAccounts(policyRemaining).instruction()
         : await voynich.methods.openSessionCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null).accountsStrict(accounts).remainingAccounts(policyRemaining).instruction()
       return ledger.build('open_session_call', delegate, [instruction], { session: address, model: row.key.toBase58(), call: call.toBase58() }, requiredLamports)
+    },
+    async setSplit(id: string, body: c.SetSplitRequest) {
+      const row = await model(id)
+      const owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can configure a revenue split.', { stage: 'build' })
+      const split = a.split(row.key)
+      const existingInfo = await runtime.rpc.connection.getAccountInfo(split, 'confirmed')
+      let requiredLamports = existingInfo ? 0n : BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(SPLIT_SPACE))
+      const token = !row.value.priceMint.equals(PublicKey.default)
+      const instructions: TransactionInstruction[] = []
+      if (token && body.recipients.length > 0) {
+        const splitEscrow = getAssociatedTokenAddressSync(row.value.priceMint, split, true)
+        if (!await runtime.rpc.connection.getAccountInfo(splitEscrow, 'confirmed')) {
+          requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+        }
+        instructions.push(createAssociatedTokenAccountIdempotentInstruction(owner, splitEscrow, split, row.value.priceMint))
+      }
+      instructions.push(
+        await voynich.methods
+          .setSplit(body.recipients.map(r => ({ wallet: publicKey(r.wallet), shareBps: r.shareBps })))
+          .accountsStrict({
+            owner,
+            model: row.key,
+            split,
+            systemProgram: SystemProgram.programId,
+            ...events,
+          })
+          .instruction(),
+      )
+      return ledger.build('set_split', owner, instructions, { model: row.key.toBase58(), split: split.toBase58() }, requiredLamports)
+    },
+    async claimSplit(id: string, body: c.ClaimSplitRequest) {
+      const row = await model(id)
+      const payer = publicKey(body.wallet)
+      const recipient = publicKey(body.recipient ?? body.wallet)
+      const split = a.split(row.key)
+      const splitInfo = await runtime.rpc.connection.getAccountInfo(split, 'confirmed')
+      const chainSplit = splitInfo && splitInfo.owner.equals(runtime.programId) ? decodeSplitAccount(splitInfo.data) : null
+      if (!chainSplit) fail('SPLIT_NOT_FOUND', 'No revenue split is configured for this model.')
+      const entry = chainSplit.recipients.find(r => r.wallet.equals(recipient))
+      if (!entry || BigInt(entry.accrued.toString()) <= BigInt(entry.claimed.toString())) {
+        fail('INVALID_SPLIT', 'No unclaimed split balance is available for this recipient.', { stage: 'build' })
+      }
+      const token = !chainSplit.mint.equals(PublicKey.default)
+      const splitEscrow = token ? getAssociatedTokenAddressSync(chainSplit.mint, split, true) : null
+      const recipientTokens = token ? getAssociatedTokenAddressSync(chainSplit.mint, recipient, true) : null
+      let requiredLamports = 0n
+      const instructions: TransactionInstruction[] = []
+      if (token && recipientTokens) {
+        if (!await runtime.rpc.connection.getAccountInfo(recipientTokens, 'confirmed')) {
+          requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+        }
+        instructions.push(createAssociatedTokenAccountIdempotentInstruction(payer, recipientTokens, recipient, chainSplit.mint))
+      }
+      instructions.push(
+        await voynich.methods
+          .claimSplit()
+          .accountsStrict({
+            payer,
+            split,
+            recipient,
+            splitEscrow,
+            recipientTokens,
+            tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+            systemProgram: SystemProgram.programId,
+            ...events,
+          })
+          .instruction(),
+      )
+      return ledger.build('claim_split', payer, instructions, { model: row.key.toBase58(), split: split.toBase58() }, requiredLamports)
     },
   }
 }

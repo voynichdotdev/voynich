@@ -205,6 +205,105 @@
       ]
     },
     {
+      "name": "claim_split",
+      "discriminator": [
+        129,
+        43,
+        213,
+        192,
+        109,
+        118,
+        139,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "split",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  108,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "split.model",
+                "account": "Split"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "split_escrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "recipient_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "clear_policy",
       "discriminator": [
         127,
@@ -3881,6 +3980,122 @@
       ]
     },
     {
+      "name": "set_split",
+      "discriminator": [
+        133,
+        67,
+        66,
+        245,
+        114,
+        175,
+        32,
+        51
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "split",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  108,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "recipients",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "SplitRecipientInput"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "settle_call",
       "discriminator": [
         58,
@@ -4739,6 +4954,19 @@
         72,
         144
       ]
+    },
+    {
+      "name": "Split",
+      "discriminator": [
+        166,
+        254,
+        141,
+        46,
+        23,
+        221,
+        129,
+        195
+      ]
     }
   ],
   "events": [
@@ -5029,6 +5257,45 @@
       ]
     },
     {
+      "name": "SplitClaimed",
+      "discriminator": [
+        234,
+        11,
+        44,
+        178,
+        141,
+        137,
+        23,
+        193
+      ]
+    },
+    {
+      "name": "SplitCredited",
+      "discriminator": [
+        215,
+        244,
+        242,
+        85,
+        233,
+        26,
+        109,
+        122
+      ]
+    },
+    {
+      "name": "SplitUpdated",
+      "discriminator": [
+        110,
+        85,
+        143,
+        135,
+        98,
+        156,
+        185,
+        91
+      ]
+    },
+    {
       "name": "WeightsAttached",
       "discriminator": [
         225,
@@ -5225,6 +5492,11 @@
       "code": 6033,
       "name": "InvalidSession",
       "msg": "The caller session is closed, expired, out of budget, or does not match this call."
+    },
+    {
+      "code": 6034,
+      "name": "InvalidSplit",
+      "msg": "The revenue split configuration, remaining account, or claim is invalid."
     }
   ],
   "types": [
@@ -6439,6 +6711,10 @@
           {
             "name": "current_version",
             "type": "u32"
+          },
+          {
+            "name": "has_split",
+            "type": "bool"
           }
         ]
       }
@@ -7501,6 +7777,220 @@
           },
           {
             "name": "Closed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Split",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "total_received",
+            "type": "u64"
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
+          },
+          {
+            "name": "recipients",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "SplitRecipient"
+                }
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SplitClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "split",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_claimed",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SplitCredited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "split",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "receipt",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_received",
+            "type": "u64"
+          },
+          {
+            "name": "recipients",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "SplitRecipient"
+                }
+              }
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SplitRecipient",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "accrued",
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SplitRecipientInput",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SplitUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "split",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "recipients",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "SplitRecipient"
+                }
+              }
+            }
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
           }
         ]
       }

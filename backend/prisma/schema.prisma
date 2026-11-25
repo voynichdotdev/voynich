@@ -86,9 +86,11 @@ model Model {
   callsSettled        BigInt     @default(0)
   hasPolicy           Boolean    @default(false)
   currentVersion      Int        @default(1)
+  hasSplit            Boolean    @default(false)
   updatedSlot         BigInt
   indexingIssue       String?
   policy              ModelPolicy?
+  split               Split?
   versions            ModelVersion[]
   weights             Weights[]
   grants              Grant[]
@@ -504,4 +506,18 @@ model Session {
   @@index([delegate, status])
   @@index([status, expiresAtSlot])
   @@map("sessions")
+}
+
+model Split {
+  address       String   @id @db.VarChar(44)
+  modelAddress  String   @unique @db.VarChar(44)
+  model         Model    @relation(fields: [modelAddress], references: [address])
+  authority     String   @db.VarChar(44)
+  mint          String?  @db.VarChar(44)
+  active        Boolean  @default(false)
+  totalReceived Decimal  @default(0) @db.Decimal(20, 0)
+  recipients    Json
+  updatedSlot   BigInt
+
+  @@map("splits")
 }

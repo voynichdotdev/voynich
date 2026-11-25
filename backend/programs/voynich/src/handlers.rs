@@ -105,6 +105,7 @@ pub fn create_model<'info>(ctx: Context<'_, '_, 'info, 'info, CreateModel<'info>
     model.price_unit = args.price_unit;
     model.has_policy = false;
     model.current_version = 1;
+    model.has_split = false;
     let key_count = upload_keys.len() as u64;
     let base_funding = args.upload_funding_lamports / key_count;
     let primary_funding = base_funding + (args.upload_funding_lamports % key_count);
@@ -936,7 +937,168 @@ pub fn build_piece_message(call: &Pubkey, input_hash: &[u8; 32], count: u64, run
     }
 }
 
-pub fn settle_call<'info>(ctx: Context<'_, '_, '_, 'info, SettleCall<'info>>, output_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16, open_answer: Vec<u8>) -> Result<()> {
+fn find_split_accounts<'info>(
+    model_key: Pubkey,
+    has_split: bool,
+    price_mint: Pubkey,
+    remaining: &'info [AccountInfo<'info>],
+) -> Result<Option<(&'info AccountInfo<'info>, Option<&'info AccountInfo<'info>>)>> {
+    if !has_split {
+        return Ok(None);
+    }
+    let (expected_pda, _) = Pubkey::find_program_address(&[b"split", model_key.as_ref()], &crate::ID);
+    let split_info = remaining
+        .iter()
+        .find(|info| info.key() == expected_pda)
+        .ok_or(VoynichError::InvalidSplit)?;
+    require!(split_info.is_writable && *split_info.owner == crate::ID, VoynichError::InvalidSplit);
+    let split_ata = if price_mint != Pubkey::default() {
+        let expected_ata = anchor_spl::associated_token::get_associated_token_address(&expected_pda, &price_mint);
+        let ata_info = remaining
+            .iter()
+            .find(|info| info.key() == expected_ata)
+            .ok_or(VoynichError::InvalidSplit)?;
+        require!(ata_info.is_writable, VoynichError::InvalidSplit);
+        Some(ata_info)
+    } else {
+        None
+    };
+    Ok(Some((split_info, split_ata)))
+}
+
+fn credit_split_account(
+    split_info: &AccountInfo,
+    model_key: Pubkey,
+    price_mint: Pubkey,
+    owner_amount: u64,
+    slot: u64,
+) -> Result<(u64, Vec<SplitRecipient>)> {
+    let mut split = {
+        let data = split_info.try_borrow_data()?;
+        let mut slice: &[u8] = &data;
+        Split::try_deserialize(&mut slice).map_err(|_| error!(VoynichError::InvalidSplit))?
+    };
+    require!(split.active && split.model == model_key && split.mint == price_mint && !split.recipients.is_empty(), VoynichError::InvalidSplit);
+    let mut distributed: u64 = 0;
+    for r in split.recipients.iter_mut() {
+        let share = ((u128::from(owner_amount) * u128::from(r.share_bps)) / 10_000) as u64;
+        r.accrued = r.accrued.checked_add(share).ok_or(VoynichError::ArithmeticOverflow)?;
+        distributed = distributed.checked_add(share).ok_or(VoynichError::ArithmeticOverflow)?;
+    }
+    let dust = owner_amount.checked_sub(distributed).ok_or(VoynichError::ArithmeticOverflow)?;
+    if dust > 0 {
+        split.recipients[0].accrued = split.recipients[0].accrued.checked_add(dust).ok_or(VoynichError::ArithmeticOverflow)?;
+    }
+    split.total_received = split.total_received.checked_add(owner_amount).ok_or(VoynichError::ArithmeticOverflow)?;
+    split.updated_slot = slot;
+    let total_received = split.total_received;
+    let recipients_snapshot = split.recipients.clone();
+    {
+        let mut data = split_info.try_borrow_mut_data()?;
+        let mut cursor: &mut [u8] = &mut data;
+        split.try_serialize(&mut cursor)?;
+    }
+    Ok((total_received, recipients_snapshot))
+}
+
+pub fn set_split(ctx: Context<SetSplit>, recipients: Vec<SplitRecipientInput>) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let model_key = ctx.accounts.model.key();
+    let owner_key = ctx.accounts.owner.key();
+    let price_mint = ctx.accounts.model.price_mint;
+    let model = &mut ctx.accounts.model;
+    let split = &mut ctx.accounts.split;
+
+    if recipients.is_empty() {
+        split.model = model_key;
+        split.authority = owner_key;
+        split.mint = price_mint;
+        split.active = false;
+        split.updated_slot = slot;
+        split.bump = ctx.bumps.split;
+        let has_unclaimed = split.recipients.iter().any(|r| r.accrued > r.claimed);
+        if !has_unclaimed {
+            split.recipients.clear();
+        }
+        model.has_split = false;
+    } else {
+        require!(recipients.len() <= MAX_SPLIT_RECIPIENTS, VoynichError::InvalidSplit);
+        let has_unclaimed = split.recipients.iter().any(|r| r.accrued > r.claimed);
+        require!(!has_unclaimed, VoynichError::InvalidSplit);
+        let mut sum_bps: u32 = 0;
+        for (i, r) in recipients.iter().enumerate() {
+            require!(r.wallet != Pubkey::default() && r.share_bps > 0, VoynichError::InvalidSplit);
+            for prev in &recipients[..i] {
+                require!(prev.wallet != r.wallet, VoynichError::InvalidSplit);
+            }
+            sum_bps = sum_bps.checked_add(u32::from(r.share_bps)).ok_or(VoynichError::ArithmeticOverflow)?;
+        }
+        require!(sum_bps == 10_000, VoynichError::InvalidSplit);
+        split.model = model_key;
+        split.authority = owner_key;
+        split.mint = price_mint;
+        split.active = true;
+        split.updated_slot = slot;
+        split.bump = ctx.bumps.split;
+        split.recipients = recipients
+            .into_iter()
+            .map(|r| SplitRecipient { wallet: r.wallet, share_bps: r.share_bps, accrued: 0, claimed: 0 })
+            .collect();
+        model.has_split = true;
+    }
+
+    let split_key = split.key();
+    let active = split.active;
+    let mint = split.mint;
+    let recipients_out = split.recipients.clone();
+    emit_cpi!(SplitUpdated {
+        split: split_key,
+        model: model_key,
+        authority: owner_key,
+        mint,
+        active,
+        recipients: recipients_out,
+        updated_slot: slot,
+    });
+    Ok(())
+}
+
+pub fn claim_split(ctx: Context<ClaimSplit>) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let recipient_key = ctx.accounts.recipient.key();
+    let (idx, owed) = {
+        let split = &ctx.accounts.split;
+        let idx = split
+            .recipients
+            .iter()
+            .position(|r| r.wallet == recipient_key)
+            .ok_or(VoynichError::InvalidSplit)?;
+        let r = &split.recipients[idx];
+        let owed = r.accrued.checked_sub(r.claimed).ok_or(VoynichError::ArithmeticOverflow)?;
+        require!(owed > 0, VoynichError::InvalidSplit);
+        (idx, owed)
+    };
+    money::claim_split_payout(&ctx, owed)?;
+    let split = &mut ctx.accounts.split;
+    split.recipients[idx].claimed = split.recipients[idx].accrued;
+    split.updated_slot = slot;
+    let total_claimed = split.recipients[idx].claimed;
+    let split_key = split.key();
+    let model_key = split.model;
+    let mint = split.mint;
+    emit_cpi!(SplitClaimed {
+        split: split_key,
+        model: model_key,
+        recipient: recipient_key,
+        mint,
+        amount: owed,
+        total_claimed,
+        slot,
+    });
+    Ok(())
+}
+
+pub fn settle_call<'info>(ctx: Context<'_, '_, 'info, 'info, SettleCall<'info>>, output_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16, open_answer: Vec<u8>) -> Result<()> {
     let call = &ctx.accounts.call;
     require!(call.status == CallStatus::Open, VoynichError::CallNotOpen);
     require!(call.price_unit == PriceUnit::Call, VoynichError::InvalidCall);
@@ -980,7 +1142,7 @@ pub fn settle_call<'info>(ctx: Context<'_, '_, '_, 'info, SettleCall<'info>>, ou
         ctx.accounts.model.exit(&crate::ID)?;
         ctx.accounts.enclave.exit(&crate::ID)?;
 
-        require!(ctx.remaining_accounts.len() == 1 + callback_accounts.len(), VoynichError::InvalidCallback);
+        require!(ctx.remaining_accounts.len() >= 1 + callback_accounts.len(), VoynichError::InvalidCallback);
         let target_program = &ctx.remaining_accounts[0];
         require_keys_eq!(target_program.key(), callback_program, VoynichError::InvalidCallback);
         require!(target_program.executable, VoynichError::InvalidCallback);
@@ -1016,12 +1178,27 @@ pub fn settle_call<'info>(ctx: Context<'_, '_, '_, 'info, SettleCall<'info>>, ou
         anchor_lang::solana_program::program::invoke(&ix, &infos)?;
     }
     // Settle SOL/SPL escrow after any callback CPI so direct lamport debits from Call stay balanced across CPI boundaries.
-    money::settle(&ctx, owner_amount, operator_amount, protocol_amount)?;
+    let split_target = find_split_accounts(ctx.accounts.model.key(), ctx.accounts.model.has_split, ctx.accounts.call.price_mint, ctx.remaining_accounts)?;
+    money::settle(&ctx, owner_amount, operator_amount, protocol_amount, split_target)?;
+    if let Some((split_info, _)) = split_target {
+        let (total_received, recipients) = credit_split_account(split_info, ctx.accounts.model.key(), ctx.accounts.call.price_mint, owner_amount, slot)?;
+        emit_cpi!(SplitCredited {
+            split: split_info.key(),
+            model: ctx.accounts.model.key(),
+            call: ctx.accounts.call.key(),
+            receipt: ctx.accounts.receipt.key(),
+            mint: ctx.accounts.call.price_mint,
+            amount: owner_amount,
+            total_received,
+            recipients,
+            slot,
+        });
+    }
     Ok(())
 }
 
 pub fn settle_metered_call<'info>(
-    ctx: Context<'_, '_, '_, 'info, SettleMeteredCall<'info>>,
+    ctx: Context<'_, '_, 'info, 'info, SettleMeteredCall<'info>>,
     count: u64,
     running_hash: [u8; 32],
     signature: [u8; 64],
@@ -1181,7 +1358,7 @@ pub fn settle_metered_call<'info>(
         ctx.accounts.model.exit(&crate::ID)?;
         ctx.accounts.enclave.exit(&crate::ID)?;
 
-        require!(ctx.remaining_accounts.len() == 1 + callback_accounts.len(), VoynichError::InvalidCallback);
+        require!(ctx.remaining_accounts.len() >= 1 + callback_accounts.len(), VoynichError::InvalidCallback);
         let target_program = &ctx.remaining_accounts[0];
         require_keys_eq!(target_program.key(), callback_program, VoynichError::InvalidCallback);
         require!(target_program.executable, VoynichError::InvalidCallback);
@@ -1217,7 +1394,22 @@ pub fn settle_metered_call<'info>(
         anchor_lang::solana_program::program::invoke(&ix, &infos)?;
     }
 
-    money::settle_metered(&ctx, total, owner_amount, operator_amount, protocol_amount, returned_amount)?;
+    let split_target = find_split_accounts(ctx.accounts.model.key(), ctx.accounts.model.has_split, ctx.accounts.call.price_mint, ctx.remaining_accounts)?;
+    money::settle_metered(&ctx, total, owner_amount, operator_amount, protocol_amount, returned_amount, split_target)?;
+    if let Some((split_info, _)) = split_target {
+        let (total_received, recipients) = credit_split_account(split_info, ctx.accounts.model.key(), ctx.accounts.call.price_mint, owner_amount, slot)?;
+        emit_cpi!(SplitCredited {
+            split: split_info.key(),
+            model: ctx.accounts.model.key(),
+            call: ctx.accounts.call.key(),
+            receipt: ctx.accounts.receipt.key(),
+            mint: ctx.accounts.call.price_mint,
+            amount: owner_amount,
+            total_received,
+            recipients,
+            slot,
+        });
+    }
     Ok(())
 }
 pub fn refund_call(ctx: Context<RefundCall>) -> Result<()> {
@@ -1467,6 +1659,7 @@ mod tests {
                 price_unit: PriceUnit::Token,
                 has_policy: false,
                 current_version: 1,
+                has_split: false,
             };
 
             let mut encoded = Vec::new();
@@ -1478,7 +1671,7 @@ mod tests {
             assert_eq!(parsed_owner, owner);
             assert_eq!(parsed_name, "text-1m");
             assert_eq!(parsed_bump, 251);
-            assert_eq!(prefix_end, encoded.len() - 6);
+            assert_eq!(prefix_end, encoded.len() - 7);
 
             // Clean PriceUnit::Token with zero tail stays untouched.
             repair_model_tail_bytes(&mut buf, prefix_end).unwrap();

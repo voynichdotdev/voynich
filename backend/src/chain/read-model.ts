@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { PublicKey, type Connection } from '@solana/web3.js'
-import { decodeManifest, type AttestationRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type Money, type Receipt, type ModelQuery } from '@voynich/contract'
+import { decodeManifest, type AttestationRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type Receipt, type ModelQuery } from '@voynich/contract'
 import { toBase64 } from 'voynich/crypto'
 import { fail } from './errors.js'
 
@@ -67,6 +67,7 @@ export class ReadModel {
       price: await this.money(row.price.toFixed(0), row.priceMint), priceUnit: row.priceUnit, operatorShareBps: row.operatorShareBps, protocolShareBps: config?.protocolShareBps ?? null,
       status: row.status, manifest: decodeManifest(row.manifest), weights, enclavesHolding, callsSettled: String(row.callsSettled),
       currentVersion: row.currentVersion ?? 1,
+      hasSplit: row.hasSplit ?? false,
       upload: row.uploadKey ? { uploadKey: row.uploadKey, uploadKeys: row.uploadKeys.length ? row.uploadKeys : [row.uploadKey], bytesWritten: row.weights.reduce((total, weight) => total + Number(weight.bytesWritten), 0), transactionsWritten: await this.uploadTransactions(row.address), writtenRanges: weights.flatMap(weight => weight.writtenRanges.map(range => ({ offset: range.offset + weight.offset, length: range.length }))), closed: row.status !== 'uploading' } : null,
     }
   }
@@ -328,5 +329,36 @@ export class ReadModel {
     const row = await this.db.modelPolicy.findUnique({ where: { modelAddress: resolved.address } })
     if (!row) fail('POLICY_NOT_FOUND', 'No policy is configured for this model.')
     return this.policyRow(row)
+  }
+  splitRow(row: Prisma.SplitGetPayload<Record<string, never>>): ModelSplit {
+    const raw = (row.recipients as { wallet: string; shareBps: number; accrued: string; claimed: string }[]) ?? []
+    return {
+      address: row.address,
+      model: row.modelAddress,
+      authority: row.authority,
+      mint: row.mint,
+      active: row.active,
+      totalReceived: row.totalReceived.toFixed(0),
+      recipients: raw.map(r => {
+        const accrued = BigInt(r.accrued)
+        const claimed = BigInt(r.claimed)
+        const claimable = accrued > claimed ? accrued - claimed : 0n
+        return {
+          wallet: r.wallet,
+          shareBps: Number(r.shareBps),
+          accrued: String(accrued),
+          claimed: String(claimed),
+          claimable: String(claimable),
+        }
+      }),
+      updatedSlot: String(row.updatedSlot),
+    }
+  }
+  async modelSplit(id: string): Promise<ModelSplit> {
+    const resolved = await this.db.model.findFirst({ where: { OR: [{ address: id }, { name: id }] }, select: { address: true } })
+    if (!resolved) fail('MODEL_NOT_FOUND', 'This model was not found.')
+    const row = await this.db.split.findUnique({ where: { modelAddress: resolved.address } })
+    if (!row) fail('SPLIT_NOT_FOUND', 'No revenue split is configured for this model.')
+    return this.splitRow(row)
   }
 }

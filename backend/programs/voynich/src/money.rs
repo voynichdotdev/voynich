@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*, system_program};
 use anchor_spl::{associated_token, token::{self, CloseAccount, Token, TokenAccount, Transfer}};
-use crate::{contexts::{CloseSession, OpenCall, OpenSession, OpenSessionCall, RefundCall, SettleCall, SettleMeteredCall}, errors::VoynichError, state::{Call, Session}};
+use crate::{contexts::{ClaimSplit, CloseSession, OpenCall, OpenSession, OpenSessionCall, RefundCall, SettleCall, SettleMeteredCall}, errors::VoynichError, state::{Call, Session}};
 
 fn token_account(account: &Account<TokenAccount>, owner: Pubkey, mint: Pubkey, associated: bool) -> Result<()> {
     require_keys_eq!(account.owner, owner, VoynichError::InvalidTokenAccount);
@@ -61,14 +61,24 @@ fn close_tokens<'info>(program: &Program<'info, Token>, call: &Account<'info, Ca
     token::close_account(CpiContext::new_with_signer(program.to_account_info(), CloseAccount { account: escrow.to_account_info(), destination: caller.clone(), authority: call.to_account_info() }, &[&seeds]))
 }
 
-pub fn settle(ctx: &Context<SettleCall>, owner_amount: u64, operator_amount: u64, protocol_amount: u64) -> Result<()> {
+pub fn settle<'info>(
+    ctx: &Context<'_, '_, 'info, 'info, SettleCall<'info>>,
+    owner_amount: u64,
+    operator_amount: u64,
+    protocol_amount: u64,
+    split_target: Option<(&'info AccountInfo<'info>, Option<&'info AccountInfo<'info>>)>,
+) -> Result<()> {
     let call = &ctx.accounts.call;
     require_keys_eq!(ctx.accounts.owner.key(), call.owner, VoynichError::InvalidRecipient);
     require_keys_eq!(ctx.accounts.operator.key(), call.operator, VoynichError::InvalidRecipient);
     require_keys_eq!(ctx.accounts.fee_recipient.key(), call.fee_recipient, VoynichError::InvalidRecipient);
     require_keys_eq!(ctx.accounts.caller.key(), call.caller, VoynichError::InvalidRecipient);
     if call.price_mint == Pubkey::default() {
-        native(&call.to_account_info(), &ctx.accounts.owner.to_account_info(), owner_amount)?;
+        if let Some((split_info, _)) = split_target {
+            native(&call.to_account_info(), split_info, owner_amount)?;
+        } else {
+            native(&call.to_account_info(), &ctx.accounts.owner.to_account_info(), owner_amount)?;
+        }
         native(&call.to_account_info(), &ctx.accounts.operator.to_account_info(), operator_amount)?;
         native(&call.to_account_info(), &ctx.accounts.fee_recipient.to_account_info(), protocol_amount)?;
     } else {
@@ -84,7 +94,14 @@ pub fn settle(ctx: &Context<SettleCall>, owner_amount: u64, operator_amount: u64
         token_account(protocol, call.fee_recipient, call.price_mint, true)?;
         token_account(caller, call.caller, call.price_mint, false)?;
         require!(escrow.amount >= call.price, VoynichError::InsufficientEscrow);
-        transfer_tokens(program, call, escrow, owner, owner_amount)?;
+        if let Some((split_info, split_ata_opt)) = split_target {
+            let split_ata_info = split_ata_opt.ok_or(VoynichError::InvalidSplit)?;
+            let split_ata = Account::<TokenAccount>::try_from(split_ata_info).map_err(|_| error!(VoynichError::InvalidSplit))?;
+            token_account(&split_ata, split_info.key(), call.price_mint, true)?;
+            transfer_tokens(program, call, escrow, &split_ata, owner_amount)?;
+        } else {
+            transfer_tokens(program, call, escrow, owner, owner_amount)?;
+        }
         transfer_tokens(program, call, escrow, operator, operator_amount)?;
         transfer_tokens(program, call, escrow, protocol, protocol_amount)?;
         // Unsolicited deposits cannot prevent settlement or strand a token balance.
@@ -94,13 +111,14 @@ pub fn settle(ctx: &Context<SettleCall>, owner_amount: u64, operator_amount: u64
     Ok(())
 }
 
-pub fn settle_metered(
-    ctx: &Context<SettleMeteredCall>,
+pub fn settle_metered<'info>(
+    ctx: &Context<'_, '_, 'info, 'info, SettleMeteredCall<'info>>,
     total: u64,
     owner_amount: u64,
     operator_amount: u64,
     protocol_amount: u64,
     returned_amount: u64,
+    split_target: Option<(&'info AccountInfo<'info>, Option<&'info AccountInfo<'info>>)>,
 ) -> Result<()> {
     let call = &ctx.accounts.call;
     require_keys_eq!(ctx.accounts.owner.key(), call.owner, VoynichError::InvalidRecipient);
@@ -108,7 +126,11 @@ pub fn settle_metered(
     require_keys_eq!(ctx.accounts.fee_recipient.key(), call.fee_recipient, VoynichError::InvalidRecipient);
     require_keys_eq!(ctx.accounts.caller.key(), call.caller, VoynichError::InvalidRecipient);
     if call.price_mint == Pubkey::default() {
-        native(&call.to_account_info(), &ctx.accounts.owner.to_account_info(), owner_amount)?;
+        if let Some((split_info, _)) = split_target {
+            native(&call.to_account_info(), split_info, owner_amount)?;
+        } else {
+            native(&call.to_account_info(), &ctx.accounts.owner.to_account_info(), owner_amount)?;
+        }
         native(&call.to_account_info(), &ctx.accounts.operator.to_account_info(), operator_amount)?;
         native(&call.to_account_info(), &ctx.accounts.fee_recipient.to_account_info(), protocol_amount)?;
         native(&call.to_account_info(), &ctx.accounts.caller.to_account_info(), returned_amount)?;
@@ -126,7 +148,14 @@ pub fn settle_metered(
         token_account(caller, call.caller, call.price_mint, false)?;
         require!(escrow.amount >= call.ceiling, VoynichError::InsufficientEscrow);
         let refund_tokens = escrow.amount.checked_sub(total).ok_or(VoynichError::InsufficientEscrow)?;
-        transfer_tokens(program, call, escrow, owner, owner_amount)?;
+        if let Some((split_info, split_ata_opt)) = split_target {
+            let split_ata_info = split_ata_opt.ok_or(VoynichError::InvalidSplit)?;
+            let split_ata = Account::<TokenAccount>::try_from(split_ata_info).map_err(|_| error!(VoynichError::InvalidSplit))?;
+            token_account(&split_ata, split_info.key(), call.price_mint, true)?;
+            transfer_tokens(program, call, escrow, &split_ata, owner_amount)?;
+        } else {
+            transfer_tokens(program, call, escrow, owner, owner_amount)?;
+        }
         transfer_tokens(program, call, escrow, operator, operator_amount)?;
         transfer_tokens(program, call, escrow, protocol, protocol_amount)?;
         transfer_tokens(program, call, escrow, caller, refund_tokens)?;
@@ -285,4 +314,32 @@ pub fn close_session_escrow(ctx: &Context<CloseSession>, remaining: u64) -> Resu
         close_session_tokens(program, session, escrow, &ctx.accounts.caller.to_account_info())?;
         Ok(amount)
     }
+}
+
+pub fn claim_split_payout(ctx: &Context<ClaimSplit>, amount: u64) -> Result<()> {
+    let split = &ctx.accounts.split;
+    if split.mint == Pubkey::default() {
+        native(&split.to_account_info(), &ctx.accounts.recipient.to_account_info(), amount)?;
+    } else {
+        let program = ctx.accounts.token_program.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let escrow = ctx.accounts.split_escrow.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let destination = ctx.accounts.recipient_tokens.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        token_account(escrow, split.key(), split.mint, true)?;
+        token_account(destination, ctx.accounts.recipient.key(), split.mint, false)?;
+        let bump = [split.bump];
+        let seeds = [b"split".as_ref(), split.model.as_ref(), bump.as_ref()];
+        token::transfer(
+            CpiContext::new_with_signer(
+                program.to_account_info(),
+                Transfer {
+                    from: escrow.to_account_info(),
+                    to: destination.to_account_info(),
+                    authority: split.to_account_info(),
+                },
+                &[&seeds],
+            ),
+            amount,
+        )?;
+    }
+    Ok(())
 }

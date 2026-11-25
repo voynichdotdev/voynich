@@ -2283,4 +2283,173 @@ test('Voynich program flows on the supplied local validator', { timeout: 180_000
       /InvalidSession/,
     )
   })
+
+  await t.test('Build 12 Step 1: Split PDA (5000/3000/2000), settle_call routing with dust, claim_split for all 3 recipients, InvalidSplit and Unauthorized rejections', async () => {
+    const { SPLIT_SPACE, decodeSplitAccount, splitPda } = await import('../sdk/src/program.js')
+    const splitModel = await createModel('split-model')
+    await uploadAndSeal(splitModel)
+    await refresh(first)
+    await execute([await ownerGrant(splitModel, first)], [owner])
+
+    // Set price to 10_000_003 lamports so owner_amount (7_000_003) has non-zero rounding dust (+2)
+    // and every recipient share exceeds Solana's 890,880-lamport rent-exemption minimum for fresh wallets.
+    const oddPrice = 10_000_003n
+    await execute([await voynich.methods.setPrice(bn(oddPrice), PublicKey.default, OPERATOR_BPS, { call: {} }).accountsStrict({
+      owner: owner.publicKey, config, model: splitModel.address, ...events(voynich.programId),
+    }).instruction()], [owner])
+
+    const splitKey = splitPda(splitModel.address, voynich.programId)
+    const r1 = Keypair.generate()
+    const r2 = Keypair.generate()
+    const r3 = Keypair.generate()
+    const stranger = Keypair.generate()
+    await execute([SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: stranger.publicKey, lamports: 10_000_000 })], [])
+
+    // 1. Non-owner cannot set_split -> Unauthorized
+    await assert.rejects(
+      execute([await voynich.methods.setSplit([{ wallet: r1.publicKey, shareBps: 10000 }]).accountsStrict({
+        owner: stranger.publicKey, model: splitModel.address, split: splitKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [stranger]),
+      /Unauthorized/,
+    )
+
+    // 2. Bad bps sum (!= 10000) -> InvalidSplit
+    await assert.rejects(
+      execute([await voynich.methods.setSplit([
+        { wallet: r1.publicKey, shareBps: 5000 },
+        { wallet: r2.publicKey, shareBps: 4000 },
+      ]).accountsStrict({
+        owner: owner.publicKey, model: splitModel.address, split: splitKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [owner]),
+      /InvalidSplit/,
+    )
+
+    // 3. Duplicate wallet -> InvalidSplit
+    await assert.rejects(
+      execute([await voynich.methods.setSplit([
+        { wallet: r1.publicKey, shareBps: 5000 },
+        { wallet: r1.publicKey, shareBps: 5000 },
+      ]).accountsStrict({
+        owner: owner.publicKey, model: splitModel.address, split: splitKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [owner]),
+      /InvalidSplit/,
+    )
+
+    // 4. Owner sets 3-recipient 5000/3000/2000 split
+    await execute([await voynich.methods.setSplit([
+      { wallet: r1.publicKey, shareBps: 5000 },
+      { wallet: r2.publicKey, shareBps: 3000 },
+      { wallet: r3.publicKey, shareBps: 2000 },
+    ]).accountsStrict({
+      owner: owner.publicKey, model: splitModel.address, split: splitKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [owner])
+
+    const splitInfo = await connection.getAccountInfo(splitKey, 'confirmed')
+    assert.equal(splitInfo?.data.length, SPLIT_SPACE)
+    const initial = decodeSplitAccount(splitInfo!.data)
+    assert.equal(initial.active, true)
+    assert.equal(initial.recipients.length, 3)
+    assert.equal((await voynich.account.model.fetch(splitModel.address)).hasSplit, true)
+
+    // 5. Open a call on splitModel and verify settle_call without Split PDA in remaining_accounts rejects with InvalidSplit
+    const c = callArgs(splitModel)
+    await execute([await voynich.methods.openCall(bn(c.nonce), [...c.inputHash], { sealed: {} }, null).accountsStrict({
+      payer: caller.publicKey, caller: caller.publicKey, config, model: splitModel.address, enclave: first.address,
+      attestationRecord: first.record, grant: grantAddress(splitModel, first), call: c.address,
+      mint: null, callerTokens: null, escrowTokens: null, tokenProgram: null, associatedTokenProgram: null,
+      systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [caller])
+
+    const outputHash = sha256(utf8('split-output'))
+    const sig = signReceipt(first.signing.secretKey.subarray(0, 32), c.address.toBytes(), c.inputHash, outputHash)
+    const verifyIx = Ed25519Program.createInstructionWithPublicKey({
+      publicKey: first.signing.publicKey.toBytes(),
+      message: receiptMessage(c.address.toBytes(), c.inputHash, outputHash),
+      signature: sig,
+    })
+    const receiptAddr = pda(voynich.programId, utf8('receipt'), c.address.toBytes())
+    const settleNoSplit = await voynich.methods.settleCall([...outputHash], [...sig], 0, Buffer.alloc(0)).accountsStrict({
+      payer: admin.publicKey, config, model: splitModel.address, enclave: first.address, attestationRecord: first.record,
+      call: c.address, receipt: receiptAddr, caller: caller.publicKey, owner: owner.publicKey, operator: first.operator.publicKey,
+      feeRecipient: feeRecipient.publicKey, instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+      escrowTokens: null, ownerTokens: null, operatorTokens: null, protocolTokens: null, callerTokens: null, tokenProgram: null,
+      systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()
+    await assert.rejects(execute([verifyIx, settleNoSplit], []), /InvalidSplit/)
+
+    // 6. Settle WITH Split PDA in remaining_accounts -> owner_amount (75003) lands in Split PDA, not owner wallet
+    const ownerBalBefore = await connection.getBalance(owner.publicKey, 'confirmed')
+    const splitBalBefore = await connection.getBalance(splitKey, 'confirmed')
+    const settleWithSplit = await voynich.methods.settleCall([...outputHash], [...sig], 0, Buffer.alloc(0)).accountsStrict({
+      payer: admin.publicKey, config, model: splitModel.address, enclave: first.address, attestationRecord: first.record,
+      call: c.address, receipt: receiptAddr, caller: caller.publicKey, owner: owner.publicKey, operator: first.operator.publicKey,
+      feeRecipient: feeRecipient.publicKey, instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+      escrowTokens: null, ownerTokens: null, operatorTokens: null, protocolTokens: null, callerTokens: null, tokenProgram: null,
+      systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).remainingAccounts([{ pubkey: splitKey, isWritable: true, isSigner: false }]).instruction()
+    await execute([verifyIx, settleWithSplit], [])
+
+    const expectedOwnerAmount = oddPrice - (oddPrice * BigInt(OPERATOR_BPS)) / 10000n - (oddPrice * BigInt(PROTOCOL_BPS)) / 10000n
+    assert.equal(expectedOwnerAmount, 7_000_003n)
+    assert.equal(BigInt(await connection.getBalance(owner.publicKey, 'confirmed') - ownerBalBefore), 0n)
+    assert.equal(BigInt(await connection.getBalance(splitKey, 'confirmed') - splitBalBefore), expectedOwnerAmount)
+
+    const credited = decodeSplitAccount((await connection.getAccountInfo(splitKey, 'confirmed'))!.data)
+    assert.equal(credited.totalReceived.toString(), '7000003')
+    assert.equal(credited.recipients[0]!.accrued.toString(), '3500003') // 3500001 + 2 dust
+    assert.equal(credited.recipients[1]!.accrued.toString(), '2100000')
+    assert.equal(credited.recipients[2]!.accrued.toString(), '1400000')
+
+    // 7. Replacing split while unclaimed funds remain -> InvalidSplit
+    await assert.rejects(
+      execute([await voynich.methods.setSplit([{ wallet: r1.publicKey, shareBps: 10000 }]).accountsStrict({
+        owner: owner.publicKey, model: splitModel.address, split: splitKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [owner]),
+      /InvalidSplit/,
+    )
+
+    // 8. Permissionless claim_split for all 3 recipients pays exact accrued lamports to each wallet
+    const expectedShares = [3_500_003n, 2_100_000n, 1_400_000n]
+    const recipients = [r1, r2, r3]
+    for (let i = 0; i < recipients.length; i++) {
+      const target = recipients[i]!
+      const before = await connection.getBalance(target.publicKey, 'confirmed')
+      await execute([await voynich.methods.claimSplit().accountsStrict({
+        payer: stranger.publicKey,
+        split: splitKey,
+        recipient: target.publicKey,
+        splitEscrow: null,
+        recipientTokens: null,
+        tokenProgram: null,
+        systemProgram: SystemProgram.programId,
+        ...events(voynich.programId),
+      }).instruction()], [stranger])
+      const after = await connection.getBalance(target.publicKey, 'confirmed')
+      assert.equal(BigInt(after - before), expectedShares[i]!)
+    }
+
+    // 9. Second claim with 0 claimable -> InvalidSplit
+    await assert.rejects(
+      execute([await voynich.methods.claimSplit().accountsStrict({
+        payer: stranger.publicKey,
+        split: splitKey,
+        recipient: r1.publicKey,
+        splitEscrow: null,
+        recipientTokens: null,
+        tokenProgram: null,
+        systemProgram: SystemProgram.programId,
+        ...events(voynich.programId),
+      }).instruction()], [stranger]),
+      /InvalidSplit/,
+    )
+
+    // 10. Deactivate split with empty recipients -> has_split = false, split.active = false
+    await execute([await voynich.methods.setSplit([]).accountsStrict({
+      owner: owner.publicKey, model: splitModel.address, split: splitKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [owner])
+    const deactivated = decodeSplitAccount((await connection.getAccountInfo(splitKey, 'confirmed'))!.data)
+    assert.equal(deactivated.active, false)
+    assert.equal(deactivated.recipients.length, 0)
+    assert.equal((await voynich.account.model.fetch(splitModel.address)).hasSplit, false)
+  })
 })

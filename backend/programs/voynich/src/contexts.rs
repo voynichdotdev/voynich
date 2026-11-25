@@ -381,3 +381,25 @@ pub struct OpenSessionCall<'info> {
     pub associated_token_program: Option<Program<'info, AssociatedToken>>,
     pub system_program: Program<'info, System>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SetSplit<'info> {
+    #[account(mut)] pub owner: Signer<'info>,
+    #[account(mut, seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(init_if_needed, payer = owner, space = Split::SPACE, seeds = [b"split", model.key().as_ref()], bump)] pub split: Box<Account<'info, Split>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct ClaimSplit<'info> {
+    #[account(mut)] pub payer: Signer<'info>,
+    #[account(mut, seeds = [b"split", split.model.as_ref()], bump = split.bump)] pub split: Box<Account<'info, Split>>,
+    /// CHECK: verified against matching entry in split.recipients.
+    #[account(mut)] pub recipient: UncheckedAccount<'info>,
+    #[account(mut)] pub split_escrow: Option<Account<'info, TokenAccount>>,
+    #[account(mut)] pub recipient_tokens: Option<Account<'info, TokenAccount>>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub system_program: Program<'info, System>,
+}

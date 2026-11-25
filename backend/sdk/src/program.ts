@@ -55,6 +55,9 @@ export function sessionPda(caller: Key, delegate: Key, nonce: bigint | number | 
   new DataView(bytes.buffer).setBigUint64(0, BigInt(nonce), true)
   return pda(key(programId), utf8('session'), key(caller).toBytes(), key(delegate).toBytes(), bytes)
 }
+export function splitPda(model: Key, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('split'), key(model).toBytes())
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -68,6 +71,7 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     policy: (model: Key) => policyPda(model, programId),
     modelVersion: (model: Key, version: number) => modelVersionPda(model, version, programId),
     session: (caller: Key, delegate: Key, nonce: bigint | number | string) => sessionPda(caller, delegate, nonce, programId),
+    split: (model: Key) => splitPda(model, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -113,6 +117,7 @@ export const GRANT_BASE_SPACE = 223
 export const GRANT_SPACE = 226
 export const MODEL_VERSION_SPACE = 8192
 export const SESSION_SPACE = 186
+export const SPLIT_SPACE = 526
 export const DEFAULT_MAX_OPEN_ANSWER_BYTES = 1024
 
 const matchesDisc = (data: Uint8Array, label: string) => {
@@ -1032,5 +1037,118 @@ export async function buildCloseSessionTx(params: {
   const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
   return new VersionedTransaction(
     new TransactionMessage({ payerKey: closer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export type DecodedSplitRecipient = {
+  wallet: PublicKey
+  shareBps: number
+  accrued: BN
+  claimed: BN
+}
+
+export type DecodedSplitAccount = {
+  model: PublicKey
+  authority: PublicKey
+  mint: PublicKey
+  active: boolean
+  totalReceived: BN
+  recipients: DecodedSplitRecipient[]
+  updatedSlot: BN
+  bump: number
+}
+
+export function decodeSplitAccount(data: Uint8Array): DecodedSplitAccount {
+  if (!matchesDisc(data, 'account:Split') || data.length < 8 + 32 + 32 + 32 + 1 + 8 + 4 + 8 + 1) {
+    throw new Error('Invalid Split account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const authority = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const mint = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const activeByte = data[offset++]!
+  if (activeByte > 1) throw new Error(`Invalid Split active flag: ${activeByte}`)
+  const active = activeByte === 1
+  const totalReceived = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const updatedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const count = view.getUint32(offset, true); offset += 4
+  if (count > 8 || offset + count * 50 + 1 > data.length) {
+    throw new Error(`Invalid Split recipients length: ${count}`)
+  }
+  const recipients: DecodedSplitRecipient[] = []
+  for (let i = 0; i < count; i++) {
+    const wallet = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+    const shareBps = view.getUint16(offset, true); offset += 2
+    const accrued = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+    const claimed = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+    recipients.push({ wallet, shareBps, accrued, claimed })
+  }
+  const bump = data[offset++]!
+  return { model, authority, mint, active, totalReceived, recipients, updatedSlot, bump }
+}
+
+export async function buildSetSplitTx(params: {
+  connection: Connection
+  owner: Key
+  model: Key
+  recipients: Array<{ wallet: Key; shareBps: number }>
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const owner = key(params.owner)
+  const model = key(params.model)
+  const split = splitPda(model, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .setSplit(params.recipients.map(r => ({ wallet: key(r.wallet), shareBps: r.shareBps })))
+    .accountsStrict({
+      owner,
+      model,
+      split,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: owner, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildClaimSplitTx(params: {
+  connection: Connection
+  payer: Key
+  model: Key
+  recipient?: Key
+  splitEscrow?: Key | null
+  recipientTokens?: Key | null
+  tokenProgram?: Key | null
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const payer = key(params.payer)
+  const model = key(params.model)
+  const recipient = key(params.recipient ?? params.payer)
+  const split = splitPda(model, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .claimSplit()
+    .accountsStrict({
+      payer,
+      split,
+      recipient,
+      splitEscrow: params.splitEscrow ? key(params.splitEscrow) : null,
+      recipientTokens: params.recipientTokens ? key(params.recipientTokens) : null,
+      tokenProgram: params.tokenProgram ? key(params.tokenProgram) : null,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: payer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
   )
 }

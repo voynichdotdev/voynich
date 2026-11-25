@@ -116,6 +116,7 @@ pub struct Model {
     pub price_unit: PriceUnit,
     pub has_policy: bool,
     pub current_version: u32,
+    pub has_split: bool,
 }
 impl Model {
     pub const SPACE: usize = 8192;
@@ -384,6 +385,40 @@ impl Session {
     pub const SPACE: usize = 8 + 32 * 4 + 8 * 6 + 1 + 1;
 }
 
+pub const MAX_SPLIT_RECIPIENTS: usize = 8;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SplitRecipientInput {
+    pub wallet: Pubkey,
+    pub share_bps: u16,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SplitRecipient {
+    pub wallet: Pubkey,
+    pub share_bps: u16,
+    pub accrued: u64,
+    pub claimed: u64,
+}
+impl SplitRecipient {
+    pub const SPACE: usize = 32 + 2 + 8 + 8;
+}
+
+#[account]
+pub struct Split {
+    pub model: Pubkey,
+    pub authority: Pubkey,
+    pub mint: Pubkey,
+    pub active: bool,
+    pub total_received: u64,
+    pub updated_slot: u64,
+    pub recipients: Vec<SplitRecipient>,
+    pub bump: u8,
+}
+impl Split {
+    pub const SPACE: usize = 8 + 32 * 3 + 1 + 8 + 8 + (4 + SplitRecipient::SPACE * MAX_SPLIT_RECIPIENTS) + 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -424,10 +459,11 @@ mod tests {
             price_unit: PriceUnit::Token,
             has_policy: true,
             current_version: u32::MAX,
+            has_split: true,
         };
         let mut buf = Vec::new();
         model.try_serialize(&mut buf).unwrap();
-        assert_eq!(buf.len(), 8056);
+        assert_eq!(buf.len(), 8057);
         assert!(buf.len() <= Model::SPACE, "worst-case Model {} > SPACE {}", buf.len(), Model::SPACE);
     }
 
@@ -678,5 +714,23 @@ mod tests {
         s.try_serialize(&mut buf).unwrap();
         assert_eq!(Session::SPACE, 186);
         assert_eq!(buf.len(), Session::SPACE);
+    }
+
+    #[test]
+    fn worst_case_split_fits_within_space() {
+        let s = Split {
+            model: Pubkey::new_unique(),
+            authority: Pubkey::new_unique(),
+            mint: Pubkey::new_unique(),
+            active: true,
+            total_received: u64::MAX,
+            updated_slot: u64::MAX,
+            recipients: vec![SplitRecipient { wallet: Pubkey::new_unique(), share_bps: 1250, accrued: u64::MAX, claimed: u64::MAX }; MAX_SPLIT_RECIPIENTS],
+            bump: 255,
+        };
+        let mut buf = Vec::new();
+        s.try_serialize(&mut buf).unwrap();
+        assert_eq!(Split::SPACE, 526);
+        assert_eq!(buf.len(), Split::SPACE);
     }
 }

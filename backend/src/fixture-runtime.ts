@@ -36,6 +36,7 @@ export class FixtureState {
   bountyAttempts: BountyAttempt[] = []
   measurements: MeasurementRecord[] = []
   readonly policies = new Map<string, ModelPolicy>()
+  readonly splits = new Map<string, import('@voynich/contract').ModelSplit>()
   readonly versions = new Map<string, import('@voynich/contract').ModelVersion[]>()
   readonly stagedVersions = new Map<string, { version: number; address: string; weights: string[]; sizeBytes: number; noncePrefix: string; manifest: import('@voynich/contract').Manifest; base: import('@voynich/contract').ModelBase | null; bytes: Uint8Array; sealedChunks: number }>()
   readonly sessions = new Map<string, import('@voynich/contract').Session>()
@@ -398,6 +399,26 @@ export class FixtureState {
       } satisfies CallStreamDone)
     })
   }
+  creditSplit(modelAddress: string, ownerAmount: bigint) {
+    const split = this.splits.get(modelAddress)
+    if (!split || !split.active || split.recipients.length === 0 || ownerAmount <= 0n) return
+    let distributed = 0n
+    const shares = split.recipients.map(r => {
+      const share = (ownerAmount * BigInt(r.shareBps)) / 10000n
+      distributed += share
+      return share
+    })
+    const dust = ownerAmount - distributed
+    if (dust > 0n) shares[0] = (shares[0] ?? 0n) + dust
+    split.totalReceived = String(BigInt(split.totalReceived) + ownerAmount)
+    split.recipients = split.recipients.map((r, i) => {
+      const accrued = BigInt(r.accrued) + (shares[i] ?? 0n)
+      const claimed = BigInt(r.claimed)
+      return { ...r, accrued: String(accrued), claimable: String(accrued > claimed ? accrued - claimed : 0n) }
+    })
+    split.updatedSlot = String(this.slot)
+    this.emit('split.updated', split)
+  }
   settle(call: Call, replyPublic: Uint8Array, increment = true) {
     const model = this.model(call.model)
     const enclave = this.enclave(call.enclave)
@@ -441,7 +462,7 @@ export class FixtureState {
     call.status = 'settled'; call.receipt = address; call.failure = null
     this.receipts = this.receipts.filter(r => r.call !== call.address); this.receipts.unshift(receipt)
     this.answers.set(call.address, { status: 'answered', call, outputEnvelope, openAnswer, outputHash, signature, settleTransaction: receipt.transactionSignature, receiptAddress: address, failure: null })
-    if (increment) { model.callsSettled = String(BigInt(model.callsSettled) + 1n); enclave.callsSettled = String(BigInt(enclave.callsSettled) + 1n); this.emit('receipt.created', receipt); this.emit('call.updated', call) }
+    if (increment) { model.callsSettled = String(BigInt(model.callsSettled) + 1n); enclave.callsSettled = String(BigInt(enclave.callsSettled) + 1n); this.creditSplit(model.address, total - operator - protocol); this.emit('receipt.created', receipt); this.emit('call.updated', call) }
   }
   range(model: Model, offset: number, length: number) {
     if (offset > model.sizeBytes) fail('VALIDATION_ERROR', 'The byte offset exceeds the ciphertext length.', { stage: 'validation', fieldErrors: { offset: ['Outside ciphertext.'] } })

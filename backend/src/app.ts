@@ -81,6 +81,12 @@ export function buildApp() {
     if (!policy) fail('POLICY_NOT_FOUND', 'No policy is configured for this model.')
     return c.json(policy)
   })
+  app.get('/v1/models/:id/split', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const split = state.splits.get(model.address)
+    if (!split) fail('SPLIT_NOT_FOUND', 'No revenue split is configured for this model.')
+    return c.json(split)
+  })
   app.get('/v1/models/:id/versions', c => {
     const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
     const existing = state.versions.get(model.address)
@@ -559,6 +565,68 @@ export function buildApp() {
       state.calls.unshift(row)
       state.emit('call.updated', row)
       state.emit('session.updated', session)
+    }))
+  })
+  app.post('/v1/models/:id/split/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.SetSplitRequest)
+    state.owner(model, body.wallet)
+    const splitAddress = fixtureAddress(`split:${model.address}`)
+    const existing = state.splits.get(model.address)
+    if (body.recipients.length > 0 && existing) {
+      if (existing.recipients.some(r => BigInt(r.accrued) > BigInt(r.claimed))) {
+        fail('INVALID_SPLIT', 'All existing split recipients must claim accrued funds before replacing recipients.', { stage: 'build' })
+      }
+    }
+    return c.json(state.build('set_split', [body.wallet], { model: model.address, split: splitAddress }, () => {
+      if (body.recipients.length === 0) {
+        const retained = (existing?.recipients ?? [])
+          .filter(r => BigInt(r.accrued) > BigInt(r.claimed))
+          .map(r => ({ ...r, shareBps: 0 }))
+        const next: s.ModelSplit = {
+          address: splitAddress,
+          model: model.address,
+          authority: body.wallet,
+          mint: existing?.mint ?? model.price.mint,
+          active: false,
+          totalReceived: existing?.totalReceived ?? '0',
+          recipients: retained,
+          updatedSlot: String(state.slot),
+        }
+        state.splits.set(model.address, next)
+        model.hasSplit = false
+        state.emit('model.updated', model)
+        state.emit('split.updated', next)
+      } else {
+        const next: s.ModelSplit = {
+          address: splitAddress,
+          model: model.address,
+          authority: body.wallet,
+          mint: model.price.mint,
+          active: true,
+          totalReceived: existing?.totalReceived ?? '0',
+          recipients: body.recipients.map(r => ({ wallet: r.wallet, shareBps: r.shareBps, accrued: '0', claimed: '0', claimable: '0' })),
+          updatedSlot: String(state.slot),
+        }
+        state.splits.set(model.address, next)
+        model.hasSplit = true
+        state.emit('model.updated', model)
+        state.emit('split.updated', next)
+      }
+    }))
+  })
+  app.post('/v1/models/:id/split/claim/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.ClaimSplitRequest)
+    const split = state.splits.get(model.address)
+    if (!split) fail('SPLIT_NOT_FOUND', 'No revenue split is configured for this model.')
+    const target = body.recipient ?? body.wallet
+    const entry = split.recipients.find(r => r.wallet === target)
+    if (!entry || BigInt(entry.accrued) <= BigInt(entry.claimed)) {
+      fail('INVALID_SPLIT', 'No unclaimed split balance is available for this recipient.', { stage: 'build' })
+    }
+    return c.json(state.build('claim_split', [body.wallet], { model: model.address, split: split.address }, () => {
+      split.recipients = split.recipients.map(r => r.wallet === target ? { ...r, claimed: r.accrued, claimable: '0' } : r)
+      split.updatedSlot = String(state.slot)
+      state.emit('split.updated', split)
     }))
   })
   app.post('/v1/calls/:id/settle/build', async c => {

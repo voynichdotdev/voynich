@@ -518,6 +518,96 @@ export function createApply(attestationProgramId: string) {
           }
           break
         }
+        case 'splitupdated': {
+          const address = text(data, 'split')
+          const modelAddress = text(data, 'model')
+          const rawMint = text(data, 'mint')
+          const ZERO_KEY = '11111111111111111111111111111111'
+          const active = Boolean(data.active)
+          const rawRecipients = (data.recipients as { wallet: string; shareBps: number; accrued: string; claimed: string }[]) ?? []
+          const recipients = rawRecipients.map(r => ({
+            wallet: String(r.wallet),
+            shareBps: Number(r.shareBps),
+            accrued: String(r.accrued),
+            claimed: String(r.claimed),
+          }))
+          const existing = await tx.split.findUnique({ where: { address } })
+          const value = {
+            address,
+            modelAddress,
+            authority: text(data, 'authority'),
+            mint: rawMint === ZERO_KEY ? null : rawMint,
+            active,
+            totalReceived: existing?.totalReceived ?? new Prisma.Decimal('0'),
+            recipients: recipients as unknown as Prisma.InputJsonValue,
+            updatedSlot: currentSlot,
+          }
+          await tx.split.upsert({
+            where: { address },
+            create: value,
+            update: {
+              authority: value.authority,
+              mint: value.mint,
+              active: value.active,
+              recipients: value.recipients,
+              updatedSlot: currentSlot,
+            },
+          })
+          await tx.model.update({
+            where: { address: modelAddress },
+            data: { hasSplit: active, updatedSlot: currentSlot },
+          })
+          await notify(tx, 'model.updated', modelAddress)
+          await notify(tx, 'split.updated', modelAddress)
+          break
+        }
+        case 'splitcredited': {
+          const address = text(data, 'split')
+          const modelAddress = text(data, 'model')
+          const rawMint = text(data, 'mint')
+          const ZERO_KEY = '11111111111111111111111111111111'
+          const rawRecipients = (data.recipients as { wallet: string; shareBps: number; accrued: string; claimed: string }[]) ?? []
+          const recipients = rawRecipients.map(r => ({
+            wallet: String(r.wallet),
+            shareBps: Number(r.shareBps),
+            accrued: String(r.accrued),
+            claimed: String(r.claimed),
+          }))
+          const existing = await tx.split.findUnique({ where: { address } })
+          if (existing) {
+            await tx.split.update({
+              where: { address },
+              data: {
+                mint: rawMint === ZERO_KEY ? null : rawMint,
+                totalReceived: new Prisma.Decimal(text(data, 'totalReceived')),
+                recipients: recipients as unknown as Prisma.InputJsonValue,
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'split.updated', modelAddress)
+          }
+          break
+        }
+        case 'splitclaimed': {
+          const address = text(data, 'split')
+          const modelAddress = text(data, 'model')
+          const recipient = text(data, 'recipient')
+          const totalClaimed = text(data, 'totalClaimed')
+          const existing = await tx.split.findUnique({ where: { address } })
+          if (existing) {
+            const current = (existing.recipients as { wallet: string; shareBps: number; accrued: string; claimed: string }[]) ?? []
+            const updated = current.map(r => r.wallet === recipient ? { ...r, claimed: totalClaimed } : r)
+            await tx.split.update({
+              where: { address },
+              data: {
+                recipients: updated as unknown as Prisma.InputJsonValue,
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'split.updated', modelAddress)
+          }
+          break
+        }
       }
     }
   }

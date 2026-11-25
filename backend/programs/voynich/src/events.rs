@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PriceUnit, SessionStatus};
+use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PriceUnit, SessionStatus, SplitRecipient};
 
 #[event]
 pub struct ConfigChanged { pub admin: Pubkey, pub config: ConfigArgs }
@@ -66,4 +66,19 @@ pub struct SessionDebited {
 pub struct SessionClosed {
     pub session: Pubkey, pub caller: Pubkey, pub delegate: Pubkey, pub closer: Pubkey,
     pub returned_amount: u64, pub spent: u64, pub calls_opened: u64, pub slot: u64, pub status: SessionStatus,
+}
+#[event]
+pub struct SplitUpdated {
+    pub split: Pubkey, pub model: Pubkey, pub authority: Pubkey, pub mint: Pubkey,
+    pub active: bool, pub recipients: Vec<SplitRecipient>, pub updated_slot: u64,
+}
+#[event]
+pub struct SplitCredited {
+    pub split: Pubkey, pub model: Pubkey, pub call: Pubkey, pub receipt: Pubkey,
+    pub mint: Pubkey, pub amount: u64, pub total_received: u64, pub recipients: Vec<SplitRecipient>, pub slot: u64,
+}
+#[event]
+pub struct SplitClaimed {
+    pub split: Pubkey, pub model: Pubkey, pub recipient: Pubkey, pub mint: Pubkey,
+    pub amount: u64, pub total_claimed: u64, pub slot: u64,
 }

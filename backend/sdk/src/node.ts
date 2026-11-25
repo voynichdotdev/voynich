@@ -56,6 +56,9 @@ const voynich = {
   policy: async (...args: Parameters<Voynich['policy']>) => (await load()).policy(...args),
   setPolicy: async (...args: Parameters<Voynich['setPolicy']>) => (await load(true)).setPolicy(...args),
   clearPolicy: async (...args: Parameters<Voynich['clearPolicy']>) => (await load(true)).clearPolicy(...args),
+  getSplit: async (...args: Parameters<Voynich['getSplit']>) => (await load()).getSplit(...args),
+  setSplit: async (...args: Parameters<Voynich['setSplit']>) => (await load(true)).setSplit(...args),
+  claimSplit: async (...args: Parameters<Voynich['claimSplit']>) => (await load(true)).claimSplit(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

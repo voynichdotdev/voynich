@@ -3603,11 +3603,12 @@ test('Review Blocking #1: prefix-tolerant Model decode on pre-Build-4 0x2e slack
     priceUnit: { call: {} },
     hasPolicy: false,
     currentVersion: 1,
+    hasSplit: false,
   })
   // Simulate pre-Build-4 8,192-byte account with stale Vec slack byte 0x2e right where priceUnit sits.
   const padded = Buffer.alloc(8192)
   encoded.copy(padded, 0)
-  padded[encoded.length - 6] = 0x2e
+  padded[encoded.length - 7] = 0x2e
 
   // Raw Anchor decode throws on 0x2e; prefix-tolerant builder helper must succeed as priceUnit=call.
   assert.throws(() => voynich.coder.accounts.decode('model', padded))
@@ -5815,4 +5816,112 @@ test('Build 11 Step 3 (voynich@0.2.42): unsigned u64 session nonce (> 2^63-1) st
     await new Promise<void>(r => spyServer.close(() => r()))
     rmSync(scratch, { recursive: true, force: true })
   }
+})
+
+test('Build 12 Step 1: Split PDA helpers, decodeSplitAccount, tx builders, fixture routes, and SDK getSplit/setSplit/claimSplit', async () => {
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const { SPLIT_SPACE, addresses, buildClaimSplitTx, buildSetSplitTx, decodeSplitAccount, splitPda } = await import('../sdk/src/program.js')
+  const { SetSplitRequest } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { sha256, utf8 } = await import('voynich/crypto')
+  const { createVoynich } = await import('../sdk/src/client.js')
+  const { buildApp } = await import('../src/app.js')
+
+  assert.equal(SPLIT_SPACE, 526)
+  const modelKey = Keypair.generate().publicKey
+  const authority = Keypair.generate().publicKey
+  const r1 = Keypair.generate().publicKey
+  const r2 = Keypair.generate().publicKey
+  const r3 = Keypair.generate().publicKey
+  assert(splitPda(modelKey).equals(addresses().split(modelKey)))
+
+  // 1. decodeSplitAccount round-trip on raw Anchor Split bytes
+  const buf = Buffer.alloc(SPLIT_SPACE)
+  Buffer.from(sha256(utf8('account:Split')).subarray(0, 8)).copy(buf, 0)
+  let off = 8
+  modelKey.toBuffer().copy(buf, off); off += 32
+  authority.toBuffer().copy(buf, off); off += 32
+  PublicKey.default.toBuffer().copy(buf, off); off += 32
+  buf[off++] = 1 // active
+  buf.writeBigUInt64LE(100001n, off); off += 8 // totalReceived
+  buf.writeBigUInt64LE(473600000n, off); off += 8 // updatedSlot
+  buf.writeUInt32LE(3, off); off += 4 // recipients.len()
+  const rows: Array<[PublicKey, number, bigint, bigint]> = [
+    [r1, 5000, 50001n, 0n],
+    [r2, 3000, 30000n, 10000n],
+    [r3, 2000, 20000n, 20000n],
+  ]
+  for (const [wallet, bps, accrued, claimed] of rows) {
+    wallet.toBuffer().copy(buf, off); off += 32
+    buf.writeUInt16LE(bps, off); off += 2
+    buf.writeBigUInt64LE(accrued, off); off += 8
+    buf.writeBigUInt64LE(claimed, off); off += 8
+  }
+  buf[off++] = 254
+
+  const decoded = decodeSplitAccount(buf)
+  assert(decoded.model.equals(modelKey))
+  assert(decoded.authority.equals(authority))
+  assert.equal(decoded.active, true)
+  assert.equal(decoded.totalReceived.toString(), '100001')
+  assert.equal(decoded.recipients.length, 3)
+  assert.equal(decoded.recipients[0]!.shareBps, 5000)
+  assert.equal(decoded.recipients[0]!.accrued.toString(), '50001')
+  assert.equal(decoded.recipients[1]!.claimed.toString(), '10000')
+  assert.equal(decoded.bump, 254)
+
+  // 2. buildSetSplitTx & buildClaimSplitTx build valid v0 transactions offline
+  const dummyConn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const blockhash = Keypair.generate().publicKey.toBase58()
+  const setTx = await buildSetSplitTx({
+    connection: dummyConn,
+    owner: authority,
+    model: modelKey,
+    recipients: [{ wallet: r1, shareBps: 5000 }, { wallet: r2, shareBps: 3000 }, { wallet: r3, shareBps: 2000 }],
+    recentBlockhash: blockhash,
+  })
+  assert.equal(setTx.message.compiledInstructions.length, 1)
+  const claimTx = await buildClaimSplitTx({
+    connection: dummyConn,
+    payer: authority,
+    model: modelKey,
+    recipient: r2,
+    recentBlockhash: blockhash,
+  })
+  assert.equal(claimTx.message.compiledInstructions.length, 1)
+
+  // 3. SetSplitRequest rejects bad bps sums and duplicate wallets, accepts empty array (deactivate)
+  assert.equal(SetSplitRequest.safeParse({ wallet: authority.toBase58(), recipients: [{ wallet: r1.toBase58(), shareBps: 5000 }] }).success, false)
+  assert.equal(SetSplitRequest.safeParse({ wallet: authority.toBase58(), recipients: [{ wallet: r1.toBase58(), shareBps: 5000 }, { wallet: r1.toBase58(), shareBps: 5000 }] }).success, false)
+  assert.equal(SetSplitRequest.safeParse({ wallet: authority.toBase58(), recipients: [] }).success, true)
+
+  // 4. Fixture API + SDK getSplit / setSplit / claimSplit end-to-end
+  const app = buildApp()
+  const fixtureSession = 'split-test-session'
+  const ownerWallet = {
+    publicKey: new PublicKey(FIXTURE.owner),
+    async signTransaction(tx: import('@solana/web3.js').VersionedTransaction) { return tx },
+  }
+  const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', fixtureSession)
+    return app.request(new Request(req, { headers }))
+  }) as typeof fetch
+  const sdk = createVoynich({ apiUrl: 'http://localhost', signer: ownerWallet, fetch: fetchFixture, pollMs: 5 })
+
+  assert.equal(await sdk.getSplit('sketch-32'), null)
+  const created = await sdk.setSplit('sketch-32', [
+    { wallet: r1.toBase58(), shareBps: 5000 },
+    { wallet: r2.toBase58(), shareBps: 3000 },
+    { wallet: r3.toBase58(), shareBps: 2000 },
+  ])
+  assert.equal(created.active, true)
+  assert.equal(created.recipients.length, 3)
+  assert.equal(created.recipients[0]!.shareBps, 5000)
+
+  // Deactivate with empty list
+  const cleared = await sdk.setSplit('sketch-32', [])
+  assert.equal(cleared.active, false)
+  assert.equal(cleared.recipients.length, 0)
 })

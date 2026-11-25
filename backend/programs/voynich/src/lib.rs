@@ -36,8 +36,8 @@ pub mod voynich {
     pub fn set_quote(ctx: Context<SetQuote>, operator_share_bps: Option<u16>) -> Result<()> { handlers::set_quote(ctx, operator_share_bps) }
     pub fn open_call(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answer_mode: AnswerMode, callback: Option<CallbackSpec>) -> Result<()> { handlers::open_call(ctx, nonce, input_hash, answer_mode, callback) }
     pub fn open_metered_call(ctx: Context<OpenCall>, nonce: u64, input_hash: [u8;32], answer_mode: AnswerMode, callback: Option<CallbackSpec>, ceiling: u64) -> Result<()> { handlers::open_metered_call(ctx, nonce, input_hash, answer_mode, callback, ceiling) }
-    pub fn settle_call<'info>(ctx: Context<'_, '_, '_, 'info, SettleCall<'info>>, output_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16, open_answer: Vec<u8>) -> Result<()> { handlers::settle_call(ctx, output_hash, signature, ed25519_instruction_index, open_answer) }
-    pub fn settle_metered_call<'info>(ctx: Context<'_, '_, '_, 'info, SettleMeteredCall<'info>>, count: u64, running_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16) -> Result<()> { handlers::settle_metered_call(ctx, count, running_hash, signature, ed25519_instruction_index) }
+    pub fn settle_call<'info>(ctx: Context<'_, '_, 'info, 'info, SettleCall<'info>>, output_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16, open_answer: Vec<u8>) -> Result<()> { handlers::settle_call(ctx, output_hash, signature, ed25519_instruction_index, open_answer) }
+    pub fn settle_metered_call<'info>(ctx: Context<'_, '_, 'info, 'info, SettleMeteredCall<'info>>, count: u64, running_hash: [u8;32], signature: [u8;64], ed25519_instruction_index: u16) -> Result<()> { handlers::settle_metered_call(ctx, count, running_hash, signature, ed25519_instruction_index) }
     pub fn refund_call(ctx: Context<RefundCall>) -> Result<()> { handlers::refund_call(ctx) }
     pub fn publish_measurement(ctx: Context<PublishMeasurement>, digest: [u8; 48], source_repo: String, commit_sha: String, recipe_hash: [u8; 32], version: String) -> Result<()> { handlers::publish_measurement(ctx, digest, source_repo, commit_sha, recipe_hash, version) }
     pub fn deprecate_measurement(ctx: Context<DeprecateMeasurement>) -> Result<()> { handlers::deprecate_measurement(ctx) }
@@ -51,4 +51,6 @@ pub mod voynich {
     pub fn close_session(ctx: Context<CloseSession>) -> Result<()> { handlers::close_session(ctx) }
     pub fn open_session_call(ctx: Context<OpenSessionCall>, nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>) -> Result<()> { handlers::open_session_call(ctx, nonce, input_hash, answer_mode, callback) }
     pub fn open_session_metered_call(ctx: Context<OpenSessionCall>, nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>, ceiling: u64) -> Result<()> { handlers::open_session_metered_call(ctx, nonce, input_hash, answer_mode, callback, ceiling) }
+    pub fn set_split(ctx: Context<SetSplit>, recipients: Vec<SplitRecipientInput>) -> Result<()> { handlers::set_split(ctx, recipients) }
+    pub fn claim_split(ctx: Context<ClaimSplit>) -> Result<()> { handlers::claim_split(ctx) }
 }

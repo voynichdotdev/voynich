@@ -37,7 +37,7 @@ export function createFacts(connection: Connection) {
         catch { event.data.manifest = manifest }
         for (const address of event.data.weights as string[]) weights.add(address)
       }
-      for (const key of ['model', 'enclave', 'call', 'receipt', 'record', 'grant', 'weights', 'uploadKey', 'bounty', 'attempt', 'measurement', 'policy', 'modelVersion', 'session']) {
+      for (const key of ['model', 'enclave', 'call', 'receipt', 'record', 'grant', 'weights', 'uploadKey', 'bounty', 'attempt', 'measurement', 'policy', 'modelVersion', 'session', 'split']) {
         const value = event.data[key]
         if (typeof value === 'string' && value !== PublicKey.default.toBase58()) facts.addresses.push(value)
       }

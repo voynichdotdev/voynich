@@ -3,12 +3,13 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.30'
+export const CONTRACT_VERSION = '0.1.31'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
   MEASUREMENT_NOT_FOUND: 404, MEASUREMENT_ALREADY_EXISTS: 409, MEASUREMENT_DEPRECATED: 409, INVALID_MEASUREMENT: 422,
   POLICY_NOT_FOUND: 404, INVALID_POLICY: 422, POLICY_CALLER_DENIED: 403, POLICY_OPERATOR_DENIED: 403, POLICY_REQUIRED: 409,
+  SPLIT_NOT_FOUND: 404, INVALID_SPLIT: 422,
   GRANT_REQUIRED: 409, INVALID_QUOTE: 422, INVALID_VERSION: 422, SESSION_NOT_FOUND: 404, INVALID_SESSION: 422, CALL_NOT_FOUND: 404, CALL_NOT_OPEN: 409,
   CALL_NOT_REFUNDABLE: 409, CALL_DEADLINE_PASSED: 409, RECEIPT_NOT_FOUND: 404,
   INPUT_HASH_MISMATCH: 422, INVALID_ENVELOPE: 422, UPLOAD_INCOMPLETE: 409,
@@ -43,7 +44,8 @@ export const MAX_POLICY_CALLERS = 32 as const
 export const MAX_POLICY_OPERATORS = 16 as const
 export const MAX_POLICY_REGIONS = 8 as const
 export const MAX_POLICY_REGION_LEN = 16 as const
-export const PROGRAM_LIMITS = { modelNameBytes: 32, weightsAccounts: MAX_WEIGHTS, measurements: 8, manifestBytes: 4096, endpointBytes: 256, weightsHeaderBytes: 56, maxOpenAnswerBytes: 4096, writeChunkBytes: WRITE_CHUNK_BYTES, maxUploadKeys: MAX_UPLOAD_KEYS, sealRangeChunks: SEAL_RANGE_CHUNKS, modelAccountBytes: MODEL_ACCOUNT_BYTES, baseFormatBytes: MAX_BASE_FORMAT, baseSourceBytes: MAX_BASE_SOURCE, sourceRepoBytes: MAX_SOURCE_REPO, commitShaBytes: MAX_COMMIT_SHA, measurementVersionBytes: MAX_MEASUREMENT_VERSION, policyCallers: MAX_POLICY_CALLERS, policyOperators: MAX_POLICY_OPERATORS, policyRegions: MAX_POLICY_REGIONS, policyRegionBytes: MAX_POLICY_REGION_LEN } as const
+export const MAX_SPLIT_RECIPIENTS = 8 as const
+export const PROGRAM_LIMITS = { modelNameBytes: 32, weightsAccounts: MAX_WEIGHTS, measurements: 8, manifestBytes: 4096, endpointBytes: 256, weightsHeaderBytes: 56, maxOpenAnswerBytes: 4096, writeChunkBytes: WRITE_CHUNK_BYTES, maxUploadKeys: MAX_UPLOAD_KEYS, sealRangeChunks: SEAL_RANGE_CHUNKS, modelAccountBytes: MODEL_ACCOUNT_BYTES, baseFormatBytes: MAX_BASE_FORMAT, baseSourceBytes: MAX_BASE_SOURCE, sourceRepoBytes: MAX_SOURCE_REPO, commitShaBytes: MAX_COMMIT_SHA, measurementVersionBytes: MAX_MEASUREMENT_VERSION, policyCallers: MAX_POLICY_CALLERS, policyOperators: MAX_POLICY_OPERATORS, policyRegions: MAX_POLICY_REGIONS, policyRegionBytes: MAX_POLICY_REGION_LEN, splitRecipients: MAX_SPLIT_RECIPIENTS } as const
 export const AnswerMode = z.enum(['sealed', 'open'])
 export const PriceUnit = z.enum(['call', 'token'])
 export const Slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).min(1).max(32)
@@ -133,6 +135,7 @@ export const Model = z.strictObject({
   status: ModelStatus, manifest: Manifest, weights: z.array(Weights), upload: Upload.nullable(),
   enclavesHolding: z.int().nonnegative(), callsSettled: U64,
   currentVersion: z.int().positive().optional(),
+  hasSplit: z.boolean().optional(),
 })
 export const VersionStatus = z.enum(['uploading', 'live', 'archived'])
 export const ModelVersion = z.strictObject({
@@ -282,6 +285,27 @@ export const ModelPolicy = z.strictObject({
   allowedRegions: z.array(PolicyRegion).max(MAX_POLICY_REGIONS),
   updatedSlot: U64,
 })
+export const SplitRecipientInput = z.strictObject({
+  wallet: Address,
+  shareBps: z.int().min(1).max(10000),
+})
+export const SplitRecipient = z.strictObject({
+  wallet: Address,
+  shareBps: z.int().min(0).max(10000),
+  accrued: U64,
+  claimed: U64,
+  claimable: U64,
+})
+export const ModelSplit = z.strictObject({
+  address: Address,
+  model: Address,
+  authority: Address,
+  mint: Address.nullable(),
+  active: z.boolean(),
+  totalReceived: U64,
+  recipients: z.array(SplitRecipient).max(MAX_SPLIT_RECIPIENTS),
+  updatedSlot: U64,
+})
 
 export const WalletRequest = z.strictObject({ wallet: Address })
 const CreateModelBase = z.strictObject({ wallet: Address, uploadKey: Address, uploadKeys: z.array(Address).min(1).max(MAX_UPLOAD_KEYS).optional(), weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS).optional(), name: Slug, manifest: Manifest, sizeBytes: z.int().positive(), plaintextSizeBytes: z.int().positive(), cipher: CipherHeader, price: Money, priceUnit: PriceUnit.optional(), operatorShareBps: z.int().min(0).max(10000), allowedMeasurements: z.array(Measurement).min(1).max(8), uploadFundingLamports: U64, base: ModelBase.optional() })
@@ -375,8 +399,25 @@ export const SetPolicyRequest = z.strictObject({
     ctx.addIssue({ code: 'custom', path: ['allowedRegions'], message: 'allowedRegions must contain distinct region codes.' })
   }
 })
-export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call'])
-export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional() }) })
+export const SetSplitRequest = z.strictObject({
+  wallet: Address,
+  recipients: z.array(SplitRecipientInput).max(MAX_SPLIT_RECIPIENTS),
+}).superRefine((value, ctx) => {
+  if (value.recipients.length === 0) return
+  if (new Set(value.recipients.map((r) => r.wallet)).size !== value.recipients.length) {
+    ctx.addIssue({ code: 'custom', path: ['recipients'], message: 'Split recipients must have distinct wallet addresses.' })
+  }
+  const totalBps = value.recipients.reduce((sum, r) => sum + r.shareBps, 0)
+  if (totalBps !== 10000) {
+    ctx.addIssue({ code: 'custom', path: ['recipients'], message: `Split shares must sum to 10000 bps (got ${totalBps}).` })
+  }
+})
+export const ClaimSplitRequest = z.strictObject({
+  wallet: Address,
+  recipient: Address.optional(),
+})
+export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split'])
+export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional() }) })
 export const TxFailure = z.strictObject({ stage: z.enum(['build', 'wallet-rejected', 'wallet-changed', 'simulation', 'send', 'confirm']), message: z.string(), nextStep: z.string().optional(), retryable: z.boolean(), program: z.strictObject({ address: Address, code: z.int().nullable(), name: z.string().nullable() }).optional() })
 export const TxStatus = z.strictObject({ id: z.string(), status: z.enum(['built', 'submitted', 'unconfirmed', 'confirmed', 'finalized', 'failed', 'expired']), signature: Signature.optional(), error: TxFailure.nullish() })
 export const TxSubmission = z.discriminatedUnion('mode', [z.strictObject({ mode: z.literal('relay'), buildId: z.string(), signedTransactionBase64: Base64, idempotencyKey: z.string().min(1).max(128) }), z.strictObject({ mode: z.literal('wallet-sent'), buildId: z.string(), signature: Signature, idempotencyKey: z.string().min(1).max(128) })])
@@ -396,6 +437,7 @@ export const ProgramEvent = z.discriminatedUnion('type', [
   z.strictObject({ ...eventFields, type: z.literal('policy.cleared'), data: z.strictObject({ model: Address, policy: Address }) }),
   z.strictObject({ ...eventFields, type: z.literal('version.published'), data: ModelVersion }),
   z.strictObject({ ...eventFields, type: z.literal('session.updated'), data: Session }),
+  z.strictObject({ ...eventFields, type: z.literal('split.updated'), data: ModelSplit }),
   z.strictObject({ ...eventFields, type: z.literal('transaction.updated'), data: TxStatus }),
 ])
 
@@ -496,6 +538,11 @@ export type PublishMeasurementRequest = z.output<typeof PublishMeasurementReques
 export type PolicyRegion = z.output<typeof PolicyRegion>
 export type ModelPolicy = z.output<typeof ModelPolicy>
 export type SetPolicyRequest = z.output<typeof SetPolicyRequest>
+export type SplitRecipientInput = z.output<typeof SplitRecipientInput>
+export type SplitRecipient = z.output<typeof SplitRecipient>
+export type ModelSplit = z.output<typeof ModelSplit>
+export type SetSplitRequest = z.output<typeof SetSplitRequest>
+export type ClaimSplitRequest = z.output<typeof ClaimSplitRequest>
 export type VersionStatus = z.output<typeof VersionStatus>
 export type ModelVersion = z.output<typeof ModelVersion>
 export type ModelVersions = z.output<typeof ModelVersions>

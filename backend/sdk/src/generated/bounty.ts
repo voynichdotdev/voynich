@@ -1485,6 +1485,10 @@ export type Bounty = {
           {
             "name": "currentVersion",
             "type": "u32"
+          },
+          {
+            "name": "hasSplit",
+            "type": "bool"
           }
         ]
       }
@@ -3037,6 +3041,10 @@ export const IDL: Bounty = {
           {
             "name": "current_version",
             "type": "u32"
+          },
+          {
+            "name": "has_split",
+            "type": "bool"
           }
         ]
       }

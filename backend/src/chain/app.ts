@@ -104,6 +104,7 @@ export function buildChainApp(runtime: ChainRuntime) {
     '/v1/models/:id/price/build', '/v1/models/:id/grant/build',
     '/v1/models/:id/revoke/build', '/v1/models/:id/retire/build',
     '/v1/models/:id/policy/build', '/v1/models/:id/policy/clear/build',
+    '/v1/models/:id/split/build', '/v1/models/:id/split/claim/build',
     '/v1/models/:id/versions/build', '/v1/models/:id/versions/publish/build',
     '/v1/enclaves/:key/quote/build',
     '/v1/calls/build', '/v1/calls/:id/refund/build',
@@ -118,6 +119,7 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/models/:id/enclaves', async c => c.json(await read.modelEnclaves(readParam(c, 'id', s.ModelId))))
   app.get('/v1/models/:id/receipts', async c => c.json(await read.modelReceipts(readParam(c, 'id', s.ModelId), readQuery(c, s.PageQuery))))
   app.get('/v1/models/:id/policy', async c => c.json(await read.modelPolicy(readParam(c, 'id', s.ModelId))))
+  app.get('/v1/models/:id/split', async c => c.json(await read.modelSplit(readParam(c, 'id', s.ModelId))))
   app.get('/v1/models/:id/versions', async c => c.json(await read.modelVersions(readParam(c, 'id', s.ModelId))))
   app.get('/v1/enclaves', async c => c.json(await read.enclaves(readQuery(c, s.PageQuery))))
   app.get('/v1/enclaves/:key', async c => c.json(await read.enclave(readParam(c, 'key', s.Address))))
@@ -324,6 +326,8 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/models/:id/retire/build', async c => c.json(await build.retire(readParam(c, 'id', s.ModelId), await readJson(c, s.WalletRequest))))
   app.post('/v1/models/:id/policy/build', async c => c.json(await build.setPolicy(readParam(c, 'id', s.ModelId), await readJson(c, s.SetPolicyRequest))))
   app.post('/v1/models/:id/policy/clear/build', async c => c.json(await build.clearPolicy(readParam(c, 'id', s.ModelId), await readJson(c, s.WalletRequest))))
+  app.post('/v1/models/:id/split/build', async c => c.json(await build.setSplit(readParam(c, 'id', s.ModelId), await readJson(c, s.SetSplitRequest))))
+  app.post('/v1/models/:id/split/claim/build', async c => c.json(await build.claimSplit(readParam(c, 'id', s.ModelId), await readJson(c, s.ClaimSplitRequest))))
   app.post('/v1/models/:id/versions/build', async c => c.json(await build.beginVersion(readParam(c, 'id', s.ModelId), await readJson(c, s.BeginVersionRequest))))
   app.post('/v1/models/:id/versions/write/build', async c => c.json(await build.writeVersionWeights(readParam(c, 'id', s.ModelId), await readJson(c, s.WriteVersionWeightsRequest))))
   app.post('/v1/models/:id/versions/seal-range/build', async c => c.json(await build.sealVersionRange(readParam(c, 'id', s.ModelId), await readJson(c, s.SealVersionRangeRequest))))
