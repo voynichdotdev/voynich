@@ -5925,3 +5925,136 @@ test('Build 12 Step 1: Split PDA helpers, decodeSplitAccount, tx builders, fixtu
   assert.equal(cleared.active, false)
   assert.equal(cleared.recipients.length, 0)
 })
+
+test('Build 12 Step 2: enclave Split remainingAccounts (SOL, SPL, callback coexistence) and CLI model split show/set/claim', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { Keypair, PublicKey } = await import('@solana/web3.js')
+  const { getAssociatedTokenAddressSync } = await import('@solana/spl-token')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { PROGRAM_ID, splitPda } = await import('../sdk/src/program.js')
+  const { buildSplitSettlementAccounts } = await import('../enclave/src/runtime.js')
+  const { buildApp } = await import('../src/app.js')
+  const execFileAsync = promisify(execFile)
+
+  // 1. Enclave buildSplitSettlementAccounts: disabled, SOL, SPL, and callback coexistence
+  const modelKey = Keypair.generate().publicKey
+  const mintKey = Keypair.generate().publicKey
+  const expectedSplit = splitPda(modelKey, PROGRAM_ID)
+  const expectedAta = getAssociatedTokenAddressSync(mintKey, expectedSplit, true)
+
+  const disabled = buildSplitSettlementAccounts(PROGRAM_ID, modelKey, false, PublicKey.default)
+  assert.equal(disabled.splitKey, null)
+  assert.equal(disabled.remainingAccounts.length, 0)
+
+  const solSplit = buildSplitSettlementAccounts(PROGRAM_ID, modelKey, true, PublicKey.default)
+  assert(solSplit.splitKey?.equals(expectedSplit))
+  assert.equal(solSplit.remainingAccounts.length, 1)
+  assert(solSplit.remainingAccounts[0]!.pubkey.equals(expectedSplit))
+  assert.equal(solSplit.remainingAccounts[0]!.isWritable, true)
+  assert.equal(solSplit.remainingAccounts[0]!.isSigner, false)
+
+  const splSplit = buildSplitSettlementAccounts(PROGRAM_ID, modelKey, true, mintKey)
+  assert(splSplit.splitKey?.equals(expectedSplit))
+  assert.equal(splSplit.remainingAccounts.length, 2)
+  assert(splSplit.remainingAccounts[0]!.pubkey.equals(expectedSplit))
+  assert(splSplit.remainingAccounts[1]!.pubkey.equals(expectedAta))
+  assert.equal(splSplit.remainingAccounts[1]!.isWritable, true)
+
+  const callbackProgram = Keypair.generate().publicKey
+  const callbackAcc = Keypair.generate().publicKey
+  const combined = [
+    { pubkey: callbackProgram, isWritable: false, isSigner: false },
+    { pubkey: callbackAcc, isWritable: true, isSigner: false },
+    ...splSplit.remainingAccounts,
+  ]
+  assert.equal(combined.length, 4)
+  assert(combined[0]!.pubkey.equals(callbackProgram))
+  assert(combined[2]!.pubkey.equals(expectedSplit))
+  assert(combined[3]!.pubkey.equals(expectedAta))
+
+  // 2. Compiled CLI `voynich model split show|set|claim` against in-process fixture API
+  const ownerKp = Keypair.generate()
+  const r1 = Keypair.generate().publicKey.toBase58()
+  const r2 = Keypair.generate().publicKey.toBase58()
+  const r3 = Keypair.generate().publicKey.toBase58()
+  const fixtureApp = buildApp()
+  // Rewrite owner checks in fixture session by using a custom wrapper that maps ownerKp <-> FIXTURE.owner
+  const wrapperApp = new (await import('hono')).Hono()
+  wrapperApp.all('*', async c => {
+    const url = new URL(c.req.url)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('X-Fixture-Session', 'cli-split-test')
+    let bodyText: string | undefined
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      bodyText = (await c.req.text()).replaceAll(ownerKp.publicKey.toBase58(), FIXTURE.owner)
+    }
+    return fixtureApp.request(new Request(url.toString(), {
+      method: c.req.method,
+      headers,
+      body: bodyText,
+    }))
+  })
+  const server = serve({ fetch: wrapperApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b12s2-cli-'))
+  const ownerKeyPath = join(scratch, 'owner.json')
+  writeFileSync(ownerKeyPath, JSON.stringify([...ownerKp.secretKey]))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  try {
+    const runCli = async (args: string[]) => {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, ...args], { cwd: resolve('.'), encoding: 'utf8' })
+      return JSON.parse(stdout) as Record<string, unknown>
+    }
+
+    // show before split is configured
+    const emptyShow = await runCli(['model', 'split', 'show', 'sketch-32'])
+    assert.equal(emptyShow.split, null)
+
+    // set 3-recipient 5000/3000/2000 split
+    const setRes = await runCli([
+      'model', 'split', 'set', 'sketch-32',
+      '--recipient', `${r1}:5000`,
+      '--recipient', `${r2}:3000`,
+      '--recipient', `${r3}:2000`,
+      '--keypair', ownerKeyPath,
+    ])
+    assert.equal(setRes.active, true)
+    assert.equal((setRes.recipients as unknown[]).length, 3)
+
+    // show after set
+    const activeShow = await runCli(['model', 'split', 'show', 'sketch-32'])
+    assert.equal(activeShow.active, true)
+    assert.equal((activeShow.recipients as Array<{ shareBps: number }>)[0]!.shareBps, 5000)
+
+    // Trigger a fixture call on sketch-32 so split accrues owner_amount
+    const { createVoynich } = await import('../sdk/src/client.js')
+    const callerClient = createVoynich({ apiUrl, signer: ownerKp, pollMs: 5 })
+    await callerClient.call('sketch-32', Array.from({ length: 784 }, () => 0))
+
+    const accruedShow = await runCli(['model', 'split', 'show', 'sketch-32'])
+    const r1Before = (accruedShow.recipients as Array<{ wallet: string; accrued: string; claimable: string }>).find(r => r.wallet === r1)!
+    assert(BigInt(r1Before.claimable) > 0n, 'r1 must have positive claimable balance after call settlement')
+
+    // claim for r1 via CLI
+    const claimed = await runCli(['model', 'split', 'claim', 'sketch-32', '--recipient', r1, '--keypair', ownerKeyPath])
+    const r1After = (claimed.recipients as Array<{ wallet: string; claimed: string; claimable: string }>).find(r => r.wallet === r1)!
+    assert.equal(r1After.claimable, '0')
+    assert.equal(r1After.claimed, r1Before.accrued)
+
+    // clear split via CLI
+    const cleared = await runCli(['model', 'split', 'set', 'sketch-32', '--clear', '--keypair', ownerKeyPath])
+    assert.equal(cleared.active, false)
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

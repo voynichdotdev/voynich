@@ -18,7 +18,7 @@ import {
 } from 'voynich/crypto'
 import { streamSSE } from 'hono/streaming'
 import { applyOnnxAdapter } from 'voynich/adapter'
-import { BN, addresses, chainPrograms, decodeAttestation, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodePolicyAccount, decodeReceiptAccount, decodeWeightsHeader, eventAccounts, type DecodedPolicyAccount } from 'voynich/program'
+import { BN, addresses, chainPrograms, decodeAttestation, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodePolicyAccount, decodeReceiptAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts, splitPda, type DecodedPolicyAccount } from 'voynich/program'
 import { defaultBaseCacheDir, fetchVerifiedBase, type BaseModelRef } from './base-cache.js'
 import { EnclaveRateLimiter, isRegionAllowed, parseEnclaveRegion } from './policy.js'
 import { loadTokenizer, type LoadedTokenizer } from './tokenizer.js'
@@ -35,6 +35,24 @@ import { readSealed, sealingKey, writeSealed } from './storage.js'
 
 const fail: Fail<z.output<typeof errors.ErrorCode>> = failer(errors.status)
 const bn = (value: bigint | number) => new BN(value.toString())
+
+export function buildSplitSettlementAccounts(
+  programId: PublicKey,
+  model: PublicKey,
+  hasSplit: boolean,
+  priceMint: PublicKey,
+): { splitKey: PublicKey | null; remainingAccounts: Array<{ pubkey: PublicKey; isWritable: boolean; isSigner: boolean }> } {
+  if (!hasSplit) return { splitKey: null, remainingAccounts: [] }
+  const splitKey = splitPda(model, programId)
+  const isSpl = !priceMint.equals(PublicKey.default)
+  return {
+    splitKey,
+    remainingAccounts: [
+      { pubkey: splitKey, isWritable: true, isSigner: false },
+      ...(isSpl ? [{ pubkey: getAssociatedTokenAddressSync(priceMint, splitKey, true), isWritable: true, isSigner: false }] : []),
+    ],
+  }
+}
 const logRpc = (entry: RpcLog) => console.error(JSON.stringify(entry))
 const emptyAnswer = () => ({ status: 'waiting' as const, outputEnvelope: null, openAnswer: null, outputHash: null, signature: null, settleTransaction: null, receiptAddress: null, failure: null })
 export type RuntimeAnswer = {
@@ -1162,13 +1180,31 @@ export class EnclaveRuntime {
       : (this.loaded.get(call.model.toBase58())?.baseSha256 ?? null)
     const token = !call.priceMint.equals(PublicKey.default)
     const ata = (owner: PublicKey) => getAssociatedTokenAddressSync(call.priceMint, owner, true)
-    const prepare = token ? [...new Map([call.owner, call.operator, call.feeRecipient, call.caller].map(owner => [owner.toBase58(), owner])).values()].map(owner => createAssociatedTokenAccountIdempotentInstruction(this.operator.publicKey, ata(owner), owner, call.priceMint)) : []
+    let hasSplit = false
+    const onChainModel = await this.programs.voynich.account.model.fetch(call.model).catch(() => null)
+    if (onChainModel) {
+      hasSplit = Boolean((onChainModel as { hasSplit?: boolean }).hasSplit)
+    } else {
+      const splitInfo = await this.rpc.connection.getAccountInfo(this.pda.split(call.model), 'confirmed').catch(() => null)
+      if (splitInfo && splitInfo.owner.equals(this.programs.voynich.programId)) {
+        try { hasSplit = decodeSplitAccount(splitInfo.data).active } catch { hasSplit = false }
+      }
+    }
+    const { splitKey, remainingAccounts: splitRemaining } = buildSplitSettlementAccounts(
+      this.programs.voynich.programId,
+      call.model,
+      hasSplit,
+      call.priceMint,
+    )
+    const prepareOwners = [call.owner, call.operator, call.feeRecipient, call.caller, ...(splitKey ? [splitKey] : [])]
+    const prepare = token ? [...new Map(prepareOwners.map(owner => [owner.toBase58(), owner])).values()].map(owner => createAssociatedTokenAccountIdempotentInstruction(this.operator.publicKey, ata(owner), owner, call.priceMint)) : []
     const callbackRemaining = !call.callbackProgram.equals(PublicKey.default)
       ? [
           { pubkey: call.callbackProgram, isWritable: false, isSigner: false },
           ...call.callbackAccounts.map(account => ({ pubkey: account.pubkey, isWritable: account.isWritable, isSigner: false })),
         ]
       : []
+    const settleRemaining = [...callbackRemaining, ...splitRemaining]
     const accounts = {
       payer: this.operator.publicKey, config: this.pda.config, model: call.model, enclave: this.enclave,
       attestationRecord: this.record, call: address, receipt, caller: call.caller, owner: call.owner,
@@ -1190,7 +1226,7 @@ export class EnclaveRuntime {
       settle = await this.programs.voynich.methods
         .settleMeteredCall(new BN(count), [...outputHash], [...signature], 2 + prepare.length)
         .accountsStrict(accounts)
-        .remainingAccounts(callbackRemaining)
+        .remainingAccounts(settleRemaining)
         .instruction()
     } else {
       verify = Ed25519Program.createInstructionWithPublicKey({
@@ -1201,7 +1237,7 @@ export class EnclaveRuntime {
       settle = await this.programs.voynich.methods
         .settleCall([...outputHash], [...signature], 2 + prepare.length, openAnswerBytes)
         .accountsStrict(accounts)
-        .remainingAccounts(callbackRemaining)
+        .remainingAccounts(settleRemaining)
         .instruction()
     }
     answer.receiptAddress = receipt.toBase58()

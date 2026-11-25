@@ -32,6 +32,7 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   'owner-key': { type: 'string' },
   budget: { type: 'string' }, 'ttl-slots': { type: 'string' }, 'delegate-gas': { type: 'string' }, 'delegate-out': { type: 'string' },
   wallet: { type: 'string' }, session: { type: 'string' }, delegate: { type: 'string' },
+  recipient: { type: 'string', multiple: true },
   help: { type: 'boolean', short: 'h' },
 } })
 if (values['api-url'] ?? values.api) process.env.VOYNICH_API_URL = values['api-url'] ?? values.api
@@ -88,6 +89,7 @@ async function configureCliSigner(): Promise<void> {
     (['call', 'seal', 'grant', 'refund', 'settle'].includes(command ?? '') && !(command === 'call' && values.session))
     || (command === 'model' && ['price', 'retire', 'revoke', 'upgrade'].includes(argument ?? ''))
     || (command === 'model' && argument === 'policy' && ['set', 'clear'].includes(third ?? ''))
+    || (command === 'model' && argument === 'split' && ['set', 'claim'].includes(third ?? ''))
     || (command === 'measurement' && ['publish', 'deprecate'].includes(argument ?? ''))
     || (command === 'session' && ['open', 'close'].includes(argument ?? ''))
     || (command === 'session' && argument === 'list' && !values.wallet)
@@ -550,6 +552,68 @@ async function main(): Promise<unknown> {
         }
       }
       throw new Error('Use model policy show <model>, model policy set <model>, or model policy clear <model>.')
+    }
+    if (argument === 'split') {
+      const action = required(third, 'split subcommand (show, set, or claim)')
+      const modelId = required(fourth, 'model')
+      if (action === 'show') {
+        const split = await voynich.getSplit(modelId)
+        return split ?? { model: modelId, split: null }
+      }
+      if (action === 'set') {
+        const rawRecipients = values.recipient ?? []
+        if (values.clear && rawRecipients.length > 0) {
+          throw new Error('Pass either --clear or --recipient <wallet:bps>, not both.')
+        }
+        const recipients = values.clear
+          ? []
+          : rawRecipients.map(item => {
+              const idx = item.lastIndexOf(':')
+              if (idx <= 0 || idx === item.length - 1) {
+                throw new Error(`Invalid --recipient "${item}". Expected <wallet:bps>.`)
+              }
+              const wallet = item.slice(0, idx).trim()
+              const bpsStr = item.slice(idx + 1).trim()
+              const shareBps = Number(bpsStr)
+              if (!Number.isSafeInteger(shareBps) || shareBps < 1 || shareBps > 10000) {
+                throw new Error(`Invalid share bps "${bpsStr}" for ${wallet}. Must be an integer between 1 and 10000.`)
+              }
+              return { wallet, shareBps }
+            })
+        if (!values.clear && recipients.length === 0) {
+          throw new Error('Supply one or more --recipient <wallet:bps> entries summing to 10000, or pass --clear.')
+        }
+        if (recipients.length > 0) {
+          const totalBps = recipients.reduce((sum, r) => sum + r.shareBps, 0)
+          if (totalBps !== 10000) {
+            throw new Error(`Split recipient shares must sum to 10000 bps (got ${totalBps}).`)
+          }
+        }
+        const signer = await loadCliKeypair()
+        const client = createVoynich({
+          apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+          rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+          signer,
+        })
+        const split = await client.setSplit(modelId, recipients)
+        return split
+      }
+      if (action === 'claim') {
+        const rawRecipients = values.recipient ?? []
+        if (rawRecipients.length > 1) {
+          throw new Error('Pass at most one --recipient <wallet> to model split claim.')
+        }
+        const signer = await loadCliKeypair()
+        const client = createVoynich({
+          apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+          rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+          signer,
+        })
+        const target = rawRecipients[0]?.trim() || undefined
+        const split = await client.claimSplit(modelId, target)
+        return split
+      }
+      throw new Error('Use model split show <model>, model split set <model>, or model split claim <model>.')
     }
     const modelId = required(third, 'model')
     if (argument === 'versions') return voynich.listVersions(modelId)
