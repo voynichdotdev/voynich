@@ -378,6 +378,28 @@ Signs `claim_split` to pay `accrued - claimed` directly to `--recipient <wallet>
 </Field>
 </Fields>
 
+## voynich model referral
+
+Reads, configures, or claims from a model's on-chain referral share (`ReferralConfig` PDA at `["referral-config", model]` and `Referral` PDA at `["referral", model, referrer]`). The same from code is [Referral shares](/docs/sdk/models-and-enclaves#referral-shares-getreferralconfig-setreferralconfig-listreferrals-claimreferral).
+
+```bash
+voynich model referral show <model>
+voynich model referral set <model> --share-bps <0..2500> [--inactive]
+voynich model referral claim <model> [--referrer <pubkey>]
+```
+
+<Fields>
+<Field name="show <model>" type="read">
+Reads `GET /v1/models/{id}/referral` (no wallet required). Prints the `ReferralConfig` JSON, or `{ "model": "<model>", "referralConfig": null }` when none is configured.
+</Field>
+<Field name="set <model>" type="owner write">
+Signs `set_referral_config` as the model's owner (`--share-bps` from `0` to `2500`, up to 25% of `owner_amount`; pass `--inactive` to pause new referrals) and prints the indexed `ReferralConfig`.
+</Field>
+<Field name="claim <model>" type="permissionless write">
+Signs `claim_referral` to release `totalEarned - claimed` directly to `--referrer <pubkey>` (defaults to the signing keypair's public key when omitted) and prints `{ "referral", "transaction" }`.
+</Field>
+</Fields>
+
 ## voynich model versions
 
 ```bash

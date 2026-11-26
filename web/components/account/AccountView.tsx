@@ -5,13 +5,14 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import type { Account, Call, Earnings, Pass, Session } from '@voynich/contract'
+import type { Account, Call, Earnings, Pass, Referral, Session } from '@voynich/contract'
 import { FIXTURE } from '@voynich/contract/fixtures'
 import { api, read, type Read } from '@/lib/api'
 import { loadLastPieceFromApi, loadSavedStreamPieces, removeSavedStreamPiece, type SavedStreamPiece } from '@/lib/call'
 import { LINKS, SKETCH32 } from '@/lib/facts'
 import { group, hardware, money, short } from '@/lib/format'
 import { closeModelPass, loadAccountPasses } from '@/lib/passes'
+import { claimModelReferral, loadAccountReferrals } from '@/lib/referrals'
 import { closeBrowserSession, loadAccountSessions } from '@/lib/sessions'
 import { play } from '@/lib/sound'
 import { errorMessage, send, type TxStageName } from '@/lib/tx'
@@ -36,6 +37,7 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
   const [r, setR] = useState<Read<Account> | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
   const [passes, setPasses] = useState<Pass[]>([])
+  const [referrals, setReferrals] = useState<Referral[]>([])
   const [names, setNames] = useState<Names>({})
   const address = walletAddress ?? w.address ?? sample ?? null
   const canSign = !!address && w.address === address
@@ -59,15 +61,17 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
 
   const load = useCallback(async (who: string) => {
     const client = api(fixture)
-    const [account, list, sess, ps] = await Promise.all([
+    const [account, list, sess, ps, refs] = await Promise.all([
       read(client.account(who)),
       read(client.models({ limit: 100 })),
       loadAccountSessions(client, who),
       loadAccountPasses(client, who),
+      loadAccountReferrals(client, who),
     ])
     if (list.ok) setNames(Object.fromEntries(list.data.items.map((m) => [m.address, m.name])))
     setSessions(sess)
     setPasses(ps)
+    setReferrals(refs)
     return account
   }, [fixture])
 
@@ -99,22 +103,26 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
         names={names}
         sessions={sessions}
         passes={passes}
+        referrals={referrals}
         wallet={address}
         canSign={canSign}
         onChange={(calls) => { if (r?.ok) setR({ ok: true, data: { ...r.data, calls } }) }}
         onSessionsChange={setSessions}
         onPassesChange={setPasses}
+        onReferralsChange={setReferrals}
       />
     </div>
   )
 }
 
-function Regions({ fixture, held, names, sessions, passes, wallet: who, canSign, onChange, onSessionsChange, onPassesChange }: { fixture: string | null; held: Held; names: Names; sessions: Session[]; passes: Pass[]; wallet: string | null; canSign: boolean; onChange: (calls: Call[]) => void; onSessionsChange: (sessions: Session[]) => void; onPassesChange: (passes: Pass[]) => void }) {
+function Regions({ fixture, held, names, sessions, passes, referrals, wallet: who, canSign, onChange, onSessionsChange, onPassesChange, onReferralsChange }: { fixture: string | null; held: Held; names: Names; sessions: Session[]; passes: Pass[]; referrals: Referral[]; wallet: string | null; canSign: boolean; onChange: (calls: Call[]) => void; onSessionsChange: (sessions: Session[]) => void; onPassesChange: (passes: Pass[]) => void; onReferralsChange: (referrals: Referral[]) => void }) {
   const [pending, setPending] = useState<{ call: string; kind: 'refund' | 'settle'; stage: 'building' | TxStageName } | null>(null)
   const [closingSession, setClosingSession] = useState<{ address: string; stage: 'building' | TxStageName } | null>(null)
   const [sessionErrors, setSessionErrors] = useState<Record<string, string>>({})
   const [closingPass, setClosingPass] = useState<{ address: string; stage: 'building' | TxStageName } | null>(null)
   const [passErrors, setPassErrors] = useState<Record<string, string>>({})
+  const [claimingRef, setClaimingRef] = useState<{ address: string; stage: 'building' | TxStageName } | null>(null)
+  const [refErrors, setRefErrors] = useState<Record<string, string>>({})
   const [loadingPiece, setLoadingPiece] = useState<string | null>(null)
   const [savedPieces, setSavedPieces] = useState<Record<string, SavedStreamPiece>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -263,6 +271,35 @@ function Regions({ fixture, held, names, sessions, passes, wallet: who, canSign,
     }
   }
 
+  const claimReferral = async (ref: Referral) => {
+    if (claimingRef || !who) return
+    const client = api(fixture)
+    setRefErrors((e) => ({ ...e, [ref.address]: '' }))
+    setClaimingRef({ address: ref.address, stage: 'building' })
+    try {
+      await claimModelReferral(client, ref.model, { wallet: who, referrer: ref.referrer }, (stage) => {
+        setClaimingRef({ address: ref.address, stage })
+      })
+      play('grant')
+      onReferralsChange(
+        referrals.map((x) =>
+          x.address === ref.address
+            ? { ...x, claimed: x.totalEarned, claimable: '0' }
+            : x,
+        ),
+      )
+      toast({
+        state: 'refunded',
+        text: `${money({ amount: ref.claimable, decimals: 9, symbol: 'SOL' })} SOL claimed from referral earnings`,
+      })
+    } catch (e) {
+      play('failed')
+      setRefErrors((x) => ({ ...x, [ref.address]: errorMessage(e) }))
+    } finally {
+      setClaimingRef(null)
+    }
+  }
+
   const quiet = held.is === 'connect' ? 'No wallet connected' : held.is === 'failed' ? 'Not read' : held.is === 'loading' ? null : 'None yet'
   // What a side region says when it has no rows of its own to show.
   const aside = (none: React.ReactNode, about: React.ReactNode) =>
@@ -381,6 +418,62 @@ function Regions({ fixture, held, names, sessions, passes, wallet: who, canSign,
                         )}
                       </span>
                       {passErrors[p.address] ? <p className={`t-small bad ${s.why}`} role="alert">{passErrors[p.address]}</p> : null}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+        ) : null}
+
+        {held.is === 'data' ? (
+          <section className="panel" aria-labelledby="referrals">
+            <div className="panel-head">
+              <h2 id="referrals">Referrals</h2>
+              <span className="mono dim">{group(referrals.length)} {referrals.length === 1 ? 'model' : 'models'}</span>
+            </div>
+            {referrals.length === 0 ? (
+              <div className="panel-body">
+                <p className="t-small dim">No referral earnings yet. Share any model page with <span className="mono">?ref=&lt;wallet&gt;</span> to earn a share of owner revenue on referred calls.</p>
+              </div>
+            ) : (
+              <ul className={s.calls}>
+                <li className={`${s.sessionRow} ${s.callHead}`} aria-hidden="true"><span>Model</span><span className={s.num}>Referred</span><span className={s.num}>Total earned</span><span className={s.num}>Claimed</span><span className={s.num}>Claimable</span><span /></li>
+                {referrals.map((ref) => {
+                  const busy = claimingRef?.address === ref.address
+                  const modelName = ref.modelName ?? names[ref.model] ?? null
+                  const hasClaimable = BigInt(ref.claimable) > 0n
+                  return (
+                    <li key={ref.address} className={s.sessionRow} data-state={hasClaimable ? 'open' : 'closed'}>
+                      <span className={s.model}>
+                        <Link className="link mono" href={`/models/${modelName ?? ref.model}${q(fixture)}`}>{modelName ?? short(ref.model, 4)}</Link>
+                      </span>
+                      <span className={s.num}><span className="t-label">Referred</span><span className="mono">{group(ref.callsReferred)} {ref.callsReferred === '1' ? 'call' : 'calls'}</span></span>
+                      <span className={s.num}><span className="t-label">Total earned</span><Amount value={{ amount: ref.totalEarned, decimals: 9, symbol: 'SOL' }} /></span>
+                      <span className={s.num}><span className="t-label">Claimed</span><Amount value={{ amount: ref.claimed, decimals: 9, symbol: 'SOL' }} /></span>
+                      <span className={s.num}><span className="t-label">Claimable</span><Amount value={{ amount: ref.claimable, decimals: 9, symbol: 'SOL' }} /></span>
+                      <span className={s.act} aria-live="polite">
+                        {hasClaimable && canSign ? (
+                          <button
+                            type="button"
+                            className="btn"
+                            data-size="s"
+                            data-kind="primary"
+                            data-pending={busy || undefined}
+                            disabled={!!claimingRef}
+                            onClick={() => void claimReferral(ref)}
+                          >
+                            {busy
+                              ? <><StateTile state="pending" size={14} />{claimingRef.stage === 'signing' ? 'Awaiting signature' : claimingRef.stage === 'confirming' ? 'Confirming' : 'Building'}</>
+                              : 'Claim'}
+                          </button>
+                        ) : hasClaimable ? (
+                          <span className="t-small dim">Claimable</span>
+                        ) : (
+                          <span className="t-small dim">Claimed</span>
+                        )}
+                      </span>
+                      {refErrors[ref.address] ? <p className={`t-small bad ${s.why}`} role="alert">{refErrors[ref.address]}</p> : null}
                     </li>
                   )
                 })}

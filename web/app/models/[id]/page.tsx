@@ -5,6 +5,7 @@ import { loadModelBenchmarks } from '@/lib/benchmarks'
 import { loadMeasurements } from '@/lib/measurements'
 import { loadModelPassPlan } from '@/lib/passes'
 import { loadModelPolicy } from '@/lib/policy'
+import { loadModelReferralConfig, parseReferralFromParams } from '@/lib/referrals'
 import { loadModelSplit } from '@/lib/splits'
 import { loadModelVersions } from '@/lib/versions'
 import { Empty, Failed } from '@/components/ui/kit'
@@ -52,11 +53,13 @@ export default async function ModelPage({ params, searchParams }: Props) {
     )
   }
 
-  const [policy, split, passPlan] = await Promise.all([
+  const [policy, split, passPlan, referralConfig] = await Promise.all([
     loadModelPolicy(client, model.data),
     loadModelSplit(client, model.data),
     loadModelPassPlan(client, model.data.address),
+    loadModelReferralConfig(client, model.data.address),
   ])
+  const referrer = parseReferralFromParams(sp)
 
-  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, passPlan, versions, benchmarks }} />
+  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} referrer={referrer} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, passPlan, referralConfig, versions, benchmarks }} />
 }

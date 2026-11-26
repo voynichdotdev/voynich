@@ -18,6 +18,7 @@ import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
 import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
 import { buyModelPass, closeModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan, passPlanCliCommand, setModelPassPlan } from '@/lib/passes'
+import { MAX_REFERRAL_SHARE_BPS, buildReferralLink, claimModelReferral, formatReferralBalance, formatReferralShare, loadAccountReferrals, loadModelReferralConfig, parseReferralFromParams, referralSetCliCommand, setModelReferralConfig } from '@/lib/referrals'
 import { SESSION_DELEGATES_KEY, findActiveBrowserSession, loadAccountSessions, loadSessionDelegate, removeSessionDelegate, saveSessionDelegate, submitDelegateBuild } from '@/lib/sessions'
 import { SPLIT_LIMITS, claimModelSplit, formatSplitPct, loadModelSplit, pctToBps, setModelSplit, splitEquals, splitSetCliCommand, splitToDraft, totalUnclaimedLamports, validateSplitDraft } from '@/lib/splits'
 import { effectiveModelVersion, fallbackModelVersions, loadModelVersions, matchReceiptVersion, upgradeCliCommand } from '@/lib/versions'
@@ -3236,6 +3237,85 @@ test('Build 15 Step 2: prepaid pass helpers, savings %, CLI hint, error mapping,
 
   const accountViewSrc = fs.readFileSync(path.join(ROOT, 'components/account/AccountView.tsx'), 'utf8')
   for (const sym of ['id="passes"', 'loadAccountPasses', 'closeModelPass', 'Close & reclaim']) {
+    assert.ok(accountViewSrc.includes(sym), `AccountView must include ${sym}`)
+  }
+})
+
+test('Build 16 Step 2: referral share helpers, ?ref= parsing, CLI hint, error mapping, and UI wiring', async () => {
+  assert.equal(MAX_REFERRAL_SHARE_BPS, 2500)
+  assert.equal(formatReferralShare(500), '5%')
+  assert.equal(formatReferralBalance('15000000'), '0.015 SOL')
+
+  const modelAddr = Keypair.generate().publicKey.toBase58()
+  const refWallet = Keypair.generate().publicKey.toBase58()
+  const refAddr = Keypair.generate().publicKey.toBase58()
+
+  assert.equal(parseReferralFromParams({ ref: refWallet }), refWallet)
+  assert.equal(parseReferralFromParams({ ref: 'not-a-pubkey' }), null)
+  assert.equal(parseReferralFromParams(new URLSearchParams(`ref=${refWallet}`)), refWallet)
+  assert.equal(buildReferralLink('https://voynich.dev/', 'sketch-32', refWallet), `https://voynich.dev/models/sketch-32?ref=${refWallet}`)
+  assert.equal(referralSetCliCommand('sketch-32', 500, true), 'voynich model referral set sketch-32 --share-bps 500')
+  assert.equal(referralSetCliCommand('sketch-32', 500, false), 'voynich model referral set sketch-32 --share-bps 500 --inactive')
+
+  const sampleCfg = {
+    address: Keypair.generate().publicKey.toBase58(),
+    model: modelAddr,
+    modelName: 'sketch-32',
+    shareBps: 500,
+    active: true,
+    updatedSlot: '475000000',
+  }
+  const sampleRef = {
+    address: refAddr,
+    model: modelAddr,
+    modelName: 'sketch-32',
+    referrer: refWallet,
+    mint: null,
+    totalEarned: '2000000',
+    claimed: '500000',
+    claimable: '1500000',
+    callsReferred: '4',
+    updatedSlot: '475000100',
+  }
+  const mockClient = {
+    modelReferral: async () => sampleCfg,
+    accountReferrals: async () => ({ items: [sampleRef], asOf: '2026-11-26T19:00:00Z' }),
+    setReferralConfig: async () => ({ id: 'ref-cfg-1', action: 'set_referral_config' as const, transactionBase64: 'AAAA', blockhash: 'BH', lastValidBlockHeight: 100, cosigned: false, requiredSigners: [refWallet], fixture: true, addresses: {} }),
+    claimReferral: async () => ({ id: 'ref-claim-1', action: 'claim_referral' as const, transactionBase64: 'AAAA', blockhash: 'BH', lastValidBlockHeight: 100, cosigned: false, requiredSigners: [refWallet], fixture: true, addresses: {} }),
+    submitTransaction: async (input: { buildId: string }) => ({ id: input.buildId, status: 'confirmed' as const }),
+    transaction: async (id: string) => ({ id, status: 'confirmed' as const }),
+  } as unknown as Parameters<typeof loadModelReferralConfig>[0]
+
+  assert.equal((await loadModelReferralConfig(mockClient, modelAddr))?.shareBps, 500)
+  assert.equal((await loadAccountReferrals(mockClient, refWallet)).length, 1)
+  assert.equal((await setModelReferralConfig(mockClient, modelAddr, { wallet: refWallet, shareBps: 500, active: true })).status, 'confirmed')
+  assert.equal((await claimModelReferral(mockClient, modelAddr, { wallet: refWallet, referrer: refWallet })).status, 'confirmed')
+
+  assert.ok(errorMessage({ body: { error: { code: 'REFERRAL_CONFIG_NOT_FOUND' } } }).includes('referral share'))
+  assert.ok(errorMessage({ body: { error: { code: 'REFERRAL_NOT_FOUND' } } }).includes('referral'))
+  assert.ok(errorMessage({ body: { error: { code: 'INVALID_REFERRAL' } } }).includes('25%'))
+
+  const callSrc = fs.readFileSync(path.join(ROOT, 'lib/call.ts'), 'utf8')
+  assert.ok(callSrc.includes('referrer?: string | null') && callSrc.includes('referrer: o.referrer'))
+
+  const modelPageSrc = fs.readFileSync(path.join(ROOT, 'app/models/[id]/page.tsx'), 'utf8')
+  assert.ok(modelPageSrc.includes('loadModelReferralConfig') && modelPageSrc.includes('parseReferralFromParams'))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['Referral share', 'Copy referral link', 'buildReferralLink', 'effectiveReferrer']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+
+  const callPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/CallPanel.tsx'), 'utf8')
+  assert.ok(callPanelSrc.includes('Referred by') && callPanelSrc.includes('referralShareBps'))
+
+  const ownerPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/OwnerPanel.tsx'), 'utf8')
+  for (const sym of ['Referral share', 'Save referral share', 'referralSetCliCommand', 'client.setReferralConfig']) {
+    assert.ok(ownerPanelSrc.includes(sym), `OwnerPanel must include ${sym}`)
+  }
+
+  const accountViewSrc = fs.readFileSync(path.join(ROOT, 'components/account/AccountView.tsx'), 'utf8')
+  for (const sym of ['id="referrals"', 'loadAccountReferrals', 'claimModelReferral', 'Claimable']) {
     assert.ok(accountViewSrc.includes(sym), `AccountView must include ${sym}`)
   }
 })

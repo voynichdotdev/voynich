@@ -199,6 +199,37 @@ await voynich.claimSplit('text-1m', walletB)
 </Way>
 </Ways>
 
+## Configure a referral share
+
+A model owner can share up to 25% (`2500` bps) of `owner_amount` with referrers who drive calls to the model (`ReferralConfig` PDA at `["referral-config", model]`). Referral shares coexist with an active revenue split: the enclave carves the referral share first and routes the remaining owner share to the `Split` PDA (or `model.owner`).
+
+<Ways>
+<Way label="Site">
+
+On `/models/<name>`, the **Owner** panel lets the owner set the referral percentage (`0%` to `25%`) and active toggle. When active, `/models/<name>` shows a **Referral share** card with a one-press copyable `?ref=<wallet>` link for any connected wallet. Visiting `/models/<name>?ref=<wallet>` automatically attaches that referrer to calls opened from the call panel, and referrers claim accrued earnings with one press under **Referrals** on [/account](/account).
+
+</Way>
+<Way label="CLI">
+
+```bash
+voynich model referral set sketch-32 --share-bps 500
+voynich model referral show sketch-32
+voynich call sketch-32 drawing.json --referrer <referrer wallet>
+voynich model referral claim sketch-32 --referrer <referrer wallet>
+```
+
+</Way>
+<Way label="SDK">
+
+```ts
+await voynich.setReferralConfig('sketch-32', { shareBps: 500, active: true })
+await voynich.call('sketch-32', drawing, { referrer: referrerWallet })
+await voynich.claimReferral('sketch-32', referrerWallet)
+```
+
+</Way>
+</Ways>
+
 ## Retire the model
 
 Retiring closes the model to new calls and new grants. Calls that are open settle until their deadline and refund after it. The ciphertext and every receipt stay on chain.

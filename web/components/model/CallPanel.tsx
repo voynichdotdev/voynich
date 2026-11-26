@@ -32,7 +32,7 @@ const LABEL = Object.fromEntries(CALL_STAGES.map((x) => [x.id, x.label])) as Rec
 const IN_FLIGHT: Stage[] = ['encrypting', 'signing', 'escrowed', 'answering', 'streaming']
 const pct = (p: number) => `${(p * 100).toFixed(p >= 0.1 ? 0 : 1)}%`
 
-type Props = { model: Model; fixture: string | null; compact?: boolean; owner?: boolean; enclaves?: GrantedEnclaves['items'] | null; policy?: ModelPolicy | null; activePass?: Pass | null; onSettled?: () => void }
+type Props = { model: Model; fixture: string | null; compact?: boolean; owner?: boolean; enclaves?: GrantedEnclaves['items'] | null; policy?: ModelPolicy | null; activePass?: Pass | null; referrer?: string | null; referralShareBps?: number | null; onSettled?: () => void }
 
 // A model that takes no calls, composed per cause: retired, sealed with no enclave yet, or still uploading.
 function Closed({ model, fixture, compact, owner }: { model: Model; fixture: string | null; compact: boolean; owner: boolean }) {
@@ -91,7 +91,7 @@ function Closed({ model, fixture, compact, owner }: { model: Model; fixture: str
   )
 }
 
-export function CallPanel({ model, fixture, compact = false, owner = false, enclaves, policy = null, activePass = null, onSettled }: Props) {
+export function CallPanel({ model, fixture, compact = false, owner = false, enclaves, policy = null, activePass = null, referrer = null, referralShareBps = null, onSettled }: Props) {
   const w = useWallet(wallet)
   const connected = w.status === 'connected' && !!w.address
   const held = heldStage(fixture)
@@ -338,7 +338,10 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
         pass: activePass.address,
       })
     } else {
-      void runCall(callParams)
+      void runCall({
+        ...callParams,
+        ...(referrer && referrer !== w.address ? { referrer } : {}),
+      })
     }
   }
   const stopStream = async () => {
@@ -956,6 +959,12 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
                 <button type="button" aria-pressed={answerMode === 'open'} disabled={inFlight} onClick={() => setAnswerMode('open')}>Open on chain</button>
               </div>
             </div>
+          ) : null}
+
+          {referrer && referralShareBps && referralShareBps > 0 && !useSession && !usePass ? (
+            <p className="t-small dim" style={{ marginBottom: 8 }}>
+              Referred by <span className="mono">{short(referrer, 4)}</span> ({bps(referralShareBps)} of owner share).
+            </p>
           ) : null}
 
           <div className={s.act}>

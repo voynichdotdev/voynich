@@ -50,6 +50,9 @@ Path to the 64-byte Solana JSON keypair file of the session's `delegate` (saved 
 <Field name="--pass" type="pass address">
 Spends one prepaid call from an active `Pass` PDA (`open_pass_call`) at the pass's discounted `pricePerCall` instead of paying spot price. Signed by `pass.holder`.
 </Field>
+<Field name="--referrer" type="wallet address">
+Attributes the call to a referrer wallet by appending `register_call_referral` in the same transaction as `open_call` when the model has an active `ReferralConfig` (must differ from the caller).
+</Field>
 </Fields>
 
 The caller is the signing wallet, chosen as told in [Install](/docs/cli/install#the-signing-wallet). It signs one transaction (`open_call` or `open_metered_call`) and deposits the model's price (or `--ceiling` for a per-token model) into the call's escrow.

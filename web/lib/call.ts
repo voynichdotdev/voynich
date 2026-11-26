@@ -842,6 +842,7 @@ export type RunCallOptions = {
   strategy?: RoutingStrategy
   enclave?: string
   pass?: string | null
+  referrer?: string | null
   session?: { address: string; delegate: Keypair } | null
   onStopReady?: (stop: (() => Promise<void>) | null) => void
   update: Update
@@ -897,6 +898,7 @@ export async function runCall(o: RunCallOptions) {
               inputHash,
               answerMode,
               ...(o.ceiling !== undefined ? { ceiling: o.ceiling } : {}),
+              ...(o.referrer && o.referrer !== o.wallet ? { referrer: o.referrer } : {}),
             })
             .catch(async (e) => { throw await shortOf(e, client, model, o.wallet, o.ceiling) }),
       sleep(ENCRYPT_MS),

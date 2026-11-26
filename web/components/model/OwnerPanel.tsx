@@ -3,13 +3,14 @@
 // What the model's owner does from its page: set the price and the operator's share, grant an enclave, retire.
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { fromBase64, toBase64, type Build, type Enclave, type GrantedEnclave, type Model, type ModelPolicy, type ModelSplit, type PassPlan, type PriceUnit } from '@voynich/contract'
+import { fromBase64, toBase64, type Build, type Enclave, type GrantedEnclave, type Model, type ModelPolicy, type ModelSplit, type PassPlan, type PriceUnit, type ReferralConfig } from '@voynich/contract'
 import { wrapKey } from 'voynich/crypto'
 import { api, read } from '@/lib/api'
 import { bps, hardware, short, units } from '@/lib/format'
 import { loadModelKey, openKeyFile, parseKeyFile, saveModelKey, setVaultPassword, unlockVault, useVault, type SealedKeyFile } from '@/lib/keys'
 import { passPlanCliCommand } from '@/lib/passes'
 import { policyEquals, policyToDraft, validatePolicyDraft, type PolicyDraft } from '@/lib/policy'
+import { MAX_REFERRAL_SHARE_BPS, referralSetCliCommand } from '@/lib/referrals'
 import { SPLIT_LIMITS, formatSplitPct, splitEquals, splitSetCliCommand, splitToDraft, validateSplitDraft, type SplitRowDraft } from '@/lib/splits'
 import { effectiveModelVersion, upgradeCliCommand } from '@/lib/versions'
 import { play } from '@/lib/sound'
@@ -60,9 +61,9 @@ function toBase(text: string, decimals: number): string | null {
   return (BigInt(m[1]!) * 10n ** BigInt(decimals) + BigInt(frac.padEnd(decimals, '0') || '0')).toString()
 }
 
-type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; split?: ModelSplit | null; passPlan?: PassPlan | null; currentVersion?: number; onChanged: () => void }
+type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; split?: ModelSplit | null; passPlan?: PassPlan | null; referralConfig?: ReferralConfig | null; currentVersion?: number; onChanged: () => void }
 
-export function OwnerPanel({ model, fixture, signer, grants, policy = null, split = null, passPlan = null, currentVersion, onChanged }: Props) {
+export function OwnerPanel({ model, fixture, signer, grants, policy = null, split = null, passPlan = null, referralConfig = null, currentVersion, onChanged }: Props) {
   const client = api(fixture)
   const protocol = model.protocolShareBps ?? 0
   const activeVersion = currentVersion ?? effectiveModelVersion(model)
@@ -218,6 +219,27 @@ export function OwnerPanel({ model, fixture, signer, grants, policy = null, spli
     ttlSlots: passTtlValid ? passTtlText.trim() : '216000',
     active: passActive,
   })
+
+  // ---- referral share
+  const [refActive, setRefActive] = useState(referralConfig?.active ?? true)
+  const [refPctText, setRefPctText] = useState(() =>
+    String(Number(((referralConfig?.shareBps ?? 500) / 100).toFixed(2))),
+  )
+  const [refCliCopied, setRefCliCopied] = useState(false)
+  const refActiveId = useId()
+  const refTx = useTx(fixture, onChanged)
+  const refShareBps = /^\d+(?:\.\d{1,2})?$/.test(refPctText.trim()) ? Math.round(Number(refPctText.trim()) * 100) : NaN
+  const refErr = Number.isNaN(refShareBps) || refShareBps < 0 || refShareBps > MAX_REFERRAL_SHARE_BPS
+    ? 'Enter a referral share between 0% and 25%.'
+    : refActive && refShareBps === 0
+      ? 'Set a share above 0%, or switch status to Inactive.'
+      : ''
+  const refSame = !!referralConfig && referralConfig.active === refActive && referralConfig.shareBps === refShareBps
+  const refCliCmd = referralSetCliCommand(
+    model.name,
+    !Number.isNaN(refShareBps) && refShareBps >= 0 && refShareBps <= MAX_REFERRAL_SHARE_BPS ? refShareBps : 500,
+    refActive,
+  )
 
   return (
     <section className={`panel ${s.owner}`} aria-labelledby="owner">
@@ -677,6 +699,85 @@ export function OwnerPanel({ model, fixture, signer, grants, policy = null, spli
           </div>
         </form>
       ) : null}
+
+      <form
+        id="owner-referral"
+        className={s.policySection}
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (refErr || refSame) return
+          void refTx.run(() =>
+            client.setReferralConfig(model.address, {
+              wallet: signer,
+              shareBps: refShareBps,
+              active: refActive,
+            }),
+          )
+        }}
+      >
+        <div className={s.policyHead}>
+          <h3 className="t-h3">Referral share</h3>
+          <span className="t-small dim">Reward wallets that bring traffic with 0% to 25% of the owner share per referred call.</span>
+        </div>
+        <div className={s.policyGrid}>
+          <div className={s.policyCol}>
+            <div className="field">
+              <span className="t-label" id={refActiveId}>Referral status</span>
+              <div className="seg" role="group" aria-labelledby={refActiveId}>
+                <button type="button" aria-pressed={refActive} onClick={() => { play('toggle'); setRefActive(true); refTx.clear() }}>Active</button>
+                <button type="button" aria-pressed={!refActive} onClick={() => { play('toggle'); setRefActive(false); refTx.clear() }}>Inactive</button>
+              </div>
+            </div>
+          </div>
+          <div className={s.policyCol}>
+            <div className="field">
+              <label htmlFor="own-ref-share">Referrer share of owner revenue (max 25%)</label>
+              <div className="input-row">
+                <input
+                  id="own-ref-share"
+                  className="input mono"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={refPctText}
+                  onChange={(e) => { setRefPctText(e.target.value); refTx.clear() }}
+                />
+                <span className="suffix">%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        {refErr ? <span className="err" role="alert">{refErr}</span> : null}
+        <div className={s.ownerAct}>
+          <button
+            type="submit"
+            className="btn"
+            data-kind="primary"
+            data-size="s"
+            disabled={!!refErr || refSame || refTx.busy}
+            data-pending={refTx.busy || undefined}
+          >
+            Save referral share
+          </button>
+          {refTx.tx.stage === 'idle' && refSame ? <span className="t-small dim">Change a value to update.</span> : null}
+          <TxLine tx={refTx.tx} done="Referral share saved" />
+        </div>
+        <div className={s.upgradeRow}>
+          <code className={`mono ${s.upgradeCode}`}>{refCliCmd}</code>
+          <button
+            type="button"
+            className="btn"
+            data-size="s"
+            onClick={() => {
+              void navigator.clipboard?.writeText(refCliCmd)
+              setRefCliCopied(true)
+              setTimeout(() => setRefCliCopied(false), 1800)
+            }}
+          >
+            {refCliCopied ? 'Copied' : 'Copy command'}
+          </button>
+        </div>
+      </form>
 
       <div className={s.policySection}>
         <div className={s.policyHead}>

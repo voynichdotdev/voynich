@@ -5,7 +5,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelSplit, ModelVersions, Pass, PassPlan, ReceiptsPage } from '@voynich/contract'
+import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelSplit, ModelVersions, Pass, PassPlan, ReceiptsPage, ReferralConfig } from '@voynich/contract'
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
@@ -15,6 +15,7 @@ import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
 import { buyModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan } from '@/lib/passes'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
+import { buildReferralLink, formatReferralShare, loadModelReferralConfig } from '@/lib/referrals'
 import { play } from '@/lib/sound'
 import { claimModelSplit, formatSplitPct, loadModelSplit, totalUnclaimedLamports } from '@/lib/splits'
 import { errorMessage } from '@/lib/tx'
@@ -32,6 +33,7 @@ import s from './model-view.module.css'
 type Props = {
   fixture: string | null
   asOwner: boolean
+  referrer?: string | null
   initial: {
     model: Model
     enclaves: Read<GrantedEnclaves>
@@ -40,6 +42,7 @@ type Props = {
     policy?: ModelPolicy | null
     split?: ModelSplit | null
     passPlan?: PassPlan | null
+    referralConfig?: ReferralConfig | null
     versions?: ModelVersions | null
     benchmarks?: BenchmarkRecord[]
   }
@@ -50,7 +53,7 @@ const SPLIT_STEPS = [14, 11, 8, 6, 13, 9, 7, 5] as const
 type ClaimTx = { wallet: string; stage: 'signing' | 'confirming' | 'done' | 'failed'; message?: string }
 type BuyPassTx = { stage: 'signing' | 'confirming' | 'done' | 'failed'; message?: string }
 
-export function ModelView({ fixture, asOwner, initial }: Props) {
+export function ModelView({ fixture, asOwner, referrer = null, initial }: Props) {
   const w = useWallet(wallet)
   const [model, setModel] = useState(initial.model)
   const [enclaves, setEnclaves] = useState(initial.enclaves)
@@ -59,6 +62,8 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
   const [policy, setPolicy] = useState<ModelPolicy | null>(initial.policy ?? null)
   const [modelSplit, setModelSplit] = useState<ModelSplit | null>(initial.split ?? null)
   const [passPlan, setPassPlan] = useState<PassPlan | null>(initial.passPlan ?? null)
+  const [referralConfig, setReferralConfig] = useState<ReferralConfig | null>(initial.referralConfig ?? null)
+  const [refCopied, setRefCopied] = useState(false)
   const [walletPasses, setWalletPasses] = useState<Pass[]>([])
   const [passCallsText, setPassCallsText] = useState(() => {
     const plan = initial.passPlan
@@ -75,7 +80,7 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
 
   const refresh = useCallback(async () => {
     const client = api(fixture)
-    const [m, e, r, ms, vs, bs, pp] = await Promise.all([
+    const [m, e, r, ms, vs, bs, pp, rc] = await Promise.all([
       read(client.model(id)),
       read(client.modelEnclaves(id)),
       read(client.modelReceipts(id, { limit: 8 })),
@@ -83,6 +88,7 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
       loadModelVersions(client, id),
       loadModelBenchmarks(client, id),
       loadModelPassPlan(client, id),
+      loadModelReferralConfig(client, id),
     ])
     const nextModel = m.ok ? m.data : model
     if (m.ok) setModel(m.data)
@@ -92,6 +98,7 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
     if (vs) setVersions(vs)
     setBenchmarks(bs)
     setPassPlan(pp)
+    setReferralConfig(rc)
     const [nextPolicy, nextSplit] = await Promise.all([
       loadModelPolicy(client, nextModel),
       loadModelSplit(client, nextModel),
@@ -124,6 +131,10 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
   }, [fixture, w.status, w.address])
 
   const activePass = findActiveModelPass(walletPasses, model.address)
+  const activeReferral = referralConfig?.active && referralConfig.shareBps > 0 ? referralConfig : null
+  const effectiveReferrer = referrer && activeReferral && referrer !== w.address ? referrer : null
+  const shareOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://voynich.dev'
+  const myReferralLink = w.status === 'connected' && w.address ? buildReferralLink(shareOrigin, model.name, w.address) : null
 
   // The owner's wallet sees the owner's tools. On a sample API the view can be opened as the owner.
   const isOwner = (w.status === 'connected' && w.address === model.owner) || (asOwner && !!config?.fixture)
@@ -259,15 +270,57 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
 
       <div className={`grid ${s.regions}`}>
         <div className={live ? s.call : s.full}>
-          <CallPanel model={model} fixture={fixture} owner={isOwner} enclaves={enclaves.ok ? enclaves.data.items : null} policy={policy} activePass={activePass} onSettled={refreshSoon} />
+          <CallPanel model={model} fixture={fixture} owner={isOwner} enclaves={enclaves.ok ? enclaves.data.items : null} policy={policy} activePass={activePass} referrer={effectiveReferrer} referralShareBps={activeReferral?.shareBps ?? null} onSettled={refreshSoon} />
         </div>
 
         {live ? facts : null}
 
         {isOwner ? (
           <div className={s.full}>
-            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} split={modelSplit} passPlan={passPlan} currentVersion={activeVersion} onChanged={refreshSoon} />
+            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} split={modelSplit} passPlan={passPlan} referralConfig={referralConfig} currentVersion={activeVersion} onChanged={refreshSoon} />
           </div>
+        ) : null}
+
+        {activeReferral ? (
+          <section id="referral-share" className={`panel ${s.full}`} aria-labelledby="referral-share-heading">
+            <div className="panel-head">
+              <div className={s.splitHeadMeta}>
+                <h2 id="referral-share-heading">Referral share</h2>
+                <span className={s.programBadge}>{formatReferralShare(activeReferral.shareBps)} of owner share</span>
+              </div>
+              <Link href={`/account${q}`} className="link t-small" data-arrow>Claim referral earnings</Link>
+            </div>
+            <div className="panel-body">
+              {myReferralLink ? (
+                <div className={s.upgradeRow}>
+                  <code className={`mono ${s.upgradeCode}`}>{myReferralLink}</code>
+                  <button
+                    type="button"
+                    className="btn"
+                    data-kind="primary"
+                    data-size="s"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(myReferralLink)
+                      play('copy')
+                      setRefCopied(true)
+                      setTimeout(() => setRefCopied(false), 1800)
+                    }}
+                  >
+                    {refCopied ? 'Copied' : 'Copy referral link'}
+                  </button>
+                </div>
+              ) : (
+                <p className="t-small dim">
+                  Connect your wallet to copy a <span className="mono">?ref=&lt;wallet&gt;</span> share link and earn {formatReferralShare(activeReferral.shareBps)} of the owner share on every settled call you refer.
+                </p>
+              )}
+              {effectiveReferrer ? (
+                <p className="t-small dim" style={{ marginTop: 8 }}>
+                  Active referral: <span className="mono">{short(effectiveReferrer, 6)}</span> receives {formatReferralShare(activeReferral.shareBps)} of the owner share when your call settles.
+                </p>
+              ) : null}
+            </div>
+          </section>
         ) : null}
 
         {passPlan?.active && !perToken ? (() => {

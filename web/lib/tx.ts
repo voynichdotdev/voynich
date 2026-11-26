@@ -117,6 +117,15 @@ export function errorMessage(e: unknown): string {
   if (code === 'INVALID_PASS') {
     return x?.body?.error?.message || 'Pass settings or credit count are outside the active pass plan limits.'
   }
+  if (code === 'REFERRAL_CONFIG_NOT_FOUND') {
+    return x?.body?.error?.message || 'This model does not have an active referral share configured.'
+  }
+  if (code === 'REFERRAL_NOT_FOUND') {
+    return x?.body?.error?.message || 'No referral earnings ledger exists for this model and wallet.'
+  }
+  if (code === 'INVALID_REFERRAL') {
+    return x?.body?.error?.message || 'Referral share must be between 0% and 25% and cannot be self-referred.'
+  }
   if (x?.body?.error?.message) return x.body.error.message
   if (e instanceof TypeError) return 'The API did not answer. Check the connection and try again.'
   if (x?.name === 'ZodError') return 'The API answered in a form this site does not read. Reload the page and try again.'
