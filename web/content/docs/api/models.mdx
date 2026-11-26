@@ -1136,6 +1136,43 @@ Reads the [PassPlan](#passplan) for model `{id}`. Answers `MODEL_NOT_FOUND` or `
 
 Builds [`set_pass_plan`](/docs/program/instructions#setpassplan) as the model owner. Body (`SetPassPlanRequest`): `{ wallet, pricePerCall, minCalls, maxCalls, ttlSlots, active }`. Returns a [Build](/docs/api/transactions#build) with `action: "set_pass_plan"` and `addresses: { model, passPlan }`. Answers `MODEL_NOT_FOUND`, `INVALID_PASS` (`422`), `INSUFFICIENT_FUNDS`, or `SIMULATION_FAILED` if `wallet` is not `model.owner`.
 
+## ReferralConfig
+
+A model's on-chain 52-byte `ReferralConfig` PDA (`["referral-config", model]`) carving up to 25% (`2500` bps) of `owner_amount` to referrers on settled referred calls.
+
+<Fields>
+<Field name="address" type="address" required>
+The `ReferralConfig` PDA address.
+</Field>
+<Field name="model" type="address" required>
+The Model address.
+</Field>
+<Field name="modelName" type="string or null">
+The model's slug name when indexed.
+</Field>
+<Field name="shareBps" type="integer (0 to 2500)" required>
+Percentage of `owner_amount` carved to referrers in basis points.
+</Field>
+<Field name="active" type="boolean" required>
+Whether new calls may currently register a referrer.
+</Field>
+<Field name="updatedSlot" type="slot" required>
+The slot the referral config was last updated in.
+</Field>
+</Fields>
+
+## `GET /v1/models/{id}/referral`
+
+Reads the [ReferralConfig](#referralconfig) for model `{id}`. Answers `MODEL_NOT_FOUND` or `REFERRAL_CONFIG_NOT_FOUND` (`404`) when none is configured.
+
+## `POST /v1/models/{id}/referral/build`
+
+Builds [`set_referral_config`](/docs/program/instructions#setreferralconfig) as the model owner. Body (`SetReferralConfigRequest`): `{ wallet, shareBps, active }`. Returns a [Build](/docs/api/transactions#build) with `action: "set_referral_config"` and `addresses: { model, referralConfig }`. Answers `MODEL_NOT_FOUND`, `INVALID_REFERRAL` (`422`), `INSUFFICIENT_FUNDS`, or `SIMULATION_FAILED`.
+
+## `POST /v1/models/{id}/referral/claim/build`
+
+Builds [`claim_referral`](/docs/program/instructions#claimreferral) to permissionlessly pay `totalEarned - claimed` from the `Referral` PDA directly to `referrer`. Body (`ClaimReferralRequest`): `{ wallet, referrer? }` (`referrer` defaults to `wallet`). Returns a [Build](/docs/api/transactions#build) with `action: "claim_referral"` and `addresses: { model, referral }`. Answers `REFERRAL_NOT_FOUND` (`404`) or `INVALID_REFERRAL` (`422`) when nothing is claimable.
+
 ## Read next
 
 <Cards>

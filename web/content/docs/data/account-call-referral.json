@@ -1,0 +1,38 @@
+[
+  {
+    "field": "call",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Call PDA bound to this referral."
+  },
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The Model called."
+  },
+  {
+    "field": "referrer",
+    "type": "pubkey",
+    "offset": "72",
+    "meaning": "The referrer wallet credited when `call` settles."
+  },
+  {
+    "field": "share_bps",
+    "type": "u16",
+    "offset": "104",
+    "meaning": "Referral share in basis points snapshotted from `ReferralConfig` when the call opened."
+  },
+  {
+    "field": "settled",
+    "type": "bool",
+    "offset": "106",
+    "meaning": "True once `settle_call` or `settle_metered_call` has credited this referral."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "107",
+    "meaning": "The PDA bump."
+  }
+]

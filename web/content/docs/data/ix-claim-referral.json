@@ -1,0 +1,74 @@
+[
+  {
+    "account": "payer",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Anyone paying the transaction fee to release accrued referral balance to `referrer`."
+  },
+  {
+    "account": "referral",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"referral\", referral.model, referral.referrer]`",
+    "is": "The Referral PDA at `[\"referral\", model, referrer]` holding accrued referral earnings."
+  },
+  {
+    "account": "referrer",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The referrer wallet receiving `total_earned - claimed`."
+  },
+  {
+    "account": "referral_escrow",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The Referral PDA's associated token account for `referral.mint`. Only for an SPL mint."
+  },
+  {
+    "account": "referrer_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The referrer's associated token account for `referral.mint`. Only for an SPL mint."
+  },
+  {
+    "account": "token_program",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`",
+    "is": "The SPL Token program. Only for a price in a mint."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

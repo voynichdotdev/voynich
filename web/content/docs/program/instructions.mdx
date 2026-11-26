@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 44 instructions.
+The program has 47 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -494,3 +494,34 @@ Sweeps remaining `pass.escrow_remaining` back to `holder` and marks the `Pass` P
 
 - **Checks.** `pass.status == Open` (`InvalidPass`). `closer` is `pass.holder` (at any slot) or any wallet once `clock.slot > pass.expires_at_slot` or `pass.calls_used == pass.calls_total` (`Unauthorized` / `InvalidPass`). `holder` matches `pass.holder` (`InvalidRecipient`).
 - **Effects.** Returns `pass.escrow_remaining` to `holder` (for SOL directly in lamports; for SPL transferring to `holder_tokens` and closing `pass_escrow`), sets `pass.status = Closed` and `pass.escrow_remaining = 0`, and emits `PassClosed`.
+
+## set_referral_config
+
+Creates, updates, or deactivates a model's 52-byte `ReferralConfig` PDA at `["referral-config", model]`.
+
+<Rows data="ix-set-referral-config-args" />
+
+<Rows data="ix-set-referral-config" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). `share_bps <= MAX_REFERRAL_SHARE_BPS` (`2500`, 25%), and when `active` is true, `share_bps > 0` (`InvalidReferral`).
+- **Effects.** Initializes (if needed, rent paid by `owner`) or updates `ReferralConfig` with `updated_slot = clock.slot` and emits `ReferralConfigUpdated`.
+
+## register_call_referral
+
+Creates a 108-byte `CallReferral` PDA at `["call-referral", call]` and initializes (if needed) the 137-byte `Referral` PDA at `["referral", model, referrer]`. Appended in the same transaction as `open_call` when a caller passes `referrer`.
+
+<Rows data="ix-register-call-referral-args" />
+
+<Rows data="ix-register-call-referral" />
+
+- **Checks.** `caller` matches `call.caller` (`Unauthorized`). `referral_config.active == true`, `call.status == Open`, and `referrer` is neither the default address nor `caller` (no self-referral) (`InvalidReferral`).
+- **Effects.** Writes `CallReferral` snapshotting `referral_config.share_bps`, initializes `Referral` if needed with `mint = model.price_mint`, and emits `CallReferralRegistered`. During `settle_call` or `settle_metered_call`, passing `[call_referral, referral]` (plus `referral_escrow` for SPL) in remaining accounts carves `floor(owner_amount * call_referral.share_bps / 10_000)` into `Referral` and routes `owner_amount - referral_amount` to `Split` (if `model.has_split`) or `model.owner`, emitting `ReferralCredited`.
+
+## claim_referral
+
+Permissionlessly transfers `owed = referral.total_earned - referral.claimed` from a `Referral` PDA directly to `referrer` (SOL lamports or PDA-signed SPL transfer).
+
+<Rows data="ix-claim-referral" />
+
+- **Checks.** `referrer` matches `referral.referrer` (`InvalidRecipient`) and `referral.total_earned > referral.claimed` (`InvalidReferral`). For an SPL mint, `referral_escrow` and `referrer_tokens` match `referral.mint` (`InvalidTokenAccount`).
+- **Effects.** Transfers `owed` to `referrer` (or `referrer_tokens`), sets `referral.claimed = referral.total_earned`, and emits `ReferralClaimed`.

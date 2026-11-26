@@ -264,6 +264,31 @@ const FIELDS = {
     status: '`Open` (`0`) or `Closed` (`1`).',
     bump: 'The PDA bump.',
   },
+  ReferralConfig: {
+    model: 'The Model this referral share configuration belongs to.',
+    share_bps: 'Percentage of `owner_amount` carved to a referrer on settled referred calls, in basis points (at most `MAX_REFERRAL_SHARE_BPS = 2500`, 25%).',
+    active: 'Whether new calls may currently register a referrer against this model.',
+    updated_slot: 'The slot the referral config was last created or updated in.',
+    bump: 'The PDA bump.',
+  },
+  Referral: {
+    model: 'The Model whose settled referred calls accrue into this account.',
+    referrer: 'The referrer wallet receiving accrued referral shares on `claim_referral`.',
+    mint: 'The mint of accrued referral payouts. The default (all-zero) address means native SOL.',
+    total_earned: 'Cumulative base units credited to this referrer for this model across settled referred calls.',
+    claimed: 'Cumulative base units already withdrawn to `referrer` via `claim_referral`.',
+    calls_referred: 'Count of settled referred calls credited into this account.',
+    updated_slot: 'The slot this referral account was last created, credited, or claimed in.',
+    bump: 'The PDA bump.',
+  },
+  CallReferral: {
+    call: 'The Call PDA bound to this referral.',
+    model: 'The Model called.',
+    referrer: 'The referrer wallet credited when `call` settles.',
+    share_bps: 'Referral share in basis points snapshotted from `ReferralConfig` when the call opened.',
+    settled: 'True once `settle_call` or `settle_metered_call` has credited this referral.',
+    bump: 'The PDA bump.',
+  },
 }
 
 const accounts = idl.accounts.map((account) => {
@@ -335,6 +360,9 @@ const SAYS = {
   buy_pass: 'Creates a 154-byte Pass PDA (`["pass", model, holder, nonce_le]`) prepaying `calls_total * pass_plan.price_per_call` in SOL or SPL.',
   open_pass_call: 'Opens a per-call Call signed by `holder`, debiting `pass.price_per_call` from the Pass PDA into Call escrow at the discounted rate.',
   close_pass: 'Sweeps `pass.escrow_remaining` back to `holder` and marks the Pass `Closed`. Callable by `holder` anytime or anyone once expired or exhausted.',
+  set_referral_config: 'Creates or updates a model\'s 52-byte ReferralConfig PDA (`["referral-config", model]`) setting `share_bps` (up to `2500`, 25% of `owner_amount`) and `active`.',
+  register_call_referral: 'Creates a 108-byte CallReferral PDA (`["call-referral", call]`) and initializes (if needed) the 137-byte Referral PDA (`["referral", model, referrer]`) in the same transaction as `open_call`.',
+  claim_referral: 'Permissionlessly transfers `total_earned - claimed` from a Referral PDA (SOL or SPL) directly to `referrer` and sets `claimed = total_earned`.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -596,6 +624,24 @@ const ACCOUNTS = {
     pass_escrow: 'The Pass PDA\'s associated token account. Only for an SPL mint.',
     holder_tokens: 'The holder\'s token account for `mint`. Only for an SPL mint.',
   },
+  set_referral_config: {
+    owner: 'The model\'s owner. Signs and pays the 52-byte ReferralConfig PDA\'s rent on creation.',
+    referral_config: 'The ReferralConfig PDA at `["referral-config", model]`, created if needed or updated in place.',
+  },
+  register_call_referral: {
+    caller: 'The call\'s `caller`. Signs and pays rent for `call_referral` and (on first referral) `referral`.',
+    referral_config: 'The model\'s active ReferralConfig PDA at `["referral-config", model]`.',
+    call: 'The open Call PDA being attributed to `referrer`.',
+    call_referral: 'The 108-byte CallReferral PDA at `["call-referral", call]`, created here.',
+    referral: 'The 137-byte Referral PDA at `["referral", model, referrer]`, initialized if needed.',
+  },
+  claim_referral: {
+    payer: 'Anyone paying the transaction fee to release accrued referral balance to `referrer`.',
+    referral: 'The Referral PDA at `["referral", model, referrer]` holding accrued referral earnings.',
+    referrer: 'The referrer wallet receiving `total_earned - claimed`.',
+    referral_escrow: 'The Referral PDA\'s associated token account for `referral.mint`. Only for an SPL mint.',
+    referrer_tokens: 'The referrer\'s associated token account for `referral.mint`. Only for an SPL mint.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -675,6 +721,10 @@ const EVENTS = {
   PassPurchased: ['buy_pass', 'A caller purchased a prepaid Pass PDA funded with `calls_total * price_per_call`.'],
   PassUsed: ['open_pass_call', 'One prepaid call was debited from a Pass PDA to open a discounted Call.'],
   PassClosed: ['close_pass', 'A Pass PDA was closed and its remaining escrow returned to `holder`.'],
+  ReferralConfigUpdated: ['set_referral_config', 'A model\'s ReferralConfig PDA was created, updated, or deactivated.'],
+  CallReferralRegistered: ['register_call_referral', 'An open Call was attributed to a referrer wallet via a CallReferral PDA.'],
+  ReferralCredited: ['settle_call, settle_metered_call', 'A settled referred call carved `floor(owner_amount * share_bps / 10_000)` into the referrer\'s Referral PDA.'],
+  ReferralClaimed: ['claim_referral', 'Accrued referral balance (`total_earned - claimed`) was paid out to the referrer wallet.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -726,6 +776,7 @@ const RAISED = {
   InvalidBond: 'In `deposit_bond`: `amount_lamports == 0`. In `withdraw_bond`: `amount_lamports == 0` or `amount_lamports > bond.bonded_lamports`. In `refund_call`: a remaining account was passed for slashing that is not the canonical writable `Bond` PDA (`["bond", call.enclave]`) owned by the Voynich program.',
   InvalidBenchmark: 'In `publish_benchmark`: invalid slug `name` (outside 1 to 32 bytes), invalid `dataset_uri` (outside 1 to 160 bytes or bad scheme/whitespace), `sample_count == 0`, `passed_count > sample_count`, `score_bps != floor(passed_count * 10_000 / sample_count)`, `receipts` empty, > 16, or duplicated, or a remaining account that is not a canonical `Receipt` PDA owned by the Voynich program for `model`.',
   InvalidPass: 'In `set_pass_plan`: model is not `PriceUnit::Call`, or when active `price_per_call == 0`, `price_per_call > model.price`, `min_calls == 0`, `max_calls < min_calls`, or `ttl_slots == 0`. In `buy_pass`: plan is inactive, mint mismatch, or `calls_total` outside `min_calls..=max_calls`. In `open_pass_call`: pass is closed, expired, exhausted, mismatched on model/mint, or lacks escrow. In `close_pass`: pass is already closed, or a non-holder tried to close it while still open, unexpired, and unexhausted.',
+  InvalidReferral: 'In `set_referral_config`: `share_bps > MAX_REFERRAL_SHARE_BPS` (`2500`), or `active == true` with `share_bps == 0`. In `register_call_referral`: config inactive, `referrer` is default or equals `caller` (self-referral), or call is not open. In `settle_call` / `settle_metered_call`: malformed referral remaining accounts. In `claim_referral`: zero claimable balance (`total_earned <= claimed`).',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -796,6 +847,9 @@ const API_ERRORS = {
   PASS_PLAN_NOT_FOUND: 'This model has no prepaid pass plan configured.',
   PASS_NOT_FOUND: 'No prepaid pass has this address.',
   INVALID_PASS: 'The pass plan or prepaid pass is invalid, inactive, expired, or exhausted.',
+  REFERRAL_CONFIG_NOT_FOUND: 'This model has no referral share configured.',
+  REFERRAL_NOT_FOUND: 'No referral account exists for this model and referrer.',
+  INVALID_REFERRAL: 'The referral config, call referral, or referral claim is invalid.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

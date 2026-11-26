@@ -1,0 +1,30 @@
+[
+  {
+    "field": "referral",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "referrer",
+    "type": "pubkey"
+  },
+  {
+    "field": "mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "amount",
+    "type": "u64"
+  },
+  {
+    "field": "total_claimed",
+    "type": "u64"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  }
+]

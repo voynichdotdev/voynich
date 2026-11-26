@@ -1,0 +1,22 @@
+[
+  {
+    "field": "referral_config",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "share_bps",
+    "type": "u16"
+  },
+  {
+    "field": "active",
+    "type": "bool"
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64"
+  }
+]

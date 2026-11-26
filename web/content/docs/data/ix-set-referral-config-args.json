@@ -1,0 +1,10 @@
+[
+  {
+    "argument": "share_bps",
+    "type": "u16"
+  },
+  {
+    "argument": "active",
+    "type": "bool"
+  }
+]

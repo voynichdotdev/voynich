@@ -198,6 +198,47 @@ Builds [`open_pass_call`](/docs/program/instructions#openpasscall) debiting one 
 
 Builds [`close_pass`](/docs/program/instructions#closepass) sweeping `escrowRemaining` back to `holder`. Body (`ClosePassRequest`): `{ wallet, pass }` (`wallet` is `holder` anytime, or any closer after `expiresAtSlot` or exhaustion). Returns a [Build](/docs/api/transactions#build) with `action: "close_pass"` and `addresses: { model, pass }`. The protocol's `crank` service automatically sweeps expired (`expiresAtSlot < currentSlot`) or exhausted (`callsUsed >= callsTotal`) open passes every 5 seconds back to `holder` (creating the holder's SPL ATA idempotently when needed).
 
+## Referral
+
+A referrer wallet's accrued referral balance for one model, at PDA `["referral", model, referrer]` (`137` bytes).
+
+<Fields>
+<Field name="address" type="address" required>
+The `Referral` PDA address.
+</Field>
+<Field name="model" type="address" required>
+The Model address.
+</Field>
+<Field name="modelName" type="string or null">
+The model's slug name when indexed.
+</Field>
+<Field name="referrer" type="address" required>
+The referrer wallet receiving payouts on `claim_referral`.
+</Field>
+<Field name="mint" type="address or null" required>
+SPL Token mint, or `null` for SOL.
+</Field>
+<Field name="totalEarned" type="amount" required>
+Cumulative base units credited across settled referred calls.
+</Field>
+<Field name="claimed" type="amount" required>
+Cumulative base units already withdrawn.
+</Field>
+<Field name="claimable" type="amount" required>
+Current withdrawable balance (`totalEarned - claimed`).
+</Field>
+<Field name="callsReferred" type="decimal string" required>
+Count of settled referred calls credited into this account.
+</Field>
+<Field name="updatedSlot" type="slot" required>
+The slot of the latest referral event.
+</Field>
+</Fields>
+
+## `GET /v1/accounts/{wallet}/referrals`
+
+Lists accrued [Referral](#referral) accounts for referrer `{wallet}` (`AccountReferrals`: `{ items, asOf }`).
+
 ## Read next
 
 <Cards>

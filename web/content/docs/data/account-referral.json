@@ -1,0 +1,50 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model whose settled referred calls accrue into this account."
+  },
+  {
+    "field": "referrer",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The referrer wallet receiving accrued referral shares on `claim_referral`."
+  },
+  {
+    "field": "mint",
+    "type": "pubkey",
+    "offset": "72",
+    "meaning": "The mint of accrued referral payouts. The default (all-zero) address means native SOL."
+  },
+  {
+    "field": "total_earned",
+    "type": "u64",
+    "offset": "104",
+    "meaning": "Cumulative base units credited to this referrer for this model across settled referred calls."
+  },
+  {
+    "field": "claimed",
+    "type": "u64",
+    "offset": "112",
+    "meaning": "Cumulative base units already withdrawn to `referrer` via `claim_referral`."
+  },
+  {
+    "field": "calls_referred",
+    "type": "u64",
+    "offset": "120",
+    "meaning": "Count of settled referred calls credited into this account."
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64",
+    "offset": "128",
+    "meaning": "The slot this referral account was last created, credited, or claimed in."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "136",
+    "meaning": "The PDA bump."
+  }
+]

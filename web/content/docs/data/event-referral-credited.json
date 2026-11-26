@@ -1,0 +1,46 @@
+[
+  {
+    "field": "referral",
+    "type": "pubkey"
+  },
+  {
+    "field": "call_referral",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "call",
+    "type": "pubkey"
+  },
+  {
+    "field": "receipt",
+    "type": "pubkey"
+  },
+  {
+    "field": "referrer",
+    "type": "pubkey"
+  },
+  {
+    "field": "mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "amount",
+    "type": "u64"
+  },
+  {
+    "field": "total_earned",
+    "type": "u64"
+  },
+  {
+    "field": "calls_referred",
+    "type": "u64"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  }
+]

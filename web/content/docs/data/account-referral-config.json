@@ -1,0 +1,32 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model this referral share configuration belongs to."
+  },
+  {
+    "field": "share_bps",
+    "type": "u16",
+    "offset": "40",
+    "meaning": "Percentage of `owner_amount` carved to a referrer on settled referred calls, in basis points (at most `MAX_REFERRAL_SHARE_BPS = 2500`, 25%)."
+  },
+  {
+    "field": "active",
+    "type": "bool",
+    "offset": "42",
+    "meaning": "Whether new calls may currently register a referrer against this model."
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64",
+    "offset": "43",
+    "meaning": "The slot the referral config was last created or updated in."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "51",
+    "meaning": "The PDA bump."
+  }
+]

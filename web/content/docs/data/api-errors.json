@@ -195,6 +195,21 @@
     "meaning": "The pass plan or prepaid pass is invalid, inactive, expired, or exhausted."
   },
   {
+    "code": "REFERRAL_CONFIG_NOT_FOUND",
+    "status": "404",
+    "meaning": "This model has no referral share configured."
+  },
+  {
+    "code": "REFERRAL_NOT_FOUND",
+    "status": "404",
+    "meaning": "No referral account exists for this model and referrer."
+  },
+  {
+    "code": "INVALID_REFERRAL",
+    "status": "422",
+    "meaning": "The referral config, call referral, or referral claim is invalid."
+  },
+  {
     "code": "GRANT_REQUIRED",
     "status": "409",
     "meaning": "The enclave holds no live grant for the model."

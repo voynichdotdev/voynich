@@ -175,6 +175,26 @@
     "does": "Build close_pass to return remaining prepaid pass escrow to the holder"
   },
   {
+    "route": "GET /v1/models/{id}/referral",
+    "operation": "modelReferral",
+    "does": "Read the referral share configuration for a model"
+  },
+  {
+    "route": "POST /v1/models/{id}/referral/build",
+    "operation": "setReferralConfig",
+    "does": "Build set_referral_config as the model owner to configure referral share bps (up to 2500)"
+  },
+  {
+    "route": "POST /v1/models/{id}/referral/claim/build",
+    "operation": "claimReferral",
+    "does": "Build claim_referral to withdraw accrued referral earnings to the referrer wallet"
+  },
+  {
+    "route": "GET /v1/accounts/{wallet}/referrals",
+    "operation": "accountReferrals",
+    "does": "List referral earnings and claimable balances for a referrer wallet"
+  },
+  {
     "route": "GET /v1/models/{id}/versions",
     "operation": "modelVersions",
     "does": "List published and uploading versions for a model, newest first"

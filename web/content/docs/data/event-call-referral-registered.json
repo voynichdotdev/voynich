@@ -1,0 +1,30 @@
+[
+  {
+    "field": "call_referral",
+    "type": "pubkey"
+  },
+  {
+    "field": "referral",
+    "type": "pubkey"
+  },
+  {
+    "field": "call",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "referrer",
+    "type": "pubkey"
+  },
+  {
+    "field": "share_bps",
+    "type": "u16"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  }
+]

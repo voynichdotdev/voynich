@@ -264,5 +264,12 @@
     "hex": "`0x1795`",
     "message": "The pass plan or prepaid pass is invalid, inactive, expired, or exhausted.",
     "raisedWhen": "In `set_pass_plan`: model is not `PriceUnit::Call`, or when active `price_per_call == 0`, `price_per_call > model.price`, `min_calls == 0`, `max_calls < min_calls`, or `ttl_slots == 0`. In `buy_pass`: plan is inactive, mint mismatch, or `calls_total` outside `min_calls..=max_calls`. In `open_pass_call`: pass is closed, expired, exhausted, mismatched on model/mint, or lacks escrow. In `close_pass`: pass is already closed, or a non-holder tried to close it while still open, unexpired, and unexhausted."
+  },
+  {
+    "name": "InvalidReferral",
+    "code": "6038",
+    "hex": "`0x1796`",
+    "message": "The referral config, call referral, or referral claim is invalid.",
+    "raisedWhen": "In `set_referral_config`: `share_bps > MAX_REFERRAL_SHARE_BPS` (`2500`), or `active == true` with `share_bps == 0`. In `register_call_referral`: config inactive, `referrer` is default or equals `caller` (self-referral), or call is not open. In `settle_call` / `settle_metered_call`: malformed referral remaining accounts. In `claim_referral`: zero claimable balance (`total_earned <= claimed`)."
   }
 ]

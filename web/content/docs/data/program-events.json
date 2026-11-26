@@ -208,5 +208,29 @@
     "discriminator": "`7a4c4534440a21df`",
     "emittedBy": "`close_pass`",
     "says": "A Pass PDA was closed and its remaining escrow returned to `holder`."
+  },
+  {
+    "event": "ReferralConfigUpdated",
+    "discriminator": "`61678bbe0bd4613a`",
+    "emittedBy": "`set_referral_config`",
+    "says": "A model's ReferralConfig PDA was created, updated, or deactivated."
+  },
+  {
+    "event": "CallReferralRegistered",
+    "discriminator": "`40e0e399d901e1d9`",
+    "emittedBy": "`register_call_referral`",
+    "says": "An open Call was attributed to a referrer wallet via a CallReferral PDA."
+  },
+  {
+    "event": "ReferralCredited",
+    "discriminator": "`a88121e25338db49`",
+    "emittedBy": "`settle_call`, `settle_metered_call`",
+    "says": "A settled referred call carved `floor(owner_amount * share_bps / 10_000)` into the referrer's Referral PDA."
+  },
+  {
+    "event": "ReferralClaimed",
+    "discriminator": "`c36d4dc486e24e6c`",
+    "emittedBy": "`claim_referral`",
+    "says": "Accrued referral balance (`total_earned - claimed`) was paid out to the referrer wallet."
   }
 ]

@@ -26,6 +26,10 @@ Eight read functions read what the API indexes from the chain (none needs a wall
 | `listPasses(wallet?, signal?)` | Prepaid passes held by `wallet` (or the signer's wallet). | [`GET /v1/accounts/{wallet}/passes`](/docs/api/accounts-and-stats#get-v1accountswalletpasses) |
 | `pass(address)` | Handle `{ address, call(input, opts?), refresh(), close() }` for spending or closing a prepaid `Pass`. | [`GET /v1/passes/{address}`](/docs/api/accounts-and-stats#get-v1passesaddress) |
 | `closePass(address, options?)` | Signs `close_pass` and returns `{ pass, transaction }`. | [`POST /v1/passes/close/build`](/docs/api/accounts-and-stats#post-v1passesclosebuild) |
+| `getReferralConfig(modelId, options?)` | The model's `ReferralConfig`, or `null` when none is configured. | [`GET /v1/models/{id}/referral`](/docs/api/models#get-v1modelsidreferral) |
+| `setReferralConfig(modelId, input, options?)` | Signs `set_referral_config` as the model owner and returns the indexed `ReferralConfig`. | [`POST /v1/models/{id}/referral/build`](/docs/api/models#post-v1modelsidreferralbuild) |
+| `listReferrals(wallet?, signal?)` | Accrued referral balances for `wallet` (or the signer's wallet). | [`GET /v1/accounts/{wallet}/referrals`](/docs/api/accounts-and-stats#get-v1accountswalletreferrals) |
+| `claimReferral(modelId, referrer?, options?)` | Signs `claim_referral` and returns `{ referral, transaction }`. | [`POST /v1/models/{id}/referral/claim/build`](/docs/api/models#post-v1modelsidreferralclaimbuild) |
 | `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
 | `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
 | `getBond(enclaveKey, options?)` | The enclave's `OperatorBond`, or `null` when none exists. | [`GET /v1/enclaves/{key}/bond`](/docs/api/enclaves#get-v1enclaveskeybond) |
@@ -152,6 +156,17 @@ const { pass: closed } = await handle.close()
 ```
 
 `getPassPlan(modelId)` reads `GET /v1/models/{id}/pass-plan` and returns `null` on `PASS_PLAN_NOT_FOUND`. `setPassPlan(modelId, input)` requires the model owner's signer (`WALLET_REQUIRED`). `buyPass(modelId, callsTotal, opts?)` funds a 154-byte `Pass` PDA at `plan.pricePerCall * callsTotal`. Pass `pass: purchased.address` in `call(modelId, input, { pass })` or use `voynich.pass(address).call(input)` to spend prepaid calls at the discounted rate, and `closePass(address)` (or `handle.close()`) to reclaim any unused escrow.
+
+## Referral shares (`getReferralConfig`, `setReferralConfig`, `listReferrals`, `claimReferral`)
+
+```ts
+const cfg = await voynich.setReferralConfig('sketch-32', { shareBps: 500, active: true })
+const res = await voynich.call('sketch-32', drawing, { referrer: referrerWallet })
+const referrals = await voynich.listReferrals(referrerWallet)
+const { referral } = await voynich.claimReferral('sketch-32', referrerWallet)
+```
+
+`getReferralConfig(modelId)` reads `GET /v1/models/{id}/referral` and returns `null` on `REFERRAL_CONFIG_NOT_FOUND`. `setReferralConfig(modelId, { shareBps, active })` requires the model owner's signer (`shareBps <= 2500`). Passing `referrer` in `call(modelId, input, { referrer })` appends `register_call_referral` in the same transaction as `open_call`, carving `floor(owner_amount * shareBps / 10_000)` to the referrer on settlement (coexisting with `Split`). `claimReferral(modelId, referrer?)` is permissionless and releases `totalEarned - claimed` directly to `referrer`.
 
 ## enclaves and enclave
 

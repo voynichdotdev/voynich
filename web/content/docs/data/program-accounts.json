@@ -18,6 +18,12 @@
     "bytes": ""
   },
   {
+    "account": "CallReferral",
+    "discriminator": "`a4bc0bf2347505ba`",
+    "fields": 6,
+    "bytes": "108"
+  },
+  {
     "account": "Config",
     "discriminator": "`9b0caae01efacc82`",
     "fields": 8,
@@ -76,6 +82,18 @@
     "discriminator": "`279a496a50669199`",
     "fields": 19,
     "bytes": ""
+  },
+  {
+    "account": "Referral",
+    "discriminator": "`1eeb88e06a6b3140`",
+    "fields": 8,
+    "bytes": "137"
+  },
+  {
+    "account": "ReferralConfig",
+    "discriminator": "`6694abeb9453fa8c`",
+    "fields": 5,
+    "bytes": "52"
   },
   {
     "account": "Session",

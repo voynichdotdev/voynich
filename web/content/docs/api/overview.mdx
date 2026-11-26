@@ -190,7 +190,7 @@ The pages for each group of routes list the codes each route adds to these.
 | `/v1/enclaves...`, `/v1/measurements...` | [Enclaves](/docs/api/enclaves) |
 | `/v1/calls/build`, `/v1/calls/{id}`, `/v1/calls/{id}/answer`, `/v1/calls/{id}/pieces`, `/v1/calls/{id}/stream`, `/v1/calls/{id}/stop`, `/v1/calls/{id}/settle/build`, `/v1/calls/{id}/refund/build`, `/v1/receipts/{id}` | [Calls and receipts](/docs/api/calls-and-receipts) |
 | `/v1/bounties...` | [Bounties](/docs/api/bounties) |
-| `/v1/accounts/{wallet}`, `/v1/accounts/{wallet}/sessions`, `/v1/sessions...`, `/v1/accounts/{wallet}/passes`, `/v1/passes...`, `/v1/stats`, `/v1/home` | [Accounts and stats](/docs/api/accounts-and-stats) |
+| `/v1/accounts/{wallet}`, `/v1/accounts/{wallet}/sessions`, `/v1/sessions...`, `/v1/accounts/{wallet}/passes`, `/v1/passes...`, `/v1/accounts/{wallet}/referrals`, `/v1/stats`, `/v1/home` | [Accounts and stats](/docs/api/accounts-and-stats) |
 | `/v1/transactions...` | [Transactions](/docs/api/transactions) |
 | `/v1/calls/{id}/input` | [Relay](/docs/api/relay) |
 
@@ -333,6 +333,8 @@ The object the event is about, whole, as its read route returns it.
 | `benchmark.published` | [BenchmarkRecord](/docs/api/models#benchmarkrecord) | A verifiable receipt-backed Benchmark PDA was published for a model. |
 | `pass_plan.updated` | [PassPlan](/docs/api/models#passplan) | A model's prepaid PassPlan PDA was created, updated, or deactivated. |
 | `pass.updated` | [Pass](/docs/api/accounts-and-stats#pass) | A prepaid Pass PDA was purchased, debited by `open_pass_call`, or closed. |
+| `referral_config.updated` | [ReferralConfig](/docs/api/models#referralconfig) | A model's ReferralConfig PDA was created, updated, or deactivated. |
+| `referral.updated` | [Referral](/docs/api/accounts-and-stats#referral) | A referral balance was registered, credited on settlement, or claimed. |
 | `call.updated` | [Call](/docs/api/calls-and-receipts#call) | A call opened, settled or was refunded. |
 | `call.piece` | [StreamPiece](/docs/api/calls-and-receipts#streampiece) | The enclave signed and emitted one encrypted output piece on a per-token stream. |
 | `call.stream.done` | [CallStreamDone](/docs/api/calls-and-receipts#callstreamdone) | A per-token piece stream completed or failed. |

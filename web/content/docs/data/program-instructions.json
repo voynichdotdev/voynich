@@ -262,5 +262,23 @@
     "arguments": "",
     "signers": "`closer`",
     "does": "Sweeps `pass.escrow_remaining` back to `holder` and marks the Pass `Closed`. Callable by `holder` anytime or anyone once expired or exhausted."
+  },
+  {
+    "instruction": "set_referral_config",
+    "arguments": "`share_bps: u16`, `active: bool`",
+    "signers": "`owner`",
+    "does": "Creates or updates a model's 52-byte ReferralConfig PDA (`[\"referral-config\", model]`) setting `share_bps` (up to `2500`, 25% of `owner_amount`) and `active`."
+  },
+  {
+    "instruction": "register_call_referral",
+    "arguments": "`referrer: pubkey`",
+    "signers": "`caller`",
+    "does": "Creates a 108-byte CallReferral PDA (`[\"call-referral\", call]`) and initializes (if needed) the 137-byte Referral PDA (`[\"referral\", model, referrer]`) in the same transaction as `open_call`."
+  },
+  {
+    "instruction": "claim_referral",
+    "arguments": "",
+    "signers": "`payer`",
+    "does": "Permissionlessly transfers `total_earned - claimed` from a Referral PDA (SOL or SPL) directly to `referrer` and sets `claimed = total_earned`."
   }
 ]
