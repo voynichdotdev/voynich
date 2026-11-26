@@ -93,6 +93,9 @@ model Model {
   split               Split?
   passPlan            PassPlan?
   passes              Pass[]
+  referralConfig      ReferralConfig?
+  referrals           Referral[]
+  callReferrals       CallReferral[]
   benchmarks          Benchmark[]
   versions            ModelVersion[]
   weights             Weights[]
@@ -605,4 +608,45 @@ model Pass {
   @@index([modelAddress, purchasedSlot(sort: Desc)])
   @@index([status, expiresAtSlot])
   @@map("passes")
+}
+
+model ReferralConfig {
+  address      String  @id @db.VarChar(44)
+  modelAddress String  @unique @db.VarChar(44)
+  model        Model   @relation(fields: [modelAddress], references: [address])
+  shareBps     Int
+  active       Boolean @default(true)
+  updatedSlot  BigInt
+
+  @@map("referral_configs")
+}
+
+model Referral {
+  address       String  @id @db.VarChar(44)
+  modelAddress  String  @db.VarChar(44)
+  model         Model   @relation(fields: [modelAddress], references: [address])
+  referrer      String  @db.VarChar(44)
+  mint          String? @db.VarChar(44)
+  totalEarned   Decimal @default(0) @db.Decimal(20, 0)
+  claimed       Decimal @default(0) @db.Decimal(20, 0)
+  callsReferred BigInt  @default(0)
+  updatedSlot   BigInt
+
+  @@unique([modelAddress, referrer])
+  @@index([referrer, updatedSlot(sort: Desc)])
+  @@map("referrals")
+}
+
+model CallReferral {
+  address      String  @id @db.VarChar(44)
+  callAddress  String  @unique @db.VarChar(44)
+  modelAddress String  @db.VarChar(44)
+  model        Model   @relation(fields: [modelAddress], references: [address])
+  referrer     String  @db.VarChar(44)
+  shareBps     Int
+  settled      Boolean @default(false)
+  updatedSlot  BigInt
+
+  @@index([modelAddress, referrer])
+  @@map("call_referrals")
 }

@@ -530,6 +530,48 @@ impl Pass {
     pub const SPACE: usize = 8 + 32 * 3 + 8 * 5 + 4 * 2 + 1 + 1;
 }
 
+pub const MAX_REFERRAL_SHARE_BPS: u16 = 2500;
+
+#[account]
+pub struct ReferralConfig {
+    pub model: Pubkey,
+    pub share_bps: u16,
+    pub active: bool,
+    pub updated_slot: u64,
+    pub bump: u8,
+}
+impl ReferralConfig {
+    pub const SPACE: usize = 8 + 32 + 2 + 1 + 8 + 1;
+}
+
+#[account]
+pub struct Referral {
+    pub model: Pubkey,
+    pub referrer: Pubkey,
+    pub mint: Pubkey,
+    pub total_earned: u64,
+    pub claimed: u64,
+    pub calls_referred: u64,
+    pub updated_slot: u64,
+    pub bump: u8,
+}
+impl Referral {
+    pub const SPACE: usize = 8 + 32 * 3 + 8 * 4 + 1;
+}
+
+#[account]
+pub struct CallReferral {
+    pub call: Pubkey,
+    pub model: Pubkey,
+    pub referrer: Pubkey,
+    pub share_bps: u16,
+    pub settled: bool,
+    pub bump: u8,
+}
+impl CallReferral {
+    pub const SPACE: usize = 8 + 32 * 3 + 2 + 1 + 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -922,5 +964,48 @@ mod tests {
         pass.try_serialize(&mut pass_buf).unwrap();
         assert_eq!(Pass::SPACE, 154);
         assert_eq!(pass_buf.len(), Pass::SPACE);
+    }
+
+    #[test]
+    fn worst_case_referral_accounts_fit_within_space() {
+        let cfg = ReferralConfig {
+            model: Pubkey::new_unique(),
+            share_bps: MAX_REFERRAL_SHARE_BPS,
+            active: true,
+            updated_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut cfg_buf = Vec::new();
+        cfg.try_serialize(&mut cfg_buf).unwrap();
+        assert_eq!(ReferralConfig::SPACE, 52);
+        assert_eq!(cfg_buf.len(), ReferralConfig::SPACE);
+
+        let r = Referral {
+            model: Pubkey::new_unique(),
+            referrer: Pubkey::new_unique(),
+            mint: Pubkey::new_unique(),
+            total_earned: u64::MAX,
+            claimed: u64::MAX,
+            calls_referred: u64::MAX,
+            updated_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut r_buf = Vec::new();
+        r.try_serialize(&mut r_buf).unwrap();
+        assert_eq!(Referral::SPACE, 137);
+        assert_eq!(r_buf.len(), Referral::SPACE);
+
+        let cr = CallReferral {
+            call: Pubkey::new_unique(),
+            model: Pubkey::new_unique(),
+            referrer: Pubkey::new_unique(),
+            share_bps: MAX_REFERRAL_SHARE_BPS,
+            settled: true,
+            bump: 255,
+        };
+        let mut cr_buf = Vec::new();
+        cr.try_serialize(&mut cr_buf).unwrap();
+        assert_eq!(CallReferral::SPACE, 108);
+        assert_eq!(cr_buf.len(), CallReferral::SPACE);
     }
 }

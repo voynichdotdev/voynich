@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { PublicKey, type Connection } from '@solana/web3.js'
-import { decodeManifest, type AccountPasses, type AttestationRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Pass, type PassPlan, type Receipt, type ModelQuery } from '@voynich/contract'
+import { decodeManifest, type AccountPasses, type AccountReferrals, type AttestationRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Pass, type PassPlan, type Receipt, type Referral, type ReferralConfig, type ModelQuery } from '@voynich/contract'
 import { toBase64 } from 'voynich/crypto'
 import { fail } from './errors.js'
 
@@ -487,5 +487,52 @@ export class ReadModel {
       include: { model: { select: { name: true } } },
     })
     return { items: rows.map(row => this.passRow(row)), asOf: new Date().toISOString() }
+  }
+  referralConfigRow(row: Prisma.ReferralConfigGetPayload<{ include: { model: { select: { name: true } } } }>): ReferralConfig {
+    return {
+      address: row.address,
+      model: row.modelAddress,
+      modelName: row.model.name,
+      shareBps: row.shareBps,
+      active: row.active,
+      updatedSlot: String(row.updatedSlot),
+    }
+  }
+  async modelReferral(id: string): Promise<ReferralConfig> {
+    const resolved = await this.db.model.findFirst({ where: { OR: [{ address: id }, { name: id }] }, select: { address: true } })
+    if (!resolved) fail('MODEL_NOT_FOUND', 'This model was not found.')
+    const row = await this.db.referralConfig.findUnique({ where: { modelAddress: resolved.address }, include: { model: { select: { name: true } } } })
+    if (!row) fail('REFERRAL_CONFIG_NOT_FOUND', 'No referral configuration is set for this model.')
+    return this.referralConfigRow(row)
+  }
+  referralRow(row: Prisma.ReferralGetPayload<{ include: { model: { select: { name: true } } } }>): Referral {
+    const totalEarned = BigInt(row.totalEarned.toFixed(0))
+    const claimed = BigInt(row.claimed.toFixed(0))
+    const claimable = totalEarned > claimed ? totalEarned - claimed : 0n
+    return {
+      address: row.address,
+      model: row.modelAddress,
+      modelName: row.model.name,
+      referrer: row.referrer,
+      mint: row.mint,
+      totalEarned: String(totalEarned),
+      claimed: String(claimed),
+      claimable: String(claimable),
+      callsReferred: String(row.callsReferred),
+      updatedSlot: String(row.updatedSlot),
+    }
+  }
+  async referral(address: string): Promise<Referral> {
+    const row = await this.db.referral.findUnique({ where: { address }, include: { model: { select: { name: true } } } })
+    if (!row) fail('REFERRAL_NOT_FOUND', 'This referral account was not found.')
+    return this.referralRow(row)
+  }
+  async accountReferrals(wallet: string): Promise<AccountReferrals> {
+    const rows = await this.db.referral.findMany({
+      where: { referrer: wallet },
+      orderBy: [{ updatedSlot: 'desc' }, { address: 'asc' }],
+      include: { model: { select: { name: true } } },
+    })
+    return { items: rows.map(row => this.referralRow(row)), asOf: new Date().toISOString() }
   }
 }

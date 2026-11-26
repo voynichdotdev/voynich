@@ -6730,3 +6730,132 @@ test('Build 15 Step 2: crank buildExpiredPassCloseInstructions (SOL & SPL) + com
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 16 Step 1: ReferralConfig/Referral/CallReferral PDA helpers, decoders, offline tx builders, fixture routes, and SDK referral methods', async () => {
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const {
+    REFERRAL_CONFIG_SPACE, REFERRAL_SPACE, CALL_REFERRAL_SPACE, MAX_REFERRAL_SHARE_BPS,
+    addresses, referralConfigPda, referralPda, callReferralPda,
+    decodeReferralConfigAccount, decodeReferralAccount, decodeCallReferralAccount,
+    buildSetReferralConfigTx, buildRegisterCallReferralTx, buildClaimReferralTx,
+  } = await import('../sdk/src/program.js')
+  const { SetReferralConfigRequest } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { sha256, utf8 } = await import('voynich/crypto')
+  const { createVoynich } = await import('../sdk/src/client.js')
+  const { buildApp } = await import('../src/app.js')
+
+  assert.equal(MAX_REFERRAL_SHARE_BPS, 2500)
+  assert.equal(REFERRAL_CONFIG_SPACE, 52)
+  assert.equal(REFERRAL_SPACE, 137)
+  assert.equal(CALL_REFERRAL_SPACE, 108)
+  const modelKey = Keypair.generate().publicKey
+  const ownerKey = Keypair.generate().publicKey
+  const referrerKey = Keypair.generate().publicKey
+  const callKey = Keypair.generate().publicKey
+  assert(referralConfigPda(modelKey).equals(addresses().referralConfig(modelKey)))
+  assert(referralPda(modelKey, referrerKey).equals(addresses().referral(modelKey, referrerKey)))
+  assert(callReferralPda(callKey).equals(addresses().callReferral(callKey)))
+
+  // 1. decodeReferralConfigAccount
+  const cfgBuf = Buffer.alloc(REFERRAL_CONFIG_SPACE)
+  Buffer.from(sha256(utf8('account:ReferralConfig')).subarray(0, 8)).copy(cfgBuf, 0)
+  let off = 8
+  modelKey.toBuffer().copy(cfgBuf, off); off += 32
+  cfgBuf.writeUInt16LE(500, off); off += 2
+  cfgBuf[off++] = 1
+  cfgBuf.writeBigUInt64LE(474600000n, off); off += 8
+  cfgBuf[off++] = 254
+  assert.equal(off, REFERRAL_CONFIG_SPACE)
+  const decCfg = decodeReferralConfigAccount(cfgBuf)
+  assert(decCfg.model.equals(modelKey))
+  assert.equal(decCfg.shareBps, 500)
+  assert.equal(decCfg.active, true)
+  assert.equal(decCfg.bump, 254)
+
+  // 2. decodeReferralAccount
+  const refBuf = Buffer.alloc(REFERRAL_SPACE)
+  Buffer.from(sha256(utf8('account:Referral')).subarray(0, 8)).copy(refBuf, 0)
+  off = 8
+  modelKey.toBuffer().copy(refBuf, off); off += 32
+  referrerKey.toBuffer().copy(refBuf, off); off += 32
+  PublicKey.default.toBuffer().copy(refBuf, off); off += 32
+  refBuf.writeBigUInt64LE(400_000n, off); off += 8
+  refBuf.writeBigUInt64LE(100_000n, off); off += 8
+  refBuf.writeBigUInt64LE(3n, off); off += 8
+  refBuf.writeBigUInt64LE(474600100n, off); off += 8
+  refBuf[off++] = 253
+  assert.equal(off, REFERRAL_SPACE)
+  const decRef = decodeReferralAccount(refBuf)
+  assert(decRef.model.equals(modelKey))
+  assert(decRef.referrer.equals(referrerKey))
+  assert.equal(decRef.totalEarned.toString(), '400000')
+  assert.equal(decRef.claimed.toString(), '100000')
+  assert.equal(decRef.callsReferred.toString(), '3')
+
+  // 3. decodeCallReferralAccount
+  const crBuf = Buffer.alloc(CALL_REFERRAL_SPACE)
+  Buffer.from(sha256(utf8('account:CallReferral')).subarray(0, 8)).copy(crBuf, 0)
+  off = 8
+  callKey.toBuffer().copy(crBuf, off); off += 32
+  modelKey.toBuffer().copy(crBuf, off); off += 32
+  referrerKey.toBuffer().copy(crBuf, off); off += 32
+  crBuf.writeUInt16LE(500, off); off += 2
+  crBuf[off++] = 1
+  crBuf[off++] = 252
+  assert.equal(off, CALL_REFERRAL_SPACE)
+  const decCr = decodeCallReferralAccount(crBuf)
+  assert(decCr.call.equals(callKey))
+  assert(decCr.referrer.equals(referrerKey))
+  assert.equal(decCr.shareBps, 500)
+  assert.equal(decCr.settled, true)
+
+  // 4. Offline tx builders & schema validation
+  const dummyConn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const bh = Keypair.generate().publicKey.toBase58()
+  assert.equal((await buildSetReferralConfigTx({ connection: dummyConn, owner: ownerKey, model: modelKey, shareBps: 500, active: true, recentBlockhash: bh })).message.compiledInstructions.length, 1)
+  assert.equal((await buildRegisterCallReferralTx({ connection: dummyConn, caller: ownerKey, model: modelKey, call: callKey, referrer: referrerKey, recentBlockhash: bh })).message.compiledInstructions.length, 1)
+  assert.equal((await buildClaimReferralTx({ connection: dummyConn, payer: referrerKey, model: modelKey, referrer: referrerKey, recentBlockhash: bh })).message.compiledInstructions.length, 1)
+  assert.equal(SetReferralConfigRequest.safeParse({ wallet: ownerKey.toBase58(), shareBps: 2501, active: true }).success, false)
+  assert.equal(SetReferralConfigRequest.safeParse({ wallet: ownerKey.toBase58(), shareBps: 0, active: true }).success, false)
+
+  // 5. Fixture API + SDK getReferralConfig / setReferralConfig / call({ referrer }) / listReferrals / claimReferral
+  const app = buildApp()
+  const makeSdk = (wallet: string) => {
+    const signer = {
+      publicKey: new PublicKey(wallet),
+      async signTransaction(vtx: import('@solana/web3.js').VersionedTransaction) { return vtx },
+    }
+    const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = new Request(input, init)
+      const headers = new Headers(req.headers)
+      headers.set('X-Fixture-Session', 'referral-test-session')
+      return app.request(new Request(req, { headers }))
+    }) as typeof fetch
+    return createVoynich({ apiUrl: 'http://localhost', signer, fetch: fetchFixture, pollMs: 5 })
+  }
+
+  const ownerSdk = makeSdk(FIXTURE.owner)
+  const callerSdk = makeSdk(FIXTURE.caller)
+  const refWallet = Keypair.generate().publicKey.toBase58()
+  const refSdk = makeSdk(refWallet)
+
+  assert.equal(await callerSdk.getReferralConfig('sketch-32'), null)
+  const cfg = await ownerSdk.setReferralConfig('sketch-32', { shareBps: 500, active: true })
+  assert.equal(cfg.shareBps, 500)
+  assert.equal(cfg.active, true)
+
+  const callRes = await callerSdk.call('sketch-32', new Array<number>(784).fill(0), { answerMode: 'open', referrer: refWallet })
+  const expectedRef = (BigInt(callRes.receipt.payments.owner.amount) * 500n) / 10000n
+  assert(expectedRef > 0n)
+
+  const list = await refSdk.listReferrals()
+  assert.equal(list.items.length, 1)
+  assert.equal(list.items[0]!.totalEarned, String(expectedRef))
+  assert.equal(list.items[0]!.claimable, String(expectedRef))
+  assert.equal(list.items[0]!.callsReferred, '1')
+
+  const claimed = await refSdk.claimReferral('sketch-32')
+  assert.equal(claimed.referral.claimed, String(expectedRef))
+  assert.equal(claimed.referral.claimable, '0')
+})

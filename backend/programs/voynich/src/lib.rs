@@ -60,4 +60,7 @@ pub mod voynich {
     pub fn buy_pass(ctx: Context<BuyPass>, nonce: u64, calls_total: u32) -> Result<()> { handlers::buy_pass(ctx, nonce, calls_total) }
     pub fn open_pass_call(ctx: Context<OpenPassCall>, nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>) -> Result<()> { handlers::open_pass_call(ctx, nonce, input_hash, answer_mode, callback) }
     pub fn close_pass(ctx: Context<ClosePass>) -> Result<()> { handlers::close_pass(ctx) }
+    pub fn set_referral_config(ctx: Context<SetReferralConfig>, share_bps: u16, active: bool) -> Result<()> { handlers::set_referral_config(ctx, share_bps, active) }
+    pub fn register_call_referral(ctx: Context<RegisterCallReferral>, referrer: Pubkey) -> Result<()> { handlers::register_call_referral(ctx, referrer) }
+    pub fn claim_referral(ctx: Context<ClaimReferral>) -> Result<()> { handlers::claim_referral(ctx) }
 }

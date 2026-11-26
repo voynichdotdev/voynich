@@ -2777,4 +2777,125 @@ test('Voynich program flows on the supplied local validator', { timeout: 240_000
     assert.equal(decPassClosed.status, 'closed')
     assert.equal(decPassClosed.escrowRemaining.toString(), '0')
   })
+
+  await t.test('Build 16 Step 1: ReferralConfig + Split active together: settle_call routes exact referral + split + operator + protocol lamports and claim_referral pays referrer', async () => {
+    const {
+      REFERRAL_CONFIG_SPACE, REFERRAL_SPACE, CALL_REFERRAL_SPACE,
+      referralConfigPda, referralPda, callReferralPda, splitPda,
+      decodeReferralConfigAccount, decodeReferralAccount, decodeCallReferralAccount, decodeSplitAccount,
+    } = await import('../sdk/src/program.js')
+    await refresh(first)
+    const refModel = await createModel('ref-split-model')
+    await uploadAndSeal(refModel)
+    await execute([await ownerGrant(refModel, first)], [owner])
+
+    // 1. Configure 2-way Split (6000/4000) AND 5% (500 bps) ReferralConfig on refModel
+    const splitR1 = Keypair.generate().publicKey
+    const splitR2 = Keypair.generate().publicKey
+    const splitKey = splitPda(refModel.address, voynich.programId)
+    await execute([await voynich.methods.setSplit([
+      { wallet: splitR1, shareBps: 6000 },
+      { wallet: splitR2, shareBps: 4000 },
+    ]).accountsStrict({
+      owner: owner.publicKey, model: refModel.address, split: splitKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [owner])
+
+    const cfgKey = referralConfigPda(refModel.address, voynich.programId)
+    // Reject > 2500 bps
+    await assert.rejects(
+      execute([await voynich.methods.setReferralConfig(2501, true).accountsStrict({
+        owner: owner.publicKey, model: refModel.address, referralConfig: cfgKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [owner]),
+      /InvalidReferral/,
+    )
+    await execute([await voynich.methods.setReferralConfig(500, true).accountsStrict({
+      owner: owner.publicKey, model: refModel.address, referralConfig: cfgKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [owner])
+
+    const cfgInfo = await connection.getAccountInfo(cfgKey, 'confirmed')
+    assert.equal(cfgInfo?.data.length, REFERRAL_CONFIG_SPACE)
+    const decCfg = decodeReferralConfigAccount(cfgInfo!.data)
+    assert.equal(decCfg.shareBps, 500)
+    assert.equal(decCfg.active, true)
+
+    // 2. Open call + register_call_referral in the SAME transaction
+    const referrer = Keypair.generate()
+    const callData = callArgs(refModel)
+    const openIx = await openInstruction(callData)
+    const callRefKey = callReferralPda(callData.address, voynich.programId)
+    const refKey = referralPda(refModel.address, referrer.publicKey, voynich.programId)
+    const regIx = await voynich.methods.registerCallReferral(referrer.publicKey).accountsStrict({
+      caller: caller.publicKey, model: refModel.address, referralConfig: cfgKey,
+      call: callData.address, callReferral: callRefKey, referral: refKey,
+      systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()
+    await execute([openIx, regIx], [caller])
+
+    const crInfo0 = await connection.getAccountInfo(callRefKey, 'confirmed')
+    assert.equal(crInfo0?.data.length, CALL_REFERRAL_SPACE)
+    assert.equal(decodeCallReferralAccount(crInfo0!.data).settled, false)
+    const refInfo0 = await connection.getAccountInfo(refKey, 'confirmed')
+    assert.equal(refInfo0?.data.length, REFERRAL_SPACE)
+
+    // 3. Settle call with BOTH Split PDA and CallReferral + Referral in remainingAccounts!
+    const outputHash = sha256(utf8('ref-split-out'))
+    const sig = signReceipt(first.signing.secretKey.subarray(0, 32), callData.address.toBytes(), callData.inputHash, outputHash)
+    const verifyIx = Ed25519Program.createInstructionWithPublicKey({
+      publicKey: first.signing.publicKey.toBytes(),
+      message: receiptMessage(callData.address.toBytes(), callData.inputHash, outputHash),
+      signature: sig,
+    })
+    const receiptAddr = pda(voynich.programId, utf8('receipt'), callData.address.toBytes())
+    const settleIx = await voynich.methods.settleCall([...outputHash], [...sig], 0, Buffer.alloc(0)).accountsStrict({
+      payer: admin.publicKey, config, model: refModel.address, enclave: first.address, attestationRecord: first.record,
+      call: callData.address, receipt: receiptAddr, caller: caller.publicKey, owner: owner.publicKey, operator: first.operator.publicKey,
+      feeRecipient: feeRecipient.publicKey, instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+      escrowTokens: null, ownerTokens: null, operatorTokens: null, protocolTokens: null, callerTokens: null, tokenProgram: null,
+      systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).remainingAccounts([
+      { pubkey: splitKey, isWritable: true, isSigner: false },
+      { pubkey: callRefKey, isWritable: true, isSigner: false },
+      { pubkey: refKey, isWritable: true, isSigner: false },
+    ]).instruction()
+    const settleTx = await transaction(await execute([verifyIx, settleIx], []))
+
+    const expectedOp = (PRICE * BigInt(OPERATOR_BPS)) / 10_000n
+    const expectedProto = (PRICE * BigInt(PROTOCOL_BPS)) / 10_000n
+    const expectedOwnerGross = PRICE - expectedOp - expectedProto
+    const expectedRef = (expectedOwnerGross * 500n) / 10_000n
+    const expectedSplitNet = expectedOwnerGross - expectedRef
+
+    assert.equal(solChange(settleTx, first.operator.publicKey), expectedOp)
+    assert.equal(solChange(settleTx, feeRecipient.publicKey), expectedProto)
+    assert.equal(solChange(settleTx, splitKey), expectedSplitNet)
+    assert.equal(solChange(settleTx, refKey), expectedRef)
+
+    const decSplit = decodeSplitAccount((await connection.getAccountInfo(splitKey, 'confirmed'))!.data)
+    assert.equal(decSplit.totalReceived.toString(), expectedSplitNet.toString())
+    const decRef1 = decodeReferralAccount((await connection.getAccountInfo(refKey, 'confirmed'))!.data)
+    assert.equal(decRef1.totalEarned.toString(), expectedRef.toString())
+    assert.equal(decRef1.callsReferred.toString(), '1')
+    assert.equal(decodeCallReferralAccount((await connection.getAccountInfo(callRefKey, 'confirmed'))!.data).settled, true)
+
+    // 4. Permissionless claim_referral pays referrer exact lamports (even when submitted by admin!)
+    // Fund referrer with rent-exempt minimum first so transfer of expectedRef lands cleanly on fresh wallet
+    await execute([SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: referrer.publicKey, lamports: 1_000_000 })], [])
+    const claimTx = await transaction(await execute([await voynich.methods.claimReferral().accountsStrict({
+      payer: admin.publicKey, referral: refKey, referrer: referrer.publicKey,
+      referralEscrow: null, referrerTokens: null, tokenProgram: null, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], []))
+    assert.equal(solChange(claimTx, referrer.publicKey), expectedRef)
+
+    const decRef2 = decodeReferralAccount((await connection.getAccountInfo(refKey, 'confirmed'))!.data)
+    assert.equal(decRef2.claimed.toString(), expectedRef.toString())
+
+    // 5. Double claim rejected with InvalidReferral
+    await assert.rejects(
+      execute([await voynich.methods.claimReferral().accountsStrict({
+        payer: admin.publicKey, referral: refKey, referrer: referrer.publicKey,
+        referralEscrow: null, referrerTokens: null, tokenProgram: null, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], []),
+      /InvalidReferral/,
+    )
+  })
 })

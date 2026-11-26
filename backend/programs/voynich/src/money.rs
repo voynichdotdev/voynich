@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*, system_program};
 use anchor_spl::{associated_token, token::{self, CloseAccount, Token, TokenAccount, Transfer}};
-use crate::{contexts::{BuyPass, ClaimSplit, ClosePass, CloseSession, DepositBond, OpenCall, OpenPassCall, OpenSession, OpenSessionCall, RefundCall, SettleCall, SettleMeteredCall, WithdrawBond}, errors::VoynichError, state::{Call, Pass, Session}};
+use crate::{contexts::{BuyPass, ClaimReferral, ClaimSplit, ClosePass, CloseSession, DepositBond, OpenCall, OpenPassCall, OpenSession, OpenSessionCall, RefundCall, SettleCall, SettleMeteredCall, WithdrawBond}, errors::VoynichError, state::{Call, Pass, Session}};
 
 fn token_account(account: &Account<TokenAccount>, owner: Pubkey, mint: Pubkey, associated: bool) -> Result<()> {
     require_keys_eq!(account.owner, owner, VoynichError::InvalidTokenAccount);
@@ -67,6 +67,7 @@ pub fn settle<'info>(
     operator_amount: u64,
     protocol_amount: u64,
     split_target: Option<(&'info AccountInfo<'info>, Option<&'info AccountInfo<'info>>)>,
+    referral_target: Option<(&'info AccountInfo<'info>, Option<&'info AccountInfo<'info>>, u64)>,
 ) -> Result<()> {
     let call = &ctx.accounts.call;
     require_keys_eq!(ctx.accounts.owner.key(), call.owner, VoynichError::InvalidRecipient);
@@ -78,6 +79,11 @@ pub fn settle<'info>(
             native(&call.to_account_info(), split_info, owner_amount)?;
         } else {
             native(&call.to_account_info(), &ctx.accounts.owner.to_account_info(), owner_amount)?;
+        }
+        if let Some((ref_info, _, ref_amount)) = referral_target {
+            if ref_amount > 0 {
+                native(&call.to_account_info(), ref_info, ref_amount)?;
+            }
         }
         native(&call.to_account_info(), &ctx.accounts.operator.to_account_info(), operator_amount)?;
         native(&call.to_account_info(), &ctx.accounts.fee_recipient.to_account_info(), protocol_amount)?;
@@ -102,6 +108,14 @@ pub fn settle<'info>(
         } else {
             transfer_tokens(program, call, escrow, owner, owner_amount)?;
         }
+        if let Some((ref_info, ref_ata_opt, ref_amount)) = referral_target {
+            if ref_amount > 0 {
+                let ref_ata_info = ref_ata_opt.ok_or(VoynichError::InvalidReferral)?;
+                let ref_ata = Account::<TokenAccount>::try_from(ref_ata_info).map_err(|_| error!(VoynichError::InvalidReferral))?;
+                token_account(&ref_ata, ref_info.key(), call.price_mint, true)?;
+                transfer_tokens(program, call, escrow, &ref_ata, ref_amount)?;
+            }
+        }
         transfer_tokens(program, call, escrow, operator, operator_amount)?;
         transfer_tokens(program, call, escrow, protocol, protocol_amount)?;
         // Unsolicited deposits cannot prevent settlement or strand a token balance.
@@ -119,6 +133,7 @@ pub fn settle_metered<'info>(
     protocol_amount: u64,
     returned_amount: u64,
     split_target: Option<(&'info AccountInfo<'info>, Option<&'info AccountInfo<'info>>)>,
+    referral_target: Option<(&'info AccountInfo<'info>, Option<&'info AccountInfo<'info>>, u64)>,
 ) -> Result<()> {
     let call = &ctx.accounts.call;
     require_keys_eq!(ctx.accounts.owner.key(), call.owner, VoynichError::InvalidRecipient);
@@ -130,6 +145,11 @@ pub fn settle_metered<'info>(
             native(&call.to_account_info(), split_info, owner_amount)?;
         } else {
             native(&call.to_account_info(), &ctx.accounts.owner.to_account_info(), owner_amount)?;
+        }
+        if let Some((ref_info, _, ref_amount)) = referral_target {
+            if ref_amount > 0 {
+                native(&call.to_account_info(), ref_info, ref_amount)?;
+            }
         }
         native(&call.to_account_info(), &ctx.accounts.operator.to_account_info(), operator_amount)?;
         native(&call.to_account_info(), &ctx.accounts.fee_recipient.to_account_info(), protocol_amount)?;
@@ -155,6 +175,14 @@ pub fn settle_metered<'info>(
             transfer_tokens(program, call, escrow, &split_ata, owner_amount)?;
         } else {
             transfer_tokens(program, call, escrow, owner, owner_amount)?;
+        }
+        if let Some((ref_info, ref_ata_opt, ref_amount)) = referral_target {
+            if ref_amount > 0 {
+                let ref_ata_info = ref_ata_opt.ok_or(VoynichError::InvalidReferral)?;
+                let ref_ata = Account::<TokenAccount>::try_from(ref_ata_info).map_err(|_| error!(VoynichError::InvalidReferral))?;
+                token_account(&ref_ata, ref_info.key(), call.price_mint, true)?;
+                transfer_tokens(program, call, escrow, &ref_ata, ref_amount)?;
+            }
         }
         transfer_tokens(program, call, escrow, operator, operator_amount)?;
         transfer_tokens(program, call, escrow, protocol, protocol_amount)?;
@@ -509,4 +537,33 @@ pub fn close_pass_escrow(ctx: &Context<ClosePass>, remaining: u64) -> Result<u64
         close_pass_tokens(program, pass, escrow, &ctx.accounts.holder.to_account_info())?;
         Ok(amount)
     }
+}
+
+pub fn claim_referral_payout(ctx: &Context<ClaimReferral>, amount: u64) -> Result<()> {
+    let referral = &ctx.accounts.referral;
+    require_keys_eq!(ctx.accounts.referrer.key(), referral.referrer, VoynichError::InvalidRecipient);
+    if referral.mint == Pubkey::default() {
+        native(&referral.to_account_info(), &ctx.accounts.referrer.to_account_info(), amount)?;
+    } else {
+        let program = ctx.accounts.token_program.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let escrow = ctx.accounts.referral_escrow.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let destination = ctx.accounts.referrer_tokens.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        token_account(escrow, referral.key(), referral.mint, true)?;
+        token_account(destination, referral.referrer, referral.mint, false)?;
+        let bump = [referral.bump];
+        let seeds = [b"referral".as_ref(), referral.model.as_ref(), referral.referrer.as_ref(), bump.as_ref()];
+        token::transfer(
+            CpiContext::new_with_signer(
+                program.to_account_info(),
+                Transfer {
+                    from: escrow.to_account_info(),
+                    to: destination.to_account_info(),
+                    authority: referral.to_account_info(),
+                },
+                &[&seeds],
+            ),
+            amount,
+        )?;
+    }
+    Ok(())
 }

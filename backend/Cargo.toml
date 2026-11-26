@@ -3,6 +3,7 @@ members = ["programs/attest", "programs/voynich", "programs/cpi-caller", "progra
 resolver = "2"
 
 [profile.release]
+opt-level = "z"
 overflow-checks = true
 lto = "fat"
 codegen-units = 1

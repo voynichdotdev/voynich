@@ -377,6 +377,113 @@ export type Voynich = {
       ]
     },
     {
+      "name": "claimReferral",
+      "discriminator": [
+        219,
+        247,
+        18,
+        148,
+        63,
+        247,
+        112,
+        198
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "referral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "referral.model",
+                "account": "referral"
+              },
+              {
+                "kind": "account",
+                "path": "referral.referrer",
+                "account": "referral"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referrer",
+          "writable": true
+        },
+        {
+          "name": "referralEscrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "referrerTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claimSplit",
       "discriminator": [
         129,
@@ -3612,6 +3719,209 @@ export type Voynich = {
       "args": []
     },
     {
+      "name": "registerCallReferral",
+      "discriminator": [
+        174,
+        215,
+        251,
+        222,
+        255,
+        143,
+        16,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "call"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referralConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "call.caller",
+                "account": "call"
+              },
+              {
+                "kind": "account",
+                "path": "call.nonce",
+                "account": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "callReferral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  45,
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "arg",
+                "path": "referrer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "referrer",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "registerEnclave",
       "discriminator": [
         212,
@@ -4870,6 +5180,129 @@ export type Voynich = {
       ]
     },
     {
+      "name": "setReferralConfig",
+      "discriminator": [
+        114,
+        36,
+        32,
+        209,
+        207,
+        21,
+        21,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referralConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "shareBps",
+          "type": "u16"
+        },
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "setSplit",
       "discriminator": [
         133,
@@ -5869,6 +6302,19 @@ export type Voynich = {
       ]
     },
     {
+      "name": "callReferral",
+      "discriminator": [
+        164,
+        188,
+        11,
+        242,
+        52,
+        117,
+        5,
+        186
+      ]
+    },
+    {
       "name": "config",
       "discriminator": [
         155,
@@ -5999,6 +6445,32 @@ export type Voynich = {
       ]
     },
     {
+      "name": "referral",
+      "discriminator": [
+        30,
+        235,
+        136,
+        224,
+        106,
+        107,
+        49,
+        64
+      ]
+    },
+    {
+      "name": "referralConfig",
+      "discriminator": [
+        102,
+        148,
+        171,
+        235,
+        148,
+        83,
+        250,
+        140
+      ]
+    },
+    {
       "name": "session",
       "discriminator": [
         243,
@@ -6089,6 +6561,19 @@ export type Voynich = {
         113,
         128,
         51
+      ]
+    },
+    {
+      "name": "callReferralRegistered",
+      "discriminator": [
+        64,
+        224,
+        227,
+        153,
+        217,
+        1,
+        225,
+        217
       ]
     },
     {
@@ -6375,6 +6860,45 @@ export type Voynich = {
         140,
         220,
         27
+      ]
+    },
+    {
+      "name": "referralClaimed",
+      "discriminator": [
+        195,
+        109,
+        77,
+        196,
+        134,
+        226,
+        78,
+        108
+      ]
+    },
+    {
+      "name": "referralConfigUpdated",
+      "discriminator": [
+        97,
+        103,
+        139,
+        190,
+        11,
+        212,
+        97,
+        58
+      ]
+    },
+    {
+      "name": "referralCredited",
+      "discriminator": [
+        168,
+        129,
+        33,
+        226,
+        83,
+        56,
+        219,
+        73
       ]
     },
     {
@@ -6672,6 +7196,11 @@ export type Voynich = {
       "code": 6037,
       "name": "invalidPass",
       "msg": "The pass plan or prepaid pass is invalid, inactive, expired, or exhausted."
+    },
+    {
+      "code": 6038,
+      "name": "invalidReferral",
+      "msg": "The referral config, call referral, or referral claim is invalid."
     }
   ],
   "types": [
@@ -7231,6 +7760,74 @@ export type Voynich = {
           },
           {
             "name": "ceiling",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "callReferral",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "shareBps",
+            "type": "u16"
+          },
+          {
+            "name": "settled",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "callReferralRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "callReferral",
+            "type": "pubkey"
+          },
+          {
+            "name": "referral",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "shareBps",
+            "type": "u16"
+          },
+          {
+            "name": "slot",
             "type": "u64"
           }
         ]
@@ -9382,6 +9979,190 @@ export type Voynich = {
       }
     },
     {
+      "name": "referral",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "totalEarned",
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "u64"
+          },
+          {
+            "name": "callsReferred",
+            "type": "u64"
+          },
+          {
+            "name": "updatedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "referralClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "referral",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "totalClaimed",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "referralConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "shareBps",
+            "type": "u16"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updatedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "referralConfigUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "referralConfig",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "shareBps",
+            "type": "u16"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updatedSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "referralCredited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "referral",
+            "type": "pubkey"
+          },
+          {
+            "name": "callReferral",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "receipt",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "totalEarned",
+            "type": "u64"
+          },
+          {
+            "name": "callsReferred",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "session",
       "type": {
         "kind": "struct",
@@ -10271,6 +11052,113 @@ export const IDL: Voynich = {
           "type": "u32"
         }
       ]
+    },
+    {
+      "name": "claim_referral",
+      "discriminator": [
+        219,
+        247,
+        18,
+        148,
+        63,
+        247,
+        112,
+        198
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "referral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "referral.model",
+                "account": "Referral"
+              },
+              {
+                "kind": "account",
+                "path": "referral.referrer",
+                "account": "Referral"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referrer",
+          "writable": true
+        },
+        {
+          "name": "referral_escrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "referrer_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
     },
     {
       "name": "claim_split",
@@ -13508,6 +14396,209 @@ export const IDL: Voynich = {
       "args": []
     },
     {
+      "name": "register_call_referral",
+      "discriminator": [
+        174,
+        215,
+        251,
+        222,
+        255,
+        143,
+        16,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "call"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referral_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "call.caller",
+                "account": "Call"
+              },
+              {
+                "kind": "account",
+                "path": "call.nonce",
+                "account": "Call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call_referral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  45,
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "call"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "arg",
+                "path": "referrer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "referrer",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "register_enclave",
       "discriminator": [
         212,
@@ -14766,6 +15857,129 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "set_referral_config",
+      "discriminator": [
+        114,
+        36,
+        32,
+        209,
+        207,
+        21,
+        21,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referral_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "share_bps",
+          "type": "u16"
+        },
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "set_split",
       "discriminator": [
         133,
@@ -15765,6 +16979,19 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "CallReferral",
+      "discriminator": [
+        164,
+        188,
+        11,
+        242,
+        52,
+        117,
+        5,
+        186
+      ]
+    },
+    {
       "name": "Config",
       "discriminator": [
         155,
@@ -15895,6 +17122,32 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "Referral",
+      "discriminator": [
+        30,
+        235,
+        136,
+        224,
+        106,
+        107,
+        49,
+        64
+      ]
+    },
+    {
+      "name": "ReferralConfig",
+      "discriminator": [
+        102,
+        148,
+        171,
+        235,
+        148,
+        83,
+        250,
+        140
+      ]
+    },
+    {
       "name": "Session",
       "discriminator": [
         243,
@@ -15985,6 +17238,19 @@ export const IDL: Voynich = {
         113,
         128,
         51
+      ]
+    },
+    {
+      "name": "CallReferralRegistered",
+      "discriminator": [
+        64,
+        224,
+        227,
+        153,
+        217,
+        1,
+        225,
+        217
       ]
     },
     {
@@ -16271,6 +17537,45 @@ export const IDL: Voynich = {
         140,
         220,
         27
+      ]
+    },
+    {
+      "name": "ReferralClaimed",
+      "discriminator": [
+        195,
+        109,
+        77,
+        196,
+        134,
+        226,
+        78,
+        108
+      ]
+    },
+    {
+      "name": "ReferralConfigUpdated",
+      "discriminator": [
+        97,
+        103,
+        139,
+        190,
+        11,
+        212,
+        97,
+        58
+      ]
+    },
+    {
+      "name": "ReferralCredited",
+      "discriminator": [
+        168,
+        129,
+        33,
+        226,
+        83,
+        56,
+        219,
+        73
       ]
     },
     {
@@ -16568,6 +17873,11 @@ export const IDL: Voynich = {
       "code": 6037,
       "name": "InvalidPass",
       "msg": "The pass plan or prepaid pass is invalid, inactive, expired, or exhausted."
+    },
+    {
+      "code": 6038,
+      "name": "InvalidReferral",
+      "msg": "The referral config, call referral, or referral claim is invalid."
     }
   ],
   "types": [
@@ -17127,6 +18437,74 @@ export const IDL: Voynich = {
           },
           {
             "name": "ceiling",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CallReferral",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "settled",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CallReferralRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "call_referral",
+            "type": "pubkey"
+          },
+          {
+            "name": "referral",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "slot",
             "type": "u64"
           }
         ]
@@ -19273,6 +20651,190 @@ export const IDL: Voynich = {
           {
             "name": "caller_is_program",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Referral",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_earned",
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "u64"
+          },
+          {
+            "name": "calls_referred",
+            "type": "u64"
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferralClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "referral",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_claimed",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferralConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferralConfigUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "referral_config",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferralCredited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "referral",
+            "type": "pubkey"
+          },
+          {
+            "name": "call_referral",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "receipt",
+            "type": "pubkey"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_earned",
+            "type": "u64"
+          },
+          {
+            "name": "calls_referred",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
           }
         ]
       }

@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BENCHMARK_SPACE, BN, BOND_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, PASS_PLAN_SPACE, PASS_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePassAccount, decodePassPlanAccount, decodePolicyAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BENCHMARK_SPACE, BN, BOND_SPACE, CALL_REFERRAL_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, PASS_PLAN_SPACE, PASS_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, REFERRAL_CONFIG_SPACE, REFERRAL_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeCallReferralAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePassAccount, decodePassPlanAccount, decodePolicyAccount, decodeReferralAccount, decodeReferralConfigAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -325,7 +325,49 @@ export function builders(runtime: ChainRuntime) {
       const instruction = priceUnit === 'token'
         ? await voynich.methods.openMeteredCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null, bn(escrowAmount)).accountsStrict(accounts).remainingAccounts(policyRemaining).instruction()
         : await voynich.methods.openCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null).accountsStrict(accounts).remainingAccounts(policyRemaining).instruction()
-      return ledger.build('open_call', caller, [instruction], { model: row.key.toBase58(), call: call.toBase58() }, requiredLamports, token ? { mint: row.value.priceMint, account: callerTokens!, amount: escrowAmount } : undefined)
+      const instructions: TransactionInstruction[] = [instruction]
+      const buildAddresses: c.Build['addresses'] = { model: row.key.toBase58(), call: call.toBase58() }
+      if (body.referrer) {
+        const referrer = publicKey(body.referrer)
+        const referralConfig = a.referralConfig(row.key)
+        const cfgInfo = await runtime.rpc.connection.getAccountInfo(referralConfig, 'confirmed')
+        const cfg = cfgInfo && cfgInfo.owner.equals(runtime.programId) ? decodeReferralConfigAccount(cfgInfo.data) : null
+        if (!cfg || !cfg.active || cfg.shareBps <= 0) {
+          fail('INVALID_REFERRAL', 'This model does not have an active referral configuration.', { stage: 'build' })
+        }
+        const callReferral = a.callReferral(call)
+        const referral = a.referral(row.key, referrer)
+        const existingRef = await runtime.rpc.connection.getAccountInfo(referral, 'confirmed')
+        requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(CALL_REFERRAL_SPACE))
+        if (!existingRef) {
+          requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(REFERRAL_SPACE))
+        }
+        instructions.push(
+          await voynich.methods
+            .registerCallReferral(referrer)
+            .accountsStrict({
+              caller,
+              model: row.key,
+              referralConfig,
+              call,
+              callReferral,
+              referral,
+              systemProgram: SystemProgram.programId,
+              ...events,
+            })
+            .instruction(),
+        )
+        if (token) {
+          const refAta = getAssociatedTokenAddressSync(row.value.priceMint, referral, true)
+          if (!await runtime.rpc.connection.getAccountInfo(refAta, 'confirmed')) {
+            requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+            instructions.push(createAssociatedTokenAccountIdempotentInstruction(caller, refAta, referral, row.value.priceMint))
+          }
+        }
+        buildAddresses.callReferral = callReferral.toBase58()
+        buildAddresses.referral = referral.toBase58()
+      }
+      return ledger.build('open_call', caller, instructions, buildAddresses, requiredLamports, token ? { mint: row.value.priceMint, account: callerTokens!, amount: escrowAmount } : undefined)
     },
     async settleMetered(id: string, body: c.SettleCallRequest) {
       const call = publicKey(id), wallet = publicKey(body.wallet)
@@ -362,7 +404,11 @@ export function builders(runtime: ChainRuntime) {
       const ata = (owner: PublicKey) => getAssociatedTokenAddressSync(chainCall.priceMint, owner, true)
       const hasSplit = Boolean((row.value as { hasSplit?: boolean }).hasSplit)
       const splitKey = hasSplit ? a.split(chainCall.model) : null
-      const uniqueOwners = token ? [...new Map([chainCall.owner, chainCall.operator, chainCall.feeRecipient, chainCall.caller, ...(splitKey ? [splitKey] : [])].map(o => [o.toBase58(), o])).values()] : []
+      const callRefKey = a.callReferral(call)
+      const callRefInfo = await runtime.rpc.connection.getAccountInfo(callRefKey, 'confirmed')
+      const chainCallRef = callRefInfo && callRefInfo.owner.equals(runtime.programId) ? decodeCallReferralAccount(callRefInfo.data) : null
+      const refKey = chainCallRef && !chainCallRef.settled ? a.referral(chainCall.model, chainCallRef.referrer) : null
+      const uniqueOwners = token ? [...new Map([chainCall.owner, chainCall.operator, chainCall.feeRecipient, chainCall.caller, ...(splitKey ? [splitKey] : []), ...(refKey ? [refKey] : [])].map(o => [o.toBase58(), o])).values()] : []
       const prepare = uniqueOwners.map(o => createAssociatedTokenAccountIdempotentInstruction(wallet, ata(o), o, chainCall.priceMint))
       let requiredLamports = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(RECEIPT_METERED_SPACE))
       if (uniqueOwners.length) {
@@ -389,6 +435,13 @@ export function builders(runtime: ChainRuntime) {
             ...(token ? [{ pubkey: ata(splitKey), isWritable: true, isSigner: false }] : []),
           ]
         : []
+      const referralRemaining = refKey
+        ? [
+            { pubkey: callRefKey, isWritable: true, isSigner: false },
+            { pubkey: refKey, isWritable: true, isSigner: false },
+            ...(token ? [{ pubkey: ata(refKey), isWritable: true, isSigner: false }] : []),
+          ]
+        : []
       // buildUnsignedV0 prepends exactly 2 ComputeBudget instructions (setComputeUnitLimit, setComputeUnitPrice).
       const ed25519IxIndex = 2 + prepare.length
       const settleIx = await voynich.methods
@@ -403,7 +456,7 @@ export function builders(runtime: ChainRuntime) {
           callerTokens: token ? ata(chainCall.caller) : null, tokenProgram: token ? TOKEN_PROGRAM_ID : null,
           systemProgram: SystemProgram.programId, ...events,
         })
-        .remainingAccounts([...callbackRemaining, ...splitRemaining])
+        .remainingAccounts([...callbackRemaining, ...splitRemaining, ...referralRemaining])
         .instruction()
       return ledger.build('settle_metered_call', wallet, [...prepare, verifyIx, settleIx], { model: chainCall.model.toBase58(), call: id, receipt: receipt.toBase58() }, requiredLamports)
     },
@@ -1170,6 +1223,61 @@ export function builders(runtime: ChainRuntime) {
           .instruction(),
       )
       return ledger.build('close_pass', closer, instructions, { model: chainPass.model.toBase58(), pass: passKey.toBase58() }, requiredLamports)
+    },
+    async setReferralConfig(id: string, body: c.SetReferralConfigRequest) {
+      const row = await model(id)
+      const owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can configure referral shares.', { stage: 'build' })
+      const referralConfig = a.referralConfig(row.key)
+      const existing = await runtime.rpc.connection.getAccountInfo(referralConfig, 'confirmed')
+      const rent = existing ? 0n : BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(REFERRAL_CONFIG_SPACE))
+      const instruction = await voynich.methods
+        .setReferralConfig(body.shareBps, body.active)
+        .accountsStrict({
+          owner,
+          model: row.key,
+          referralConfig,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .instruction()
+      return ledger.build('set_referral_config', owner, [instruction], { model: row.key.toBase58(), referralConfig: referralConfig.toBase58() }, rent)
+    },
+    async claimReferral(id: string, body: c.ClaimReferralRequest) {
+      const row = await model(id)
+      const payer = publicKey(body.wallet)
+      const referrer = publicKey(body.referrer ?? body.wallet)
+      const referral = a.referral(row.key, referrer)
+      const refInfo = await runtime.rpc.connection.getAccountInfo(referral, 'confirmed')
+      const chainRef = refInfo && refInfo.owner.equals(runtime.programId) ? decodeReferralAccount(refInfo.data) : null
+      if (!chainRef) fail('REFERRAL_NOT_FOUND', 'No referral account was found for this model and referrer.')
+      if (BigInt(chainRef.totalEarned.toString()) <= BigInt(chainRef.claimed.toString())) {
+        fail('INVALID_REFERRAL', 'No unclaimed referral balance is available for this referrer.', { stage: 'build' })
+      }
+      const token = !chainRef.mint.equals(PublicKey.default)
+      const referrerTokens = token ? getAssociatedTokenAddressSync(chainRef.mint, referrer, true) : null
+      const instructions: TransactionInstruction[] = []
+      let requiredLamports = 0n
+      if (token && referrerTokens && !await runtime.rpc.connection.getAccountInfo(referrerTokens, 'confirmed')) {
+        requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+        instructions.push(createAssociatedTokenAccountIdempotentInstruction(payer, referrerTokens, referrer, chainRef.mint))
+      }
+      instructions.push(
+        await voynich.methods
+          .claimReferral()
+          .accountsStrict({
+            payer,
+            referral,
+            referrer,
+            referralEscrow: token ? getAssociatedTokenAddressSync(chainRef.mint, referral, true) : null,
+            referrerTokens,
+            tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+            systemProgram: SystemProgram.programId,
+            ...events,
+          })
+          .instruction(),
+      )
+      return ledger.build('claim_referral', payer, instructions, { model: row.key.toBase58(), referral: referral.toBase58() }, requiredLamports)
     },
   }
 }

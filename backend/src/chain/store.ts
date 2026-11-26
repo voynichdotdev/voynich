@@ -780,6 +780,104 @@ export function createApply(attestationProgramId: string) {
           }
           break
         }
+        case 'referralconfigupdated': {
+          const address = text(data, 'referralConfig')
+          const modelAddress = text(data, 'model')
+          const value = {
+            address,
+            modelAddress,
+            shareBps: number(data, 'shareBps'),
+            active: Boolean(data.active),
+            updatedSlot: slot(data, 'updatedSlot'),
+          }
+          await tx.referralConfig.upsert({ where: { address }, create: value, update: value })
+          await notify(tx, 'referral_config.updated', modelAddress)
+          break
+        }
+        case 'callreferralregistered': {
+          const address = text(data, 'callReferral')
+          const referralAddress = text(data, 'referral')
+          const modelAddress = text(data, 'model')
+          const referrer = text(data, 'referrer')
+          const callAddress = text(data, 'call')
+          const value = {
+            address,
+            callAddress,
+            modelAddress,
+            referrer,
+            shareBps: number(data, 'shareBps'),
+            settled: false,
+            updatedSlot: currentSlot,
+          }
+          await tx.callReferral.upsert({ where: { address }, create: value, update: value })
+          const existingRef = await tx.referral.findUnique({ where: { address: referralAddress } })
+          if (!existingRef) {
+            const callRow = await tx.call.findUnique({ where: { address: callAddress }, select: { priceMint: true } })
+            await tx.referral.create({
+              data: {
+                address: referralAddress,
+                modelAddress,
+                referrer,
+                mint: callRow?.priceMint ?? null,
+                totalEarned: new Prisma.Decimal('0'),
+                claimed: new Prisma.Decimal('0'),
+                callsReferred: 0n,
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'referral.updated', referralAddress)
+          }
+          break
+        }
+        case 'referralcredited': {
+          const address = text(data, 'referral')
+          const callReferralAddress = text(data, 'callReferral')
+          const modelAddress = text(data, 'model')
+          const referrer = text(data, 'referrer')
+          const rawMint = text(data, 'mint')
+          const ZERO_KEY = '11111111111111111111111111111111'
+          const mint = rawMint === ZERO_KEY ? null : rawMint
+          await tx.referral.upsert({
+            where: { address },
+            create: {
+              address,
+              modelAddress,
+              referrer,
+              mint,
+              totalEarned: new Prisma.Decimal(text(data, 'totalEarned')),
+              claimed: new Prisma.Decimal('0'),
+              callsReferred: BigInt(text(data, 'callsReferred')),
+              updatedSlot: currentSlot,
+            },
+            update: {
+              mint,
+              totalEarned: new Prisma.Decimal(text(data, 'totalEarned')),
+              callsReferred: BigInt(text(data, 'callsReferred')),
+              updatedSlot: currentSlot,
+            },
+          })
+          await tx.callReferral.updateMany({
+            where: { address: callReferralAddress },
+            data: { settled: true, updatedSlot: currentSlot },
+          })
+          await notify(tx, 'referral.updated', address)
+          break
+        }
+        case 'referralclaimed': {
+          const address = text(data, 'referral')
+          const existing = await tx.referral.findUnique({ where: { address } })
+          if (existing) {
+            await tx.referral.update({
+              where: { address },
+              data: {
+                claimed: new Prisma.Decimal(text(data, 'totalClaimed')),
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'referral.updated', address)
+          }
+          break
+        }
       }
     }
   }

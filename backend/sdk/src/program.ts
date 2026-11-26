@@ -72,6 +72,15 @@ export function passPda(model: Key, holder: Key, nonce: bigint | number | string
   new DataView(bytes.buffer).setBigUint64(0, BigInt(nonce), true)
   return pda(key(programId), utf8('pass'), key(model).toBytes(), key(holder).toBytes(), bytes)
 }
+export function referralConfigPda(model: Key, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('referral-config'), key(model).toBytes())
+}
+export function referralPda(model: Key, referrer: Key, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('referral'), key(model).toBytes(), key(referrer).toBytes())
+}
+export function callReferralPda(call: Key, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('call-referral'), key(call).toBytes())
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -90,6 +99,9 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     benchmark: (model: Key, name: string) => benchmarkPda(model, name, programId),
     passPlan: (model: Key) => passPlanPda(model, programId),
     pass: (model: Key, holder: Key, nonce: bigint | number | string) => passPda(model, holder, nonce, programId),
+    referralConfig: (model: Key) => referralConfigPda(model, programId),
+    referral: (model: Key, referrer: Key) => referralPda(model, referrer, programId),
+    callReferral: (call: Key) => callReferralPda(call, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -1608,5 +1620,188 @@ export async function buildClosePassTx(params: {
   const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
   return new VersionedTransaction(
     new TransactionMessage({ payerKey: closer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export const MAX_REFERRAL_SHARE_BPS = 2500 as const
+export const REFERRAL_CONFIG_SPACE = 52 as const
+export const REFERRAL_SPACE = 137 as const
+export const CALL_REFERRAL_SPACE = 108 as const
+
+export type DecodedReferralConfigAccount = {
+  model: PublicKey
+  shareBps: number
+  active: boolean
+  updatedSlot: BN
+  bump: number
+}
+
+export function decodeReferralConfigAccount(data: Uint8Array): DecodedReferralConfigAccount {
+  if (!matchesDisc(data, 'account:ReferralConfig') || data.length < REFERRAL_CONFIG_SPACE) {
+    throw new Error('Invalid ReferralConfig account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const shareBps = view.getUint16(offset, true); offset += 2
+  const activeByte = data[offset++]!
+  if (activeByte > 1) throw new Error(`Invalid ReferralConfig active flag: ${activeByte}`)
+  const active = activeByte === 1
+  const updatedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const bump = data[offset++]!
+  return { model, shareBps, active, updatedSlot, bump }
+}
+
+export type DecodedReferralAccount = {
+  model: PublicKey
+  referrer: PublicKey
+  mint: PublicKey
+  totalEarned: BN
+  claimed: BN
+  callsReferred: BN
+  updatedSlot: BN
+  bump: number
+}
+
+export function decodeReferralAccount(data: Uint8Array): DecodedReferralAccount {
+  if (!matchesDisc(data, 'account:Referral') || data.length < REFERRAL_SPACE) {
+    throw new Error('Invalid Referral account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const referrer = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const mint = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const totalEarned = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const claimed = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const callsReferred = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const updatedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const bump = data[offset++]!
+  return { model, referrer, mint, totalEarned, claimed, callsReferred, updatedSlot, bump }
+}
+
+export type DecodedCallReferralAccount = {
+  call: PublicKey
+  model: PublicKey
+  referrer: PublicKey
+  shareBps: number
+  settled: boolean
+  bump: number
+}
+
+export function decodeCallReferralAccount(data: Uint8Array): DecodedCallReferralAccount {
+  if (!matchesDisc(data, 'account:CallReferral') || data.length < CALL_REFERRAL_SPACE) {
+    throw new Error('Invalid CallReferral account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const call = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const referrer = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const shareBps = view.getUint16(offset, true); offset += 2
+  const settledByte = data[offset++]!
+  if (settledByte > 1) throw new Error(`Invalid CallReferral settled flag: ${settledByte}`)
+  const settled = settledByte === 1
+  const bump = data[offset++]!
+  return { call, model, referrer, shareBps, settled, bump }
+}
+
+export async function buildSetReferralConfigTx(params: {
+  connection: Connection
+  owner: Key
+  model: Key
+  shareBps: number
+  active: boolean
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const owner = key(params.owner)
+  const model = key(params.model)
+  const referralConfig = referralConfigPda(model, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .setReferralConfig(params.shareBps, params.active)
+    .accountsStrict({
+      owner,
+      model,
+      referralConfig,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: owner, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildRegisterCallReferralTx(params: {
+  connection: Connection
+  caller: Key
+  model: Key
+  call: Key
+  referrer: Key
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const caller = key(params.caller)
+  const model = key(params.model)
+  const call = key(params.call)
+  const referrer = key(params.referrer)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .registerCallReferral(referrer)
+    .accountsStrict({
+      caller,
+      model,
+      referralConfig: referralConfigPda(model, programId),
+      call,
+      callReferral: callReferralPda(call, programId),
+      referral: referralPda(model, referrer, programId),
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: caller, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildClaimReferralTx(params: {
+  connection: Connection
+  payer: Key
+  model: Key
+  referrer?: Key
+  referralEscrow?: Key | null
+  referrerTokens?: Key | null
+  tokenProgram?: Key | null
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const payer = key(params.payer)
+  const model = key(params.model)
+  const referrer = key(params.referrer ?? params.payer)
+  const referral = referralPda(model, referrer, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .claimReferral()
+    .accountsStrict({
+      payer,
+      referral,
+      referrer,
+      referralEscrow: params.referralEscrow ? key(params.referralEscrow) : null,
+      referrerTokens: params.referrerTokens ? key(params.referrerTokens) : null,
+      tokenProgram: params.tokenProgram ? key(params.tokenProgram) : null,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: payer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
   )
 }

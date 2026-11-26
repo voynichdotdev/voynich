@@ -71,6 +71,10 @@ const voynich = {
   listPasses: async (...args: Parameters<Voynich['listPasses']>) => (await load(args[0] === undefined)).listPasses(...args),
   pass: async (...args: Parameters<Voynich['pass']>) => (await load(true)).pass(...args),
   closePass: async (...args: Parameters<Voynich['closePass']>) => (await load(true)).closePass(...args),
+  getReferralConfig: async (...args: Parameters<Voynich['getReferralConfig']>) => (await load()).getReferralConfig(...args),
+  setReferralConfig: async (...args: Parameters<Voynich['setReferralConfig']>) => (await load(true)).setReferralConfig(...args),
+  listReferrals: async (...args: Parameters<Voynich['listReferrals']>) => (await load(args[0] === undefined)).listReferrals(...args),
+  claimReferral: async (...args: Parameters<Voynich['claimReferral']>) => (await load(true)).claimReferral(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

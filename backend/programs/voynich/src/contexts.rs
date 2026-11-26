@@ -493,3 +493,38 @@ pub struct ClosePass<'info> {
     pub token_program: Option<Program<'info, Token>>,
     pub system_program: Program<'info, System>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SetReferralConfig<'info> {
+    #[account(mut)] pub owner: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(init_if_needed, payer = owner, space = ReferralConfig::SPACE, seeds = [b"referral-config", model.key().as_ref()], bump)] pub referral_config: Box<Account<'info, ReferralConfig>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(referrer: Pubkey)]
+pub struct RegisterCallReferral<'info> {
+    #[account(mut)] pub caller: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
+    #[account(seeds = [b"referral-config", model.key().as_ref()], bump = referral_config.bump)] pub referral_config: Box<Account<'info, ReferralConfig>>,
+    #[account(seeds = [b"call", call.caller.as_ref(), &call.nonce.to_le_bytes()], bump = call.bump, has_one = caller @ VoynichError::Unauthorized)] pub call: Box<Account<'info, Call>>,
+    #[account(init, payer = caller, space = CallReferral::SPACE, seeds = [b"call-referral", call.key().as_ref()], bump)] pub call_referral: Box<Account<'info, CallReferral>>,
+    #[account(init_if_needed, payer = caller, space = Referral::SPACE, seeds = [b"referral", model.key().as_ref(), referrer.as_ref()], bump)] pub referral: Box<Account<'info, Referral>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct ClaimReferral<'info> {
+    #[account(mut)] pub payer: Signer<'info>,
+    #[account(mut, seeds = [b"referral", referral.model.as_ref(), referral.referrer.as_ref()], bump = referral.bump)] pub referral: Box<Account<'info, Referral>>,
+    /// CHECK: exact referrer recipient verified against referral.referrer.
+    #[account(mut)] pub referrer: UncheckedAccount<'info>,
+    #[account(mut)] pub referral_escrow: Option<Account<'info, TokenAccount>>,
+    #[account(mut)] pub referrer_tokens: Option<Account<'info, TokenAccount>>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub system_program: Program<'info, System>,
+}

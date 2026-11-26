@@ -41,6 +41,9 @@ export class FixtureState {
   benchmarks: import('@voynich/contract').BenchmarkRecord[] = []
   readonly passPlans = new Map<string, import('@voynich/contract').PassPlan>()
   readonly passes = new Map<string, import('@voynich/contract').Pass>()
+  readonly referralConfigs = new Map<string, import('@voynich/contract').ReferralConfig>()
+  readonly referrals = new Map<string, import('@voynich/contract').Referral>()
+  readonly callReferrals = new Map<string, { referrer: string; shareBps: number; settled: boolean }>()
   readonly versions = new Map<string, import('@voynich/contract').ModelVersion[]>()
   readonly stagedVersions = new Map<string, { version: number; address: string; weights: string[]; sizeBytes: number; noncePrefix: string; manifest: import('@voynich/contract').Manifest; base: import('@voynich/contract').ModelBase | null; bytes: Uint8Array; sealedChunks: number }>()
   readonly sessions = new Map<string, import('@voynich/contract').Session>()
@@ -466,7 +469,31 @@ export class FixtureState {
     call.status = 'settled'; call.receipt = address; call.failure = null
     this.receipts = this.receipts.filter(r => r.call !== call.address); this.receipts.unshift(receipt)
     this.answers.set(call.address, { status: 'answered', call, outputEnvelope, openAnswer, outputHash, signature, settleTransaction: receipt.transactionSignature, receiptAddress: address, failure: null })
-    if (increment) { model.callsSettled = String(BigInt(model.callsSettled) + 1n); enclave.callsSettled = String(BigInt(enclave.callsSettled) + 1n); this.creditSplit(model.address, total - operator - protocol); this.emit('receipt.created', receipt); this.emit('call.updated', call) }
+    if (increment) {
+      model.callsSettled = String(BigInt(model.callsSettled) + 1n)
+      enclave.callsSettled = String(BigInt(enclave.callsSettled) + 1n)
+      let ownerShare = total - operator - protocol
+      const callRef = this.callReferrals.get(call.address)
+      if (callRef && !callRef.settled) {
+        const refAmount = (ownerShare * BigInt(callRef.shareBps)) / 10000n
+        ownerShare -= refAmount
+        callRef.settled = true
+        const refKey = `${model.address}:${callRef.referrer}`
+        const existing = this.referrals.get(refKey)
+        if (existing) {
+          const nextTotal = BigInt(existing.totalEarned) + refAmount
+          const claimed = BigInt(existing.claimed)
+          existing.totalEarned = String(nextTotal)
+          existing.claimable = String(nextTotal - claimed)
+          existing.callsReferred = String(BigInt(existing.callsReferred) + 1n)
+          existing.updatedSlot = String(this.slot)
+          this.emit('referral.updated', existing)
+        }
+      }
+      this.creditSplit(model.address, ownerShare)
+      this.emit('receipt.created', receipt)
+      this.emit('call.updated', call)
+    }
   }
   range(model: Model, offset: number, length: number) {
     if (offset > model.sizeBytes) fail('VALIDATION_ERROR', 'The byte offset exceeds the ciphertext length.', { stage: 'validation', fieldErrors: { offset: ['Outside ciphertext.'] } })

@@ -3,7 +3,7 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.34'
+export const CONTRACT_VERSION = '0.1.35'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
@@ -13,6 +13,7 @@ export const errors = defineErrors({
   BOND_NOT_FOUND: 404, INVALID_BOND: 422,
   BENCHMARK_NOT_FOUND: 404, INVALID_BENCHMARK: 422,
   PASS_PLAN_NOT_FOUND: 404, PASS_NOT_FOUND: 404, INVALID_PASS: 422,
+  REFERRAL_CONFIG_NOT_FOUND: 404, REFERRAL_NOT_FOUND: 404, INVALID_REFERRAL: 422,
   GRANT_REQUIRED: 409, INVALID_QUOTE: 422, INVALID_VERSION: 422, SESSION_NOT_FOUND: 404, INVALID_SESSION: 422, CALL_NOT_FOUND: 404, CALL_NOT_OPEN: 409,
   CALL_NOT_REFUNDABLE: 409, CALL_DEADLINE_PASSED: 409, RECEIPT_NOT_FOUND: 404,
   INPUT_HASH_MISMATCH: 422, INVALID_ENVELOPE: 422, UPLOAD_INCOMPLETE: 409,
@@ -52,6 +53,7 @@ export const DEFAULT_BOND_SLASH_BPS = 1000 as const
 export const MAX_BENCHMARK_NAME = 32 as const
 export const MAX_BENCHMARK_URI = 160 as const
 export const MAX_BENCHMARK_RECEIPTS = 16 as const
+export const MAX_REFERRAL_SHARE_BPS = 2500 as const
 export const PROGRAM_LIMITS = { modelNameBytes: 32, weightsAccounts: MAX_WEIGHTS, measurements: 8, manifestBytes: 4096, endpointBytes: 256, weightsHeaderBytes: 56, maxOpenAnswerBytes: 4096, writeChunkBytes: WRITE_CHUNK_BYTES, maxUploadKeys: MAX_UPLOAD_KEYS, sealRangeChunks: SEAL_RANGE_CHUNKS, modelAccountBytes: MODEL_ACCOUNT_BYTES, baseFormatBytes: MAX_BASE_FORMAT, baseSourceBytes: MAX_BASE_SOURCE, sourceRepoBytes: MAX_SOURCE_REPO, commitShaBytes: MAX_COMMIT_SHA, measurementVersionBytes: MAX_MEASUREMENT_VERSION, policyCallers: MAX_POLICY_CALLERS, policyOperators: MAX_POLICY_OPERATORS, policyRegions: MAX_POLICY_REGIONS, policyRegionBytes: MAX_POLICY_REGION_LEN, splitRecipients: MAX_SPLIT_RECIPIENTS } as const
 export const AnswerMode = z.enum(['sealed', 'open'])
 export const PriceUnit = z.enum(['call', 'token'])
@@ -381,6 +383,27 @@ export const Pass = z.strictObject({
   updatedSlot: U64,
 })
 export const AccountPasses = z.strictObject({ items: z.array(Pass), asOf: Timestamp })
+export const ReferralConfig = z.strictObject({
+  address: Address,
+  model: Address,
+  modelName: Slug.nullable().optional(),
+  shareBps: z.int().min(0).max(MAX_REFERRAL_SHARE_BPS),
+  active: z.boolean(),
+  updatedSlot: U64,
+})
+export const Referral = z.strictObject({
+  address: Address,
+  model: Address,
+  modelName: Slug.nullable().optional(),
+  referrer: Address,
+  mint: Address.nullable(),
+  totalEarned: U64,
+  claimed: U64,
+  claimable: U64,
+  callsReferred: U64,
+  updatedSlot: U64,
+})
+export const AccountReferrals = z.strictObject({ items: z.array(Referral), asOf: Timestamp })
 
 export const WalletRequest = z.strictObject({ wallet: Address })
 const CreateModelBase = z.strictObject({ wallet: Address, uploadKey: Address, uploadKeys: z.array(Address).min(1).max(MAX_UPLOAD_KEYS).optional(), weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS).optional(), name: Slug, manifest: Manifest, sizeBytes: z.int().positive(), plaintextSizeBytes: z.int().positive(), cipher: CipherHeader, price: Money, priceUnit: PriceUnit.optional(), operatorShareBps: z.int().min(0).max(10000), allowedMeasurements: z.array(Measurement).min(1).max(8), uploadFundingLamports: U64, base: ModelBase.optional() })
@@ -436,7 +459,7 @@ export const PublishVersionRequest = z.strictObject({
   version: z.int().min(2),
   ciphertextSha256: Hash,
 })
-export const OpenCallRequest = z.strictObject({ wallet: Address, model: ModelId, enclave: Address, inputHash: Hash, answerMode: AnswerMode.default('sealed'), nonce: U64.optional(), ceiling: U64.optional() })
+export const OpenCallRequest = z.strictObject({ wallet: Address, model: ModelId, enclave: Address, inputHash: Hash, answerMode: AnswerMode.default('sealed'), nonce: U64.optional(), ceiling: U64.optional(), referrer: Address.optional() })
 export const RelayInputRequest = z.strictObject({ envelope: Envelope })
 export const StopCallRequest = z.strictObject({ stopToken: Base64 })
 export const SettleCallRequest = z.strictObject({ wallet: Address, count: U64, runningHash: Hash, signature: ReceiptSignature })
@@ -560,8 +583,21 @@ export const ClosePassRequest = z.strictObject({
   wallet: Address,
   pass: Address,
 })
-export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split', 'deposit_bond', 'withdraw_bond', 'publish_benchmark', 'set_pass_plan', 'buy_pass', 'open_pass_call', 'close_pass'])
-export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional(), bond: Address.optional(), benchmark: Address.optional(), passPlan: Address.optional(), pass: Address.optional() }) })
+export const SetReferralConfigRequest = z.strictObject({
+  wallet: Address,
+  shareBps: z.int().min(0).max(MAX_REFERRAL_SHARE_BPS),
+  active: z.boolean(),
+}).superRefine((value, ctx) => {
+  if (value.active && value.shareBps <= 0) {
+    ctx.addIssue({ code: 'custom', path: ['shareBps'], message: 'shareBps must be positive when active.' })
+  }
+})
+export const ClaimReferralRequest = z.strictObject({
+  wallet: Address,
+  referrer: Address.optional(),
+})
+export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split', 'deposit_bond', 'withdraw_bond', 'publish_benchmark', 'set_pass_plan', 'buy_pass', 'open_pass_call', 'close_pass', 'set_referral_config', 'register_call_referral', 'claim_referral'])
+export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional(), bond: Address.optional(), benchmark: Address.optional(), passPlan: Address.optional(), pass: Address.optional(), referralConfig: Address.optional(), referral: Address.optional(), callReferral: Address.optional() }) })
 export const TxFailure = z.strictObject({ stage: z.enum(['build', 'wallet-rejected', 'wallet-changed', 'simulation', 'send', 'confirm']), message: z.string(), nextStep: z.string().optional(), retryable: z.boolean(), program: z.strictObject({ address: Address, code: z.int().nullable(), name: z.string().nullable() }).optional() })
 export const TxStatus = z.strictObject({ id: z.string(), status: z.enum(['built', 'submitted', 'unconfirmed', 'confirmed', 'finalized', 'failed', 'expired']), signature: Signature.optional(), error: TxFailure.nullish() })
 export const TxSubmission = z.discriminatedUnion('mode', [z.strictObject({ mode: z.literal('relay'), buildId: z.string(), signedTransactionBase64: Base64, idempotencyKey: z.string().min(1).max(128) }), z.strictObject({ mode: z.literal('wallet-sent'), buildId: z.string(), signature: Signature, idempotencyKey: z.string().min(1).max(128) })])
@@ -586,6 +622,8 @@ export const ProgramEvent = z.discriminatedUnion('type', [
   z.strictObject({ ...eventFields, type: z.literal('benchmark.published'), data: BenchmarkRecord }),
   z.strictObject({ ...eventFields, type: z.literal('pass.updated'), data: Pass }),
   z.strictObject({ ...eventFields, type: z.literal('pass_plan.updated'), data: PassPlan }),
+  z.strictObject({ ...eventFields, type: z.literal('referral_config.updated'), data: ReferralConfig }),
+  z.strictObject({ ...eventFields, type: z.literal('referral.updated'), data: Referral }),
   z.strictObject({ ...eventFields, type: z.literal('transaction.updated'), data: TxStatus }),
 ])
 
@@ -706,6 +744,11 @@ export type SetPassPlanRequest = z.output<typeof SetPassPlanRequest>
 export type BuyPassRequest = z.output<typeof BuyPassRequest>
 export type OpenPassCallRequest = z.output<typeof OpenPassCallRequest>
 export type ClosePassRequest = z.output<typeof ClosePassRequest>
+export type ReferralConfig = z.output<typeof ReferralConfig>
+export type Referral = z.output<typeof Referral>
+export type AccountReferrals = z.output<typeof AccountReferrals>
+export type SetReferralConfigRequest = z.output<typeof SetReferralConfigRequest>
+export type ClaimReferralRequest = z.output<typeof ClaimReferralRequest>
 export type VersionStatus = z.output<typeof VersionStatus>
 export type ModelVersion = z.output<typeof ModelVersion>
 export type ModelVersions = z.output<typeof ModelVersions>

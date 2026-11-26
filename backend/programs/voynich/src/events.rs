@@ -128,3 +128,24 @@ pub struct PassClosed {
     pub returned_amount: u64, pub calls_used: u32, pub calls_total: u32,
     pub slot: u64, pub status: PassStatus,
 }
+#[event]
+pub struct ReferralConfigUpdated {
+    pub referral_config: Pubkey, pub model: Pubkey, pub share_bps: u16,
+    pub active: bool, pub updated_slot: u64,
+}
+#[event]
+pub struct CallReferralRegistered {
+    pub call_referral: Pubkey, pub referral: Pubkey, pub call: Pubkey,
+    pub model: Pubkey, pub referrer: Pubkey, pub share_bps: u16, pub slot: u64,
+}
+#[event]
+pub struct ReferralCredited {
+    pub referral: Pubkey, pub call_referral: Pubkey, pub model: Pubkey, pub call: Pubkey,
+    pub receipt: Pubkey, pub referrer: Pubkey, pub mint: Pubkey,
+    pub amount: u64, pub total_earned: u64, pub calls_referred: u64, pub slot: u64,
+}
+#[event]
+pub struct ReferralClaimed {
+    pub referral: Pubkey, pub model: Pubkey, pub referrer: Pubkey, pub mint: Pubkey,
+    pub amount: u64, pub total_claimed: u64, pub slot: u64,
+}

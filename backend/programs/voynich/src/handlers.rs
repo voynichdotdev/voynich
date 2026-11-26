@@ -1001,6 +1001,87 @@ fn credit_split_account(
     Ok((total_received, recipients_snapshot))
 }
 
+fn find_referral_accounts<'info>(
+    call_key: Pubkey,
+    model_key: Pubkey,
+    price_mint: Pubkey,
+    remaining: &'info [AccountInfo<'info>],
+) -> Result<Option<(&'info AccountInfo<'info>, &'info AccountInfo<'info>, Option<&'info AccountInfo<'info>>, CallReferral)>> {
+    let (expected_call_ref, _) = Pubkey::find_program_address(&[b"call-referral", call_key.as_ref()], &crate::ID);
+    let Some(call_ref_info) = remaining.iter().find(|info| info.key() == expected_call_ref) else {
+        return Ok(None);
+    };
+    require!(call_ref_info.is_writable && *call_ref_info.owner == crate::ID, VoynichError::InvalidReferral);
+    let call_ref = {
+        let data = call_ref_info.try_borrow_data()?;
+        let mut slice: &[u8] = &data;
+        CallReferral::try_deserialize(&mut slice).map_err(|_| error!(VoynichError::InvalidReferral))?
+    };
+    require!(
+        call_ref.call == call_key
+            && call_ref.model == model_key
+            && !call_ref.settled
+            && call_ref.share_bps > 0
+            && call_ref.share_bps <= MAX_REFERRAL_SHARE_BPS,
+        VoynichError::InvalidReferral
+    );
+    let (expected_ref, _) = Pubkey::find_program_address(&[b"referral", model_key.as_ref(), call_ref.referrer.as_ref()], &crate::ID);
+    let ref_info = remaining
+        .iter()
+        .find(|info| info.key() == expected_ref)
+        .ok_or(VoynichError::InvalidReferral)?;
+    require!(ref_info.is_writable && *ref_info.owner == crate::ID, VoynichError::InvalidReferral);
+    let ref_ata = if price_mint != Pubkey::default() {
+        let expected_ata = anchor_spl::associated_token::get_associated_token_address(&expected_ref, &price_mint);
+        let ata_info = remaining
+            .iter()
+            .find(|info| info.key() == expected_ata)
+            .ok_or(VoynichError::InvalidReferral)?;
+        require!(ata_info.is_writable, VoynichError::InvalidReferral);
+        Some(ata_info)
+    } else {
+        None
+    };
+    Ok(Some((call_ref_info, ref_info, ref_ata, call_ref)))
+}
+
+fn credit_referral_accounts(
+    call_ref_info: &AccountInfo,
+    ref_info: &AccountInfo,
+    mut call_ref: CallReferral,
+    model_key: Pubkey,
+    price_mint: Pubkey,
+    referral_amount: u64,
+    slot: u64,
+) -> Result<(u64, u64)> {
+    let mut referral = {
+        let data = ref_info.try_borrow_data()?;
+        let mut slice: &[u8] = &data;
+        Referral::try_deserialize(&mut slice).map_err(|_| error!(VoynichError::InvalidReferral))?
+    };
+    require!(
+        referral.model == model_key && referral.referrer == call_ref.referrer && referral.mint == price_mint,
+        VoynichError::InvalidReferral
+    );
+    referral.total_earned = referral.total_earned.checked_add(referral_amount).ok_or(VoynichError::ArithmeticOverflow)?;
+    referral.calls_referred = referral.calls_referred.checked_add(1).ok_or(VoynichError::ArithmeticOverflow)?;
+    referral.updated_slot = slot;
+    call_ref.settled = true;
+    let total_earned = referral.total_earned;
+    let calls_referred = referral.calls_referred;
+    {
+        let mut data = ref_info.try_borrow_mut_data()?;
+        let mut cursor: &mut [u8] = &mut data;
+        referral.try_serialize(&mut cursor)?;
+    }
+    {
+        let mut data = call_ref_info.try_borrow_mut_data()?;
+        let mut cursor: &mut [u8] = &mut data;
+        call_ref.try_serialize(&mut cursor)?;
+    }
+    Ok((total_earned, calls_referred))
+}
+
 pub fn set_split(ctx: Context<SetSplit>, recipients: Vec<SplitRecipientInput>) -> Result<()> {
     let slot = Clock::get()?.slot;
     let model_key = ctx.accounts.model.key();
@@ -1179,18 +1260,42 @@ pub fn settle_call<'info>(ctx: Context<'_, '_, 'info, 'info, SettleCall<'info>>,
     }
     // Settle SOL/SPL escrow after any callback CPI so direct lamport debits from Call stay balanced across CPI boundaries.
     let split_target = find_split_accounts(ctx.accounts.model.key(), ctx.accounts.model.has_split, ctx.accounts.call.price_mint, ctx.remaining_accounts)?;
-    money::settle(&ctx, owner_amount, operator_amount, protocol_amount, split_target)?;
+    let referral_target = find_referral_accounts(ctx.accounts.call.key(), ctx.accounts.model.key(), ctx.accounts.call.price_mint, ctx.remaining_accounts)?;
+    let referral_amount = referral_target
+        .as_ref()
+        .map(|(_, _, _, cr)| ((u128::from(owner_amount) * u128::from(cr.share_bps)) / 10_000) as u64)
+        .unwrap_or(0);
+    let net_owner_amount = owner_amount.checked_sub(referral_amount).ok_or(VoynichError::ArithmeticOverflow)?;
+    let referral_payout = referral_target.as_ref().map(|(_, ref_info, ref_ata, _)| (*ref_info, *ref_ata, referral_amount));
+    money::settle(&ctx, net_owner_amount, operator_amount, protocol_amount, split_target, referral_payout)?;
     if let Some((split_info, _)) = split_target {
-        let (total_received, recipients) = credit_split_account(split_info, ctx.accounts.model.key(), ctx.accounts.call.price_mint, owner_amount, slot)?;
+        let (total_received, recipients) = credit_split_account(split_info, ctx.accounts.model.key(), ctx.accounts.call.price_mint, net_owner_amount, slot)?;
         emit_cpi!(SplitCredited {
             split: split_info.key(),
             model: ctx.accounts.model.key(),
             call: ctx.accounts.call.key(),
             receipt: ctx.accounts.receipt.key(),
             mint: ctx.accounts.call.price_mint,
-            amount: owner_amount,
+            amount: net_owner_amount,
             total_received,
             recipients,
+            slot,
+        });
+    }
+    if let Some((call_ref_info, ref_info, _, call_ref)) = referral_target {
+        let referrer = call_ref.referrer;
+        let (total_earned, calls_referred) = credit_referral_accounts(call_ref_info, ref_info, call_ref, ctx.accounts.model.key(), ctx.accounts.call.price_mint, referral_amount, slot)?;
+        emit_cpi!(ReferralCredited {
+            referral: ref_info.key(),
+            call_referral: call_ref_info.key(),
+            model: ctx.accounts.model.key(),
+            call: ctx.accounts.call.key(),
+            receipt: ctx.accounts.receipt.key(),
+            referrer,
+            mint: ctx.accounts.call.price_mint,
+            amount: referral_amount,
+            total_earned,
+            calls_referred,
             slot,
         });
     }
@@ -1395,18 +1500,42 @@ pub fn settle_metered_call<'info>(
     }
 
     let split_target = find_split_accounts(ctx.accounts.model.key(), ctx.accounts.model.has_split, ctx.accounts.call.price_mint, ctx.remaining_accounts)?;
-    money::settle_metered(&ctx, total, owner_amount, operator_amount, protocol_amount, returned_amount, split_target)?;
+    let referral_target = find_referral_accounts(ctx.accounts.call.key(), ctx.accounts.model.key(), ctx.accounts.call.price_mint, ctx.remaining_accounts)?;
+    let referral_amount = referral_target
+        .as_ref()
+        .map(|(_, _, _, cr)| ((u128::from(owner_amount) * u128::from(cr.share_bps)) / 10_000) as u64)
+        .unwrap_or(0);
+    let net_owner_amount = owner_amount.checked_sub(referral_amount).ok_or(VoynichError::ArithmeticOverflow)?;
+    let referral_payout = referral_target.as_ref().map(|(_, ref_info, ref_ata, _)| (*ref_info, *ref_ata, referral_amount));
+    money::settle_metered(&ctx, total, net_owner_amount, operator_amount, protocol_amount, returned_amount, split_target, referral_payout)?;
     if let Some((split_info, _)) = split_target {
-        let (total_received, recipients) = credit_split_account(split_info, ctx.accounts.model.key(), ctx.accounts.call.price_mint, owner_amount, slot)?;
+        let (total_received, recipients) = credit_split_account(split_info, ctx.accounts.model.key(), ctx.accounts.call.price_mint, net_owner_amount, slot)?;
         emit_cpi!(SplitCredited {
             split: split_info.key(),
             model: ctx.accounts.model.key(),
             call: ctx.accounts.call.key(),
             receipt: ctx.accounts.receipt.key(),
             mint: ctx.accounts.call.price_mint,
-            amount: owner_amount,
+            amount: net_owner_amount,
             total_received,
             recipients,
+            slot,
+        });
+    }
+    if let Some((call_ref_info, ref_info, _, call_ref)) = referral_target {
+        let referrer = call_ref.referrer;
+        let (total_earned, calls_referred) = credit_referral_accounts(call_ref_info, ref_info, call_ref, ctx.accounts.model.key(), ctx.accounts.call.price_mint, referral_amount, slot)?;
+        emit_cpi!(ReferralCredited {
+            referral: ref_info.key(),
+            call_referral: call_ref_info.key(),
+            model: ctx.accounts.model.key(),
+            call: ctx.accounts.call.key(),
+            receipt: ctx.accounts.receipt.key(),
+            referrer,
+            mint: ctx.accounts.call.price_mint,
+            amount: referral_amount,
+            total_earned,
+            calls_referred,
             slot,
         });
     }
@@ -1963,6 +2092,107 @@ pub fn close_pass(ctx: Context<ClosePass>) -> Result<()> {
         calls_total,
         slot,
         status: PassStatus::Closed,
+    });
+    Ok(())
+}
+
+pub fn set_referral_config(ctx: Context<SetReferralConfig>, share_bps: u16, active: bool) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    require!(share_bps <= MAX_REFERRAL_SHARE_BPS, VoynichError::InvalidReferral);
+    if active {
+        require!(share_bps > 0, VoynichError::InvalidReferral);
+    }
+    let cfg = &mut ctx.accounts.referral_config;
+    cfg.model = ctx.accounts.model.key();
+    cfg.share_bps = share_bps;
+    cfg.active = active;
+    cfg.updated_slot = slot;
+    cfg.bump = ctx.bumps.referral_config;
+    emit_cpi!(ReferralConfigUpdated {
+        referral_config: cfg.key(),
+        model: cfg.model,
+        share_bps: cfg.share_bps,
+        active: cfg.active,
+        updated_slot: cfg.updated_slot,
+    });
+    Ok(())
+}
+
+pub fn register_call_referral(ctx: Context<RegisterCallReferral>, referrer: Pubkey) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let model_key = ctx.accounts.model.key();
+    let call = &ctx.accounts.call;
+    let cfg = &ctx.accounts.referral_config;
+    require!(call.status == CallStatus::Open, VoynichError::CallNotOpen);
+    require_keys_eq!(call.model, model_key, VoynichError::InvalidReferral);
+    require!(cfg.active && cfg.share_bps > 0 && cfg.share_bps <= MAX_REFERRAL_SHARE_BPS, VoynichError::InvalidReferral);
+    require!(referrer != Pubkey::default(), VoynichError::InvalidReferral);
+
+    let call_ref = &mut ctx.accounts.call_referral;
+    call_ref.call = call.key();
+    call_ref.model = model_key;
+    call_ref.referrer = referrer;
+    call_ref.share_bps = cfg.share_bps;
+    call_ref.settled = false;
+    call_ref.bump = ctx.bumps.call_referral;
+
+    let referral = &mut ctx.accounts.referral;
+    if referral.model == Pubkey::default() {
+        referral.model = model_key;
+        referral.referrer = referrer;
+        referral.mint = call.price_mint;
+        referral.total_earned = 0;
+        referral.claimed = 0;
+        referral.calls_referred = 0;
+        referral.updated_slot = slot;
+        referral.bump = ctx.bumps.referral;
+    } else {
+        require_keys_eq!(referral.model, model_key, VoynichError::InvalidReferral);
+        require_keys_eq!(referral.referrer, referrer, VoynichError::InvalidReferral);
+        if referral.mint != call.price_mint {
+            require!(referral.total_earned == referral.claimed, VoynichError::InvalidReferral);
+            referral.mint = call.price_mint;
+        }
+        referral.updated_slot = slot;
+    }
+
+    emit_cpi!(CallReferralRegistered {
+        call_referral: call_ref.key(),
+        referral: referral.key(),
+        call: call.key(),
+        model: model_key,
+        referrer,
+        share_bps: call_ref.share_bps,
+        slot,
+    });
+    Ok(())
+}
+
+pub fn claim_referral(ctx: Context<ClaimReferral>) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let owed = {
+        let referral = &ctx.accounts.referral;
+        let owed = referral.total_earned.checked_sub(referral.claimed).ok_or(VoynichError::ArithmeticOverflow)?;
+        require!(owed > 0, VoynichError::InvalidReferral);
+        owed
+    };
+    money::claim_referral_payout(&ctx, owed)?;
+    let referral = &mut ctx.accounts.referral;
+    referral.claimed = referral.total_earned;
+    referral.updated_slot = slot;
+    let total_claimed = referral.claimed;
+    let referral_key = referral.key();
+    let model_key = referral.model;
+    let referrer = referral.referrer;
+    let mint = referral.mint;
+    emit_cpi!(ReferralClaimed {
+        referral: referral_key,
+        model: model_key,
+        referrer,
+        mint,
+        amount: owed,
+        total_claimed,
+        slot,
     });
     Ok(())
 }

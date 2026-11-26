@@ -169,6 +169,17 @@ export function buildApp() {
     if (!item) fail('PASS_NOT_FOUND', 'This prepaid pass was not found.')
     return c.json(item)
   })
+  app.get('/v1/models/:id/referral', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const cfg = state.referralConfigs.get(model.address)
+    if (!cfg) fail('REFERRAL_CONFIG_NOT_FOUND', 'No referral configuration is set for this model.')
+    return c.json(cfg)
+  })
+  app.get('/v1/accounts/:wallet/referrals', c => {
+    const state = c.get('fixture'); const wallet = readParam(c, 'wallet', s.Address)
+    const items = [...state.referrals.values()].filter(r => r.referrer === wallet)
+    return c.json({ items, asOf: new Date().toISOString() })
+  })
   app.get('/v1/calls/:id', c => c.json(c.get('fixture').call(readParam(c, 'id', s.Address))))
   app.get('/v1/bounties', c => {
     const state = c.get('fixture'); const q = readQuery(c, s.BountyQuery, queryKeys)
@@ -493,8 +504,31 @@ export function buildApp() {
       escrowed = structuredClone(model.price)
     }
     const call = fixtureAddress(`call:${crypto.randomUUID()}`)
+    let buildAddresses: s.Build['addresses'] = { model: model.address, call }
+    let refCommit: (() => void) | null = null
+    if (body.referrer) {
+      const cfg = state.referralConfigs.get(model.address)
+      if (!cfg || !cfg.active || cfg.shareBps <= 0) {
+        fail('INVALID_REFERRAL', 'This model does not have an active referral configuration.', { stage: 'build' })
+      }
+      const callRefAddr = fixtureAddress(`call-referral:${call}`)
+      const refAddr = fixtureAddress(`referral:${model.address}:${body.referrer}`)
+      buildAddresses = { ...buildAddresses, callReferral: callRefAddr, referral: refAddr }
+      refCommit = () => {
+        state.callReferrals.set(call, { referrer: body.referrer!, shareBps: cfg.shareBps, settled: false })
+        const refKey = `${model.address}:${body.referrer!}`
+        if (!state.referrals.has(refKey)) {
+          const refRow: s.Referral = {
+            address: refAddr, model: model.address, modelName: model.name, referrer: body.referrer!,
+            mint: model.price.mint, totalEarned: '0', claimed: '0', claimable: '0', callsReferred: '0', updatedSlot: String(state.slot),
+          }
+          state.referrals.set(refKey, refRow)
+          state.emit('referral.updated', refRow)
+        }
+      }
+    }
     const row: s.Call = { address: call, caller: body.wallet, callerIsProgram: false, model: model.address, modelName: model.name, enclave: enclave.address, inputHash: body.inputHash, answerMode: body.answerMode, price: escrowed, priceUnit: model.priceUnit, unitPrice: structuredClone(model.price), ceiling: model.priceUnit === 'token' ? structuredClone(escrowed) : null, openedSlot: String(state.slot), deadlineSlot: String(state.slot + BigInt(fixtureConfig.callDeadlineSlots!)), status: 'open', receipt: null, failure: null }
-    return c.json(state.build('open_call', [body.wallet], { model: model.address, call }, () => { state.calls.unshift(row); state.emit('call.updated', row) }))
+    return c.json(state.build('open_call', [body.wallet], buildAddresses, () => { state.calls.unshift(row); refCommit?.(); state.emit('call.updated', row) }))
   })
   app.get('/v1/accounts/:wallet/sessions', c => {
     const state = c.get('fixture')
@@ -899,6 +933,33 @@ export function buildApp() {
       pass.status = 'closed'
       pass.updatedSlot = String(state.slot)
       state.emit('pass.updated', pass)
+    }))
+  })
+  app.post('/v1/models/:id/referral/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.SetReferralConfigRequest)
+    state.owner(model, body.wallet)
+    const address = fixtureAddress(`referral-config:${model.address}`)
+    const next: s.ReferralConfig = {
+      address, model: model.address, modelName: model.name,
+      shareBps: body.shareBps, active: body.active, updatedSlot: String(state.slot),
+    }
+    return c.json(state.build('set_referral_config', [body.wallet], { model: model.address, referralConfig: address }, () => {
+      state.referralConfigs.set(model.address, next)
+      state.emit('referral_config.updated', next)
+    }))
+  })
+  app.post('/v1/models/:id/referral/claim/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.ClaimReferralRequest)
+    const referrer = body.referrer ?? body.wallet
+    const refKey = `${model.address}:${referrer}`
+    const row = state.referrals.get(refKey)
+    if (!row) fail('REFERRAL_NOT_FOUND', 'No referral account was found for this model and referrer.')
+    if (BigInt(row.claimable) <= 0n) fail('INVALID_REFERRAL', 'No unclaimed referral balance is available for this referrer.', { stage: 'build' })
+    return c.json(state.build('claim_referral', [body.wallet], { model: model.address, referral: row.address }, () => {
+      row.claimed = row.totalEarned
+      row.claimable = '0'
+      row.updatedSlot = String(state.slot)
+      state.emit('referral.updated', row)
     }))
   })
   return app

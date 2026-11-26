@@ -107,6 +107,7 @@ export function buildChainApp(runtime: ChainRuntime) {
     '/v1/models/:id/split/build', '/v1/models/:id/split/claim/build',
     '/v1/models/:id/benchmarks/build',
     '/v1/models/:id/pass-plan/build',
+    '/v1/models/:id/referral/build', '/v1/models/:id/referral/claim/build',
     '/v1/passes/buy/build', '/v1/passes/call/build', '/v1/passes/close/build',
     '/v1/models/:id/versions/build', '/v1/models/:id/versions/publish/build',
     '/v1/enclaves/:key/quote/build',
@@ -127,6 +128,8 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/benchmarks', async c => c.json(await read.benchmarks(readQuery(c, s.BenchmarkQuery))))
   app.get('/v1/models/:id/benchmarks', async c => c.json(await read.modelBenchmarks(readParam(c, 'id', s.ModelId), readQuery(c, s.PageQuery))))
   app.get('/v1/models/:id/pass-plan', async c => c.json(await read.modelPassPlan(readParam(c, 'id', s.ModelId))))
+  app.get('/v1/models/:id/referral', async c => c.json(await read.modelReferral(readParam(c, 'id', s.ModelId))))
+  app.get('/v1/accounts/:wallet/referrals', async c => c.json(await read.accountReferrals(readParam(c, 'wallet', s.Address))))
   app.get('/v1/accounts/:wallet/passes', async c => c.json(await read.accountPasses(readParam(c, 'wallet', s.Address))))
   app.get('/v1/passes/:address', async c => c.json(await read.pass(readParam(c, 'address', s.Address))))
   app.get('/v1/models/:id/versions', async c => c.json(await read.modelVersions(readParam(c, 'id', s.ModelId))))
@@ -340,6 +343,8 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/models/:id/split/claim/build', async c => c.json(await build.claimSplit(readParam(c, 'id', s.ModelId), await readJson(c, s.ClaimSplitRequest))))
   app.post('/v1/models/:id/benchmarks/build', async c => c.json(await build.publishBenchmark(readParam(c, 'id', s.ModelId), await readJson(c, s.PublishBenchmarkRequest))))
   app.post('/v1/models/:id/pass-plan/build', async c => c.json(await build.setPassPlan(readParam(c, 'id', s.ModelId), await readJson(c, s.SetPassPlanRequest))))
+  app.post('/v1/models/:id/referral/build', async c => c.json(await build.setReferralConfig(readParam(c, 'id', s.ModelId), await readJson(c, s.SetReferralConfigRequest))))
+  app.post('/v1/models/:id/referral/claim/build', async c => c.json(await build.claimReferral(readParam(c, 'id', s.ModelId), await readJson(c, s.ClaimReferralRequest))))
   app.post('/v1/passes/buy/build', async c => c.json(await build.buyPass(await readJson(c, s.BuyPassRequest))))
   app.post('/v1/passes/call/build', async c => c.json(await build.openPassCall(await readJson(c, s.OpenPassCallRequest))))
   app.post('/v1/passes/close/build', async c => c.json(await build.closePass(await readJson(c, s.ClosePassRequest))))
