@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PriceUnit, SessionStatus, SplitRecipient};
+use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PassStatus, PriceUnit, SessionStatus, SplitRecipient};
 
 #[event]
 pub struct ConfigChanged { pub admin: Pubkey, pub config: ConfigArgs }
@@ -103,4 +103,28 @@ pub struct BenchmarkPublished {
     pub model_version: u32, pub dataset_sha256: [u8; 32], pub dataset_uri: String,
     pub sample_count: u32, pub passed_count: u32, pub score_bps: u16,
     pub receipts: Vec<Pubkey>, pub published_slot: u64,
+}
+#[event]
+pub struct PassPlanUpdated {
+    pub pass_plan: Pubkey, pub model: Pubkey, pub authority: Pubkey, pub mint: Pubkey,
+    pub price_per_call: u64, pub min_calls: u32, pub max_calls: u32, pub ttl_slots: u64,
+    pub active: bool, pub updated_slot: u64,
+}
+#[event]
+pub struct PassPurchased {
+    pub pass: Pubkey, pub model: Pubkey, pub holder: Pubkey, pub nonce: u64, pub mint: Pubkey,
+    pub price_per_call: u64, pub calls_total: u32, pub escrow_remaining: u64,
+    pub purchased_slot: u64, pub expires_at_slot: u64,
+}
+#[event]
+pub struct PassUsed {
+    pub pass: Pubkey, pub model: Pubkey, pub holder: Pubkey, pub call: Pubkey,
+    pub amount: u64, pub calls_used: u32, pub calls_total: u32, pub escrow_remaining: u64,
+    pub slot: u64,
+}
+#[event]
+pub struct PassClosed {
+    pub pass: Pubkey, pub model: Pubkey, pub holder: Pubkey, pub closer: Pubkey,
+    pub returned_amount: u64, pub calls_used: u32, pub calls_total: u32,
+    pub slot: u64, pub status: PassStatus,
 }

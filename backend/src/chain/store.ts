@@ -698,6 +698,88 @@ export function createApply(attestationProgramId: string) {
           await notify(tx, 'benchmark.published', address)
           break
         }
+        case 'passplanupdated': {
+          const address = text(data, 'passPlan')
+          const modelAddress = text(data, 'model')
+          const rawMint = text(data, 'mint')
+          const ZERO_KEY = '11111111111111111111111111111111'
+          const value = {
+            address,
+            modelAddress,
+            authority: text(data, 'authority'),
+            mint: rawMint === ZERO_KEY ? null : rawMint,
+            pricePerCall: new Prisma.Decimal(text(data, 'pricePerCall')),
+            minCalls: number(data, 'minCalls'),
+            maxCalls: number(data, 'maxCalls'),
+            ttlSlots: BigInt(text(data, 'ttlSlots')),
+            active: Boolean(data.active),
+            updatedSlot: slot(data, 'updatedSlot'),
+          }
+          await tx.passPlan.upsert({ where: { address }, create: value, update: value })
+          await notify(tx, 'pass_plan.updated', modelAddress)
+          break
+        }
+        case 'passpurchased': {
+          const address = text(data, 'pass')
+          const modelAddress = text(data, 'model')
+          const rawMint = text(data, 'mint')
+          const ZERO_KEY = '11111111111111111111111111111111'
+          const value = {
+            address,
+            modelAddress,
+            holder: text(data, 'holder'),
+            nonce: text(data, 'nonce'),
+            mint: rawMint === ZERO_KEY ? null : rawMint,
+            pricePerCall: new Prisma.Decimal(text(data, 'pricePerCall')),
+            callsTotal: number(data, 'callsTotal'),
+            callsUsed: 0,
+            escrowRemaining: new Prisma.Decimal(text(data, 'escrowRemaining')),
+            returnedAmount: new Prisma.Decimal('0'),
+            purchasedSlot: slot(data, 'purchasedSlot'),
+            expiresAtSlot: slot(data, 'expiresAtSlot'),
+            closedSlot: null,
+            status: 'open' as const,
+            updatedSlot: currentSlot,
+          }
+          await tx.pass.upsert({ where: { address }, create: value, update: value })
+          await notify(tx, 'pass.updated', address)
+          break
+        }
+        case 'passused': {
+          const address = text(data, 'pass')
+          const existing = await tx.pass.findUnique({ where: { address } })
+          if (existing) {
+            await tx.pass.update({
+              where: { address },
+              data: {
+                callsUsed: number(data, 'callsUsed'),
+                escrowRemaining: new Prisma.Decimal(text(data, 'escrowRemaining')),
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'pass.updated', address)
+          }
+          break
+        }
+        case 'passclosed': {
+          const address = text(data, 'pass')
+          const existing = await tx.pass.findUnique({ where: { address } })
+          if (existing) {
+            await tx.pass.update({
+              where: { address },
+              data: {
+                callsUsed: number(data, 'callsUsed'),
+                escrowRemaining: new Prisma.Decimal('0'),
+                returnedAmount: new Prisma.Decimal(text(data, 'returnedAmount')),
+                closedSlot: slot(data, 'slot'),
+                status: 'closed',
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'pass.updated', address)
+          }
+          break
+        }
       }
     }
   }

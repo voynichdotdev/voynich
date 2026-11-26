@@ -1734,6 +1734,239 @@ pub fn clear_policy(ctx: Context<ClearPolicy>) -> Result<()> {
     Ok(())
 }
 
+pub fn set_pass_plan(ctx: Context<SetPassPlan>, args: SetPassPlanArgs) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let model = &ctx.accounts.model;
+    require!(model.price_unit == PriceUnit::Call, VoynichError::InvalidPass);
+    if args.active {
+        require!(args.price_per_call > 0 && args.price_per_call <= model.price, VoynichError::InvalidPass);
+        require!(args.min_calls >= 1 && args.max_calls >= args.min_calls, VoynichError::InvalidPass);
+        require!(args.ttl_slots > 0, VoynichError::InvalidPass);
+    }
+    let plan = &mut ctx.accounts.pass_plan;
+    plan.model = model.key();
+    plan.authority = ctx.accounts.owner.key();
+    plan.mint = model.price_mint;
+    plan.price_per_call = args.price_per_call;
+    plan.min_calls = args.min_calls;
+    plan.max_calls = args.max_calls;
+    plan.ttl_slots = args.ttl_slots;
+    plan.active = args.active;
+    plan.updated_slot = slot;
+    plan.bump = ctx.bumps.pass_plan;
+    emit_cpi!(PassPlanUpdated {
+        pass_plan: plan.key(),
+        model: plan.model,
+        authority: plan.authority,
+        mint: plan.mint,
+        price_per_call: plan.price_per_call,
+        min_calls: plan.min_calls,
+        max_calls: plan.max_calls,
+        ttl_slots: plan.ttl_slots,
+        active: plan.active,
+        updated_slot: plan.updated_slot,
+    });
+    Ok(())
+}
+
+pub fn buy_pass(ctx: Context<BuyPass>, nonce: u64, calls_total: u32) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let model = &ctx.accounts.model;
+    let plan = &ctx.accounts.pass_plan;
+    require!(model.status == ModelStatus::Live, VoynichError::ModelNotLive);
+    require!(model.price_unit == PriceUnit::Call, VoynichError::InvalidPass);
+    require!(plan.active, VoynichError::InvalidPass);
+    require_keys_eq!(plan.model, model.key(), VoynichError::InvalidPass);
+    require_keys_eq!(plan.mint, model.price_mint, VoynichError::InvalidPass);
+    require!(calls_total >= plan.min_calls && calls_total <= plan.max_calls, VoynichError::InvalidPass);
+    let total_escrow = u64::from(calls_total)
+        .checked_mul(plan.price_per_call)
+        .ok_or(VoynichError::ArithmeticOverflow)?;
+    require!(total_escrow > 0, VoynichError::InvalidPass);
+    let expires_at_slot = slot.checked_add(plan.ttl_slots).ok_or(VoynichError::ArithmeticOverflow)?;
+
+    let pass = &mut ctx.accounts.pass;
+    pass.model = model.key();
+    pass.holder = ctx.accounts.holder.key();
+    pass.nonce = nonce;
+    pass.mint = plan.mint;
+    pass.price_per_call = plan.price_per_call;
+    pass.calls_total = calls_total;
+    pass.calls_used = 0;
+    pass.escrow_remaining = total_escrow;
+    pass.purchased_slot = slot;
+    pass.expires_at_slot = expires_at_slot;
+    pass.status = PassStatus::Open;
+    pass.bump = ctx.bumps.pass;
+
+    money::deposit_pass(&ctx, total_escrow)?;
+
+    let pass = &ctx.accounts.pass;
+    emit_cpi!(PassPurchased {
+        pass: pass.key(),
+        model: pass.model,
+        holder: pass.holder,
+        nonce: pass.nonce,
+        mint: pass.mint,
+        price_per_call: pass.price_per_call,
+        calls_total: pass.calls_total,
+        escrow_remaining: pass.escrow_remaining,
+        purchased_slot: pass.purchased_slot,
+        expires_at_slot: pass.expires_at_slot,
+    });
+    Ok(())
+}
+
+pub fn open_pass_call(
+    ctx: Context<OpenPassCall>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    answer_mode: AnswerMode,
+    callback: Option<CallbackSpec>,
+) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let model = &ctx.accounts.model;
+    require!(model.status == ModelStatus::Live, VoynichError::ModelNotLive);
+    require!(model.price_unit == PriceUnit::Call, VoynichError::InvalidPass);
+
+    let holder_key = ctx.accounts.holder.key();
+    require!(ctx.accounts.pass.status == PassStatus::Open, VoynichError::InvalidPass);
+    require_keys_eq!(ctx.accounts.pass.holder, holder_key, VoynichError::Unauthorized);
+    require_keys_eq!(ctx.accounts.pass.model, model.key(), VoynichError::InvalidPass);
+    require_keys_eq!(ctx.accounts.pass.mint, model.price_mint, VoynichError::InvalidPass);
+    require!(ctx.accounts.pass.calls_used < ctx.accounts.pass.calls_total, VoynichError::InvalidPass);
+    require!(slot <= ctx.accounts.pass.expires_at_slot, VoynichError::InvalidPass);
+    let pass_price = ctx.accounts.pass.price_per_call;
+    require!(ctx.accounts.pass.escrow_remaining >= pass_price, VoynichError::InvalidPass);
+
+    let grant = load_grant(&ctx.accounts.grant, model.key(), Some(ctx.accounts.enclave.key()), Some(ctx.bumps.grant))?;
+    require!(!grant.revoked, VoynichError::GrantRequired);
+    let value = current_record(&ctx.accounts.config, &ctx.accounts.enclave, &ctx.accounts.attestation_record)?;
+    allowed(model, &value.measurement)?;
+    if let Some(policy) = load_model_policy(model.key(), model.has_policy, ctx.remaining_accounts)? {
+        if policy.allow_list_enabled {
+            require!(policy.allowed_callers.contains(&holder_key), VoynichError::PolicyCallerDenied);
+        }
+    }
+    let effective_operator_share_bps = grant
+        .quoted_operator_share_bps
+        .map(|q| q.min(model.operator_share_bps))
+        .unwrap_or(model.operator_share_bps);
+    require!(u32::from(effective_operator_share_bps) + u32::from(ctx.accounts.config.protocol_share_bps) <= 10000, VoynichError::InvalidConfig);
+    let (callback_program, callback_accounts) = match callback {
+        Some(spec) => {
+            require!(spec.program != Pubkey::default() && spec.program != crate::ID, VoynichError::InvalidCallback);
+            require!(spec.accounts.len() <= MAX_CALLBACK_ACCOUNTS, VoynichError::InvalidCallback);
+            (spec.program, spec.accounts)
+        }
+        None => (Pubkey::default(), Vec::new()),
+    };
+
+    let pass = &mut ctx.accounts.pass;
+    pass.calls_used = pass.calls_used.checked_add(1).ok_or(VoynichError::ArithmeticOverflow)?;
+    pass.escrow_remaining = pass.escrow_remaining.checked_sub(pass_price).ok_or(VoynichError::ArithmeticOverflow)?;
+    let calls_used_after = pass.calls_used;
+    let calls_total = pass.calls_total;
+    let escrow_remaining_after = pass.escrow_remaining;
+    let pass_key = pass.key();
+
+    let call = &mut ctx.accounts.call;
+    call.caller = holder_key;
+    call.model = model.key();
+    call.enclave = ctx.accounts.enclave.key();
+    call.nonce = nonce;
+    call.input_hash = input_hash;
+    call.price = pass_price;
+    call.price_mint = model.price_mint;
+    call.owner = model.owner;
+    call.operator = ctx.accounts.enclave.operator;
+    call.fee_recipient = ctx.accounts.config.fee_recipient;
+    call.operator_share_bps = effective_operator_share_bps;
+    call.protocol_share_bps = ctx.accounts.config.protocol_share_bps;
+    call.opened_slot = slot;
+    call.deadline_slot = slot.checked_add(ctx.accounts.config.call_deadline_slots).ok_or(VoynichError::ArithmeticOverflow)?;
+    call.status = CallStatus::Open;
+    call.bump = ctx.bumps.call;
+    call.answer_mode = answer_mode;
+    call.caller_is_program = anchor_lang::solana_program::instruction::get_stack_height()
+        > anchor_lang::solana_program::instruction::TRANSACTION_LEVEL_STACK_HEIGHT;
+    call.callback_program = callback_program;
+    call.callback_accounts = callback_accounts;
+    call.price_unit = PriceUnit::Call;
+    call.ceiling = pass_price;
+
+    money::deposit_from_pass(&ctx, pass_price)?;
+
+    let call = &ctx.accounts.call;
+    emit_cpi!(CallOpened {
+        call: call.key(),
+        caller: call.caller,
+        model: call.model,
+        enclave: call.enclave,
+        nonce: call.nonce,
+        input_hash: call.input_hash,
+        price: call.price,
+        price_mint: call.price_mint,
+        owner: call.owner,
+        operator: call.operator,
+        fee_recipient: call.fee_recipient,
+        operator_share_bps: call.operator_share_bps,
+        protocol_share_bps: call.protocol_share_bps,
+        opened_slot: call.opened_slot,
+        deadline_slot: call.deadline_slot,
+        answer_mode: call.answer_mode,
+        caller_is_program: call.caller_is_program,
+        callback_program: call.callback_program,
+        callback_accounts: call.callback_accounts.clone(),
+        price_unit: call.price_unit,
+        ceiling: call.ceiling,
+    });
+    emit_cpi!(PassUsed {
+        pass: pass_key,
+        model: call.model,
+        holder: holder_key,
+        call: call.key(),
+        amount: pass_price,
+        calls_used: calls_used_after,
+        calls_total,
+        escrow_remaining: escrow_remaining_after,
+        slot,
+    });
+    Ok(())
+}
+
+pub fn close_pass(ctx: Context<ClosePass>) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let holder_key = ctx.accounts.pass.holder;
+    let model_key = ctx.accounts.pass.model;
+    let expires_at_slot = ctx.accounts.pass.expires_at_slot;
+    let calls_used = ctx.accounts.pass.calls_used;
+    let calls_total = ctx.accounts.pass.calls_total;
+    require!(ctx.accounts.pass.status == PassStatus::Open, VoynichError::InvalidPass);
+    require!(
+        ctx.accounts.closer.key() == holder_key || slot > expires_at_slot || calls_used == calls_total,
+        VoynichError::Unauthorized
+    );
+    let remaining = ctx.accounts.pass.escrow_remaining;
+    let returned_amount = money::close_pass_escrow(&ctx, remaining)?;
+    let pass = &mut ctx.accounts.pass;
+    pass.status = PassStatus::Closed;
+    pass.escrow_remaining = 0;
+    let pass_key = pass.key();
+    emit_cpi!(PassClosed {
+        pass: pass_key,
+        model: model_key,
+        holder: holder_key,
+        closer: ctx.accounts.closer.key(),
+        returned_amount,
+        calls_used,
+        calls_total,
+        slot,
+        status: PassStatus::Closed,
+    });
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

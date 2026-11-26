@@ -1,6 +1,6 @@
 import { Connection, Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { IdlAccounts } from '@coral-xyz/anchor'
-import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AccountSessions, type AnswerMode, type BenchmarkQuery, type BenchmarkRecord, type BenchmarksPage, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type ModelVersion, type ModelVersions, type Money, type OperatorBond, type PriceUnit, type Receipt, type ReceiptView, type Session, type SplitRecipientInput, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
+import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AccountPasses, type AccountSessions, type AnswerMode, type BenchmarkQuery, type BenchmarkRecord, type BenchmarksPage, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type ModelVersion, type ModelVersions, type Money, type OperatorBond, type Pass, type PassPlan, type PriceUnit, type Receipt, type ReceiptView, type Session, type SplitRecipientInput, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
 import { decodeAdapter } from './adapter.js'
 import { CIPHER_CHUNK_BYTES, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER, ciphertextHash, decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, openWeightsChunk, sealWeights, sha256, signSealDerivation, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, verifyReceipt, wrapKey, type SealDerivationSigner, type WeightsCipherHeader } from './crypto.js'
 import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeGrantAccount, decodeModelBaseBytes, decodeModelVersionAccount, decodeReceiptAccount, decodeWeightsHeader, modelVersionPda, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
@@ -20,7 +20,7 @@ export type SelectEnclaveOptions = {
 }
 export type CallStep = 'encrypting' | 'awaiting-signature' | 'escrowed' | 'answering' | 'verified'
 export type SessionAuth = { address: string; delegate: Keypair }
-export type CallOptions = { signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; strategy?: RoutingStrategy; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string; session?: SessionAuth }
+export type CallOptions = { signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; strategy?: RoutingStrategy; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string; session?: SessionAuth; pass?: string }
 export type ClassificationScore = { label: string; probability: number }
 export type ClassificationOutput = { label: string; probability?: number; scores?: ClassificationScore[] }
 export type TextGenerationOutput = { text: string; tokens: number; finishReason: 'eos' | 'length' }
@@ -738,9 +738,11 @@ export function createVoynich(options: VoynichOptions) {
     const encrypted = encryptCallInput(utf8(JSON.stringify(callPayload)), destination.encryptionKey)
     const inputHash = toHex(sha256(encrypted))
     opts.onStep?.('awaiting-signature')
-    const build = opts.session
-      ? await api.openSessionCall(opts.session.address, { delegate: opts.session.delegate.publicKey.toBase58(), model: model.address, enclave: selected.enclave.address, inputHash, answerMode, ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}) }, { signal: opts.signal })
-      : await api.openCall({ wallet: signer().publicKey.toBase58(), model: model.address, enclave: selected.enclave.address, inputHash, answerMode, ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}) }, { signal: opts.signal })
+    const build = opts.pass
+      ? await api.openPassCall({ wallet: signer().publicKey.toBase58(), pass: opts.pass, enclave: selected.enclave.address, inputHash, answerMode }, { signal: opts.signal })
+      : opts.session
+        ? await api.openSessionCall(opts.session.address, { delegate: opts.session.delegate.publicKey.toBase58(), model: model.address, enclave: selected.enclave.address, inputHash, answerMode, ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}) }, { signal: opts.signal })
+        : await api.openCall({ wallet: signer().publicKey.toBase58(), model: model.address, enclave: selected.enclave.address, inputHash, answerMode, ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}) }, { signal: opts.signal })
     await send(build, [], opts.session?.delegate, opts.signal)
     const callAddress = build.addresses.call!
     const opened = await indexed(() => api.call(callAddress, { signal: opts.signal }), 'CALL_NOT_FOUND', undefined, opts.signal)
@@ -1915,6 +1917,73 @@ export function createVoynich(options: VoynichOptions) {
       close: (closeOpts?: { signal?: AbortSignal }) => closeSession(address, closeOpts),
     }
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, getBond, depositBond, withdrawBond, listBenchmarks, listModelBenchmarks, publishBenchmark, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  async function getPassPlan(modelId: string, opts: { signal?: AbortSignal } = {}): Promise<PassPlan | null> {
+    try {
+      return await api.modelPassPlan(modelId, { signal: opts.signal })
+    } catch (error) {
+      if (error instanceof ApiClientError && error.code === 'PASS_PLAN_NOT_FOUND') return null
+      throw error
+    }
+  }
+  async function setPassPlan(
+    modelId: string,
+    input: { pricePerCall: bigint | number | string; minCalls: number; maxCalls: number; ttlSlots: bigint | number | string; active: boolean },
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<PassPlan> {
+    const wallet = signer()
+    const pricePerCall = String(input.pricePerCall)
+    const ttlSlots = String(input.ttlSlots)
+    await send(await api.setPassPlan(modelId, {
+      wallet: wallet.publicKey.toBase58(),
+      pricePerCall,
+      minCalls: input.minCalls,
+      maxCalls: input.maxCalls,
+      ttlSlots,
+      active: input.active,
+    }, { signal: opts.signal }), [], undefined, opts.signal)
+    return indexed(
+      () => api.modelPassPlan(modelId, { signal: opts.signal }),
+      'PASS_PLAN_NOT_FOUND',
+      value => value.pricePerCall === pricePerCall && value.minCalls === input.minCalls && value.maxCalls === input.maxCalls && value.ttlSlots === ttlSlots && value.active === input.active,
+      opts.signal,
+    )
+  }
+  async function buyPass(
+    modelId: string,
+    callsTotal: number,
+    opts: { nonce?: bigint | number | string; signal?: AbortSignal } = {},
+  ): Promise<Pass> {
+    const wallet = signer()
+    const build = await api.buyPass({
+      wallet: wallet.publicKey.toBase58(),
+      model: modelId,
+      callsTotal,
+      ...(opts.nonce !== undefined ? { nonce: String(opts.nonce) } : {}),
+    }, { signal: opts.signal })
+    await send(build, [], undefined, opts.signal)
+    const address = build.addresses.pass!
+    return indexed(() => api.pass(address, { signal: opts.signal }), 'PASS_NOT_FOUND', undefined, opts.signal)
+  }
+  async function listPasses(wallet?: string, signal?: AbortSignal): Promise<AccountPasses> {
+    return api.accountPasses(wallet ?? signer().publicKey.toBase58(), { signal })
+  }
+  async function closePass(address: string, opts: { signal?: AbortSignal } = {}): Promise<{ pass: Pass; transaction: TxStatus }> {
+    const build = await api.closePass({ wallet: signer().publicKey.toBase58(), pass: address }, { signal: opts.signal })
+    const transaction = await send(build, [], undefined, opts.signal)
+    const closed = await indexed(() => api.pass(address, { signal: opts.signal }), 'PASS_NOT_FOUND', value => value.status === 'closed', opts.signal)
+    return { pass: closed, transaction }
+  }
+  function pass(address: string) {
+    return {
+      address,
+      call: async (input: SketchInput | number[] | string, callOpts: Omit<CallOptions, 'pass' | 'session'> = {}) => {
+        const current = await api.pass(address, { signal: callOpts.signal })
+        return call(current.model, input, { ...callOpts, pass: address })
+      },
+      refresh: (signal?: AbortSignal) => api.pass(address, { signal }),
+      close: (closeOpts?: { signal?: AbortSignal }) => closePass(address, closeOpts),
+    }
+  }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, getBond, depositBond, withdrawBond, listBenchmarks, listModelBenchmarks, publishBenchmark, getPassPlan, setPassPlan, buyPass, listPasses, pass, closePass, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>

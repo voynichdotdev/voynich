@@ -3,7 +3,7 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.33'
+export const CONTRACT_VERSION = '0.1.34'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
@@ -12,6 +12,7 @@ export const errors = defineErrors({
   SPLIT_NOT_FOUND: 404, INVALID_SPLIT: 422,
   BOND_NOT_FOUND: 404, INVALID_BOND: 422,
   BENCHMARK_NOT_FOUND: 404, INVALID_BENCHMARK: 422,
+  PASS_PLAN_NOT_FOUND: 404, PASS_NOT_FOUND: 404, INVALID_PASS: 422,
   GRANT_REQUIRED: 409, INVALID_QUOTE: 422, INVALID_VERSION: 422, SESSION_NOT_FOUND: 404, INVALID_SESSION: 422, CALL_NOT_FOUND: 404, CALL_NOT_OPEN: 409,
   CALL_NOT_REFUNDABLE: 409, CALL_DEADLINE_PASSED: 409, RECEIPT_NOT_FOUND: 404,
   INPUT_HASH_MISMATCH: 422, INVALID_ENVELOPE: 422, UPLOAD_INCOMPLETE: 409,
@@ -346,6 +347,40 @@ export const BenchmarkQuery = PageQuery.extend({
   model: ModelId.optional(),
   name: Slug.optional(),
 })
+export const PassStatus = z.enum(['open', 'closed'])
+export const PassPlan = z.strictObject({
+  address: Address,
+  model: Address,
+  modelName: Slug.nullable().optional(),
+  authority: Address,
+  mint: Address.nullable(),
+  pricePerCall: U64,
+  minCalls: z.int().nonnegative(),
+  maxCalls: z.int().nonnegative(),
+  ttlSlots: U64,
+  active: z.boolean(),
+  updatedSlot: U64,
+})
+export const Pass = z.strictObject({
+  address: Address,
+  model: Address,
+  modelName: Slug.nullable().optional(),
+  holder: Address,
+  nonce: U64,
+  mint: Address.nullable(),
+  pricePerCall: U64,
+  callsTotal: z.int().positive(),
+  callsUsed: z.int().nonnegative(),
+  callsRemaining: z.int().nonnegative(),
+  escrowRemaining: U64,
+  returnedAmount: U64,
+  purchasedSlot: U64,
+  expiresAtSlot: U64,
+  closedSlot: U64.nullable(),
+  status: PassStatus,
+  updatedSlot: U64,
+})
+export const AccountPasses = z.strictObject({ items: z.array(Pass), asOf: Timestamp })
 
 export const WalletRequest = z.strictObject({ wallet: Address })
 const CreateModelBase = z.strictObject({ wallet: Address, uploadKey: Address, uploadKeys: z.array(Address).min(1).max(MAX_UPLOAD_KEYS).optional(), weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS).optional(), name: Slug, manifest: Manifest, sizeBytes: z.int().positive(), plaintextSizeBytes: z.int().positive(), cipher: CipherHeader, price: Money, priceUnit: PriceUnit.optional(), operatorShareBps: z.int().min(0).max(10000), allowedMeasurements: z.array(Measurement).min(1).max(8), uploadFundingLamports: U64, base: ModelBase.optional() })
@@ -485,8 +520,48 @@ export const PublishBenchmarkRequest = z.strictObject({
     ctx.addIssue({ code: 'custom', path: ['receipts'], message: 'receipts must contain distinct receipt addresses.' })
   }
 })
-export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split', 'deposit_bond', 'withdraw_bond', 'publish_benchmark'])
-export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional(), bond: Address.optional(), benchmark: Address.optional() }) })
+export const SetPassPlanRequest = z.strictObject({
+  wallet: Address,
+  pricePerCall: U64,
+  minCalls: z.int().nonnegative(),
+  maxCalls: z.int().nonnegative(),
+  ttlSlots: U64,
+  active: z.boolean(),
+}).superRefine((value, ctx) => {
+  if (!value.active) return
+  if (BigInt(value.pricePerCall) <= 0n) {
+    ctx.addIssue({ code: 'custom', path: ['pricePerCall'], message: 'pricePerCall must be positive when active.' })
+  }
+  if (value.minCalls < 1) {
+    ctx.addIssue({ code: 'custom', path: ['minCalls'], message: 'minCalls must be at least 1 when active.' })
+  }
+  if (value.maxCalls < value.minCalls) {
+    ctx.addIssue({ code: 'custom', path: ['maxCalls'], message: 'maxCalls must be >= minCalls when active.' })
+  }
+  if (BigInt(value.ttlSlots) <= 0n) {
+    ctx.addIssue({ code: 'custom', path: ['ttlSlots'], message: 'ttlSlots must be positive when active.' })
+  }
+})
+export const BuyPassRequest = z.strictObject({
+  wallet: Address,
+  model: ModelId,
+  callsTotal: z.int().positive(),
+  nonce: U64.optional(),
+})
+export const OpenPassCallRequest = z.strictObject({
+  wallet: Address,
+  pass: Address,
+  enclave: Address,
+  inputHash: Hash,
+  answerMode: AnswerMode.default('sealed'),
+  nonce: U64.optional(),
+})
+export const ClosePassRequest = z.strictObject({
+  wallet: Address,
+  pass: Address,
+})
+export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split', 'deposit_bond', 'withdraw_bond', 'publish_benchmark', 'set_pass_plan', 'buy_pass', 'open_pass_call', 'close_pass'])
+export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional(), bond: Address.optional(), benchmark: Address.optional(), passPlan: Address.optional(), pass: Address.optional() }) })
 export const TxFailure = z.strictObject({ stage: z.enum(['build', 'wallet-rejected', 'wallet-changed', 'simulation', 'send', 'confirm']), message: z.string(), nextStep: z.string().optional(), retryable: z.boolean(), program: z.strictObject({ address: Address, code: z.int().nullable(), name: z.string().nullable() }).optional() })
 export const TxStatus = z.strictObject({ id: z.string(), status: z.enum(['built', 'submitted', 'unconfirmed', 'confirmed', 'finalized', 'failed', 'expired']), signature: Signature.optional(), error: TxFailure.nullish() })
 export const TxSubmission = z.discriminatedUnion('mode', [z.strictObject({ mode: z.literal('relay'), buildId: z.string(), signedTransactionBase64: Base64, idempotencyKey: z.string().min(1).max(128) }), z.strictObject({ mode: z.literal('wallet-sent'), buildId: z.string(), signature: Signature, idempotencyKey: z.string().min(1).max(128) })])
@@ -509,6 +584,8 @@ export const ProgramEvent = z.discriminatedUnion('type', [
   z.strictObject({ ...eventFields, type: z.literal('split.updated'), data: ModelSplit }),
   z.strictObject({ ...eventFields, type: z.literal('bond.updated'), data: OperatorBond }),
   z.strictObject({ ...eventFields, type: z.literal('benchmark.published'), data: BenchmarkRecord }),
+  z.strictObject({ ...eventFields, type: z.literal('pass.updated'), data: Pass }),
+  z.strictObject({ ...eventFields, type: z.literal('pass_plan.updated'), data: PassPlan }),
   z.strictObject({ ...eventFields, type: z.literal('transaction.updated'), data: TxStatus }),
 ])
 
@@ -621,6 +698,14 @@ export type BenchmarkRecord = z.output<typeof BenchmarkRecord>
 export type BenchmarksPage = z.output<typeof BenchmarksPage>
 export type BenchmarkQuery = z.output<typeof BenchmarkQuery>
 export type PublishBenchmarkRequest = z.output<typeof PublishBenchmarkRequest>
+export type PassStatus = z.output<typeof PassStatus>
+export type PassPlan = z.output<typeof PassPlan>
+export type Pass = z.output<typeof Pass>
+export type AccountPasses = z.output<typeof AccountPasses>
+export type SetPassPlanRequest = z.output<typeof SetPassPlanRequest>
+export type BuyPassRequest = z.output<typeof BuyPassRequest>
+export type OpenPassCallRequest = z.output<typeof OpenPassCallRequest>
+export type ClosePassRequest = z.output<typeof ClosePassRequest>
 export type VersionStatus = z.output<typeof VersionStatus>
 export type ModelVersion = z.output<typeof ModelVersion>
 export type ModelVersions = z.output<typeof ModelVersions>

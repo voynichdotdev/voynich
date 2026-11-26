@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { PublicKey, type Connection } from '@solana/web3.js'
-import { decodeManifest, type AttestationRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Receipt, type ModelQuery } from '@voynich/contract'
+import { decodeManifest, type AccountPasses, type AttestationRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Pass, type PassPlan, type Receipt, type ModelQuery } from '@voynich/contract'
 import { toBase64 } from 'voynich/crypto'
 import { fail } from './errors.js'
 
@@ -431,5 +431,61 @@ export class ReadModel {
       take: query.limit + 1,
     })
     return page(rows.map(row => this.benchmarkRow(row)), query)
+  }
+  passPlanRow(row: Prisma.PassPlanGetPayload<{ include: { model: { select: { name: true } } } }>): PassPlan {
+    return {
+      address: row.address,
+      model: row.modelAddress,
+      modelName: row.model.name,
+      authority: row.authority,
+      mint: row.mint,
+      pricePerCall: row.pricePerCall.toFixed(0),
+      minCalls: row.minCalls,
+      maxCalls: row.maxCalls,
+      ttlSlots: String(row.ttlSlots),
+      active: row.active,
+      updatedSlot: String(row.updatedSlot),
+    }
+  }
+  async modelPassPlan(id: string): Promise<PassPlan> {
+    const resolved = await this.db.model.findFirst({ where: { OR: [{ address: id }, { name: id }] }, select: { address: true } })
+    if (!resolved) fail('MODEL_NOT_FOUND', 'This model was not found.')
+    const row = await this.db.passPlan.findUnique({ where: { modelAddress: resolved.address }, include: { model: { select: { name: true } } } })
+    if (!row) fail('PASS_PLAN_NOT_FOUND', 'No prepaid pass plan is configured for this model.')
+    return this.passPlanRow(row)
+  }
+  passRow(row: Prisma.PassGetPayload<{ include: { model: { select: { name: true } } } }>): Pass {
+    return {
+      address: row.address,
+      model: row.modelAddress,
+      modelName: row.model.name,
+      holder: row.holder,
+      nonce: row.nonce,
+      mint: row.mint,
+      pricePerCall: row.pricePerCall.toFixed(0),
+      callsTotal: row.callsTotal,
+      callsUsed: row.callsUsed,
+      callsRemaining: Math.max(0, row.callsTotal - row.callsUsed),
+      escrowRemaining: row.escrowRemaining.toFixed(0),
+      returnedAmount: row.returnedAmount.toFixed(0),
+      purchasedSlot: String(row.purchasedSlot),
+      expiresAtSlot: String(row.expiresAtSlot),
+      closedSlot: row.closedSlot !== null ? String(row.closedSlot) : null,
+      status: row.status,
+      updatedSlot: String(row.updatedSlot),
+    }
+  }
+  async pass(address: string): Promise<Pass> {
+    const row = await this.db.pass.findUnique({ where: { address }, include: { model: { select: { name: true } } } })
+    if (!row) fail('PASS_NOT_FOUND', 'This prepaid pass was not found.')
+    return this.passRow(row)
+  }
+  async accountPasses(wallet: string): Promise<AccountPasses> {
+    const rows = await this.db.pass.findMany({
+      where: { holder: wallet },
+      orderBy: [{ purchasedSlot: 'desc' }, { address: 'asc' }],
+      include: { model: { select: { name: true } } },
+    })
+    return { items: rows.map(row => this.passRow(row)), asOf: new Date().toISOString() }
   }
 }

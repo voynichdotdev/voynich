@@ -62,7 +62,9 @@ export function createChainRuntime(role: 'api' | 'indexer' | 'crank') {
       : event.type === 'session.updated' ? await readModel.session(event.id)
       : event.type === 'split.updated' ? await readModel.modelSplit(event.id)
       : event.type === 'bond.updated' ? await readModel.enclaveBond(event.id)
-      : event.type === 'benchmark.published' ? await readModel.benchmark(event.id) : null
+      : event.type === 'benchmark.published' ? await readModel.benchmark(event.id)
+      : event.type === 'pass.updated' ? await readModel.pass(event.id)
+      : event.type === 'pass_plan.updated' ? await readModel.modelPassPlan(event.id) : null
     if (data) hub.publish(streamEvent(event.type, data))
   }
   return {

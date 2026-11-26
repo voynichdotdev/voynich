@@ -106,6 +106,8 @@ export function buildChainApp(runtime: ChainRuntime) {
     '/v1/models/:id/policy/build', '/v1/models/:id/policy/clear/build',
     '/v1/models/:id/split/build', '/v1/models/:id/split/claim/build',
     '/v1/models/:id/benchmarks/build',
+    '/v1/models/:id/pass-plan/build',
+    '/v1/passes/buy/build', '/v1/passes/call/build', '/v1/passes/close/build',
     '/v1/models/:id/versions/build', '/v1/models/:id/versions/publish/build',
     '/v1/enclaves/:key/quote/build',
     '/v1/enclaves/:key/bond/deposit/build', '/v1/enclaves/:key/bond/withdraw/build',
@@ -124,6 +126,9 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/models/:id/split', async c => c.json(await read.modelSplit(readParam(c, 'id', s.ModelId))))
   app.get('/v1/benchmarks', async c => c.json(await read.benchmarks(readQuery(c, s.BenchmarkQuery))))
   app.get('/v1/models/:id/benchmarks', async c => c.json(await read.modelBenchmarks(readParam(c, 'id', s.ModelId), readQuery(c, s.PageQuery))))
+  app.get('/v1/models/:id/pass-plan', async c => c.json(await read.modelPassPlan(readParam(c, 'id', s.ModelId))))
+  app.get('/v1/accounts/:wallet/passes', async c => c.json(await read.accountPasses(readParam(c, 'wallet', s.Address))))
+  app.get('/v1/passes/:address', async c => c.json(await read.pass(readParam(c, 'address', s.Address))))
   app.get('/v1/models/:id/versions', async c => c.json(await read.modelVersions(readParam(c, 'id', s.ModelId))))
   app.get('/v1/enclaves', async c => c.json(await read.enclaves(readQuery(c, s.PageQuery))))
   app.get('/v1/enclaves/:key', async c => c.json(await read.enclave(readParam(c, 'key', s.Address))))
@@ -334,6 +339,10 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/models/:id/split/build', async c => c.json(await build.setSplit(readParam(c, 'id', s.ModelId), await readJson(c, s.SetSplitRequest))))
   app.post('/v1/models/:id/split/claim/build', async c => c.json(await build.claimSplit(readParam(c, 'id', s.ModelId), await readJson(c, s.ClaimSplitRequest))))
   app.post('/v1/models/:id/benchmarks/build', async c => c.json(await build.publishBenchmark(readParam(c, 'id', s.ModelId), await readJson(c, s.PublishBenchmarkRequest))))
+  app.post('/v1/models/:id/pass-plan/build', async c => c.json(await build.setPassPlan(readParam(c, 'id', s.ModelId), await readJson(c, s.SetPassPlanRequest))))
+  app.post('/v1/passes/buy/build', async c => c.json(await build.buyPass(await readJson(c, s.BuyPassRequest))))
+  app.post('/v1/passes/call/build', async c => c.json(await build.openPassCall(await readJson(c, s.OpenPassCallRequest))))
+  app.post('/v1/passes/close/build', async c => c.json(await build.closePass(await readJson(c, s.ClosePassRequest))))
   app.post('/v1/models/:id/versions/build', async c => c.json(await build.beginVersion(readParam(c, 'id', s.ModelId), await readJson(c, s.BeginVersionRequest))))
   app.post('/v1/models/:id/versions/write/build', async c => c.json(await build.writeVersionWeights(readParam(c, 'id', s.ModelId), await readJson(c, s.WriteVersionWeightsRequest))))
   app.post('/v1/models/:id/versions/seal-range/build', async c => c.json(await build.sealVersionRange(readParam(c, 'id', s.ModelId), await readJson(c, s.SealVersionRangeRequest))))

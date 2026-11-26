@@ -39,4 +39,5 @@ pub enum VoynichError {
     #[msg("The revenue split configuration, remaining account, or claim is invalid.")] InvalidSplit,
     #[msg("The operator bond deposit, withdrawal, or remaining account is invalid.")] InvalidBond,
     #[msg("The benchmark name, dataset, score, or receipt proofs are invalid.")] InvalidBenchmark,
+    #[msg("The pass plan or prepaid pass is invalid, inactive, expired, or exhausted.")] InvalidPass,
 }

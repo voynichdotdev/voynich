@@ -431,3 +431,65 @@ pub struct PublishBenchmark<'info> {
     #[account(init, payer = publisher, space = Benchmark::SPACE, seeds = [b"benchmark", model.key().as_ref(), args.name.as_bytes()], bump)] pub benchmark: Box<Account<'info, Benchmark>>,
     pub system_program: Program<'info, System>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SetPassPlan<'info> {
+    #[account(mut)] pub owner: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump, has_one = owner @ VoynichError::Unauthorized)] pub model: Box<Account<'info, Model>>,
+    #[account(init_if_needed, payer = owner, space = PassPlan::SPACE, seeds = [b"pass-plan", model.key().as_ref()], bump)] pub pass_plan: Box<Account<'info, PassPlan>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(nonce: u64, calls_total: u32)]
+pub struct BuyPass<'info> {
+    #[account(mut)] pub holder: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
+    #[account(seeds = [b"pass-plan", model.key().as_ref()], bump = pass_plan.bump)] pub pass_plan: Box<Account<'info, PassPlan>>,
+    #[account(init, payer = holder, space = Pass::SPACE, seeds = [b"pass", model.key().as_ref(), holder.key().as_ref(), &nonce.to_le_bytes()], bump)] pub pass: Box<Account<'info, Pass>>,
+    pub mint: Option<Account<'info, Mint>>,
+    #[account(mut)] pub holder_tokens: Option<Account<'info, TokenAccount>>,
+    /// CHECK: pass-owned ATA for SPL deposits; created and verified in money.rs.
+    #[account(mut)] pub pass_escrow: Option<UncheckedAccount<'info>>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub associated_token_program: Option<Program<'info, AssociatedToken>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>)]
+pub struct OpenPassCall<'info> {
+    #[account(mut)] pub holder: Signer<'info>,
+    #[account(mut, seeds = [b"pass", pass.model.as_ref(), pass.holder.as_ref(), &pass.nonce.to_le_bytes()], bump = pass.bump, has_one = holder @ VoynichError::Unauthorized)] pub pass: Box<Account<'info, Pass>>,
+    #[account(seeds = [b"config"], bump = config.bump)] pub config: Account<'info, Config>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
+    #[account(seeds = [b"enclave", enclave.signing_key.as_ref()], bump = enclave.bump)] pub enclave: Box<Account<'info, Enclave>>,
+    /// CHECK: verified against enclave and configured verifier.
+    pub attestation_record: UncheckedAccount<'info>,
+    /// CHECK: verified in handler (owner, PDA ["grant", model, enclave], discriminator, legacy 223B or 226B layout).
+    #[account(seeds = [b"grant", model.key().as_ref(), enclave.key().as_ref()], bump)] pub grant: UncheckedAccount<'info>,
+    #[account(init, payer = holder, space = Call::space(callback.as_ref().map(|c| c.accounts.len()).unwrap_or(0)), seeds = [b"call", holder.key().as_ref(), &nonce.to_le_bytes()], bump)] pub call: Box<Account<'info, Call>>,
+    pub mint: Option<Account<'info, Mint>>,
+    #[account(mut)] pub pass_escrow: Option<Account<'info, TokenAccount>>,
+    /// CHECK: must be the call-owned associated token account; created and checked in money.rs.
+    #[account(mut)] pub escrow_tokens: Option<UncheckedAccount<'info>>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub associated_token_program: Option<Program<'info, AssociatedToken>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct ClosePass<'info> {
+    #[account(mut)] pub closer: Signer<'info>,
+    #[account(mut, seeds = [b"pass", pass.model.as_ref(), pass.holder.as_ref(), &pass.nonce.to_le_bytes()], bump = pass.bump)] pub pass: Box<Account<'info, Pass>>,
+    /// CHECK: exact holder recipient verified against pass.holder.
+    #[account(mut)] pub holder: UncheckedAccount<'info>,
+    #[account(mut)] pub pass_escrow: Option<Account<'info, TokenAccount>>,
+    #[account(mut)] pub holder_tokens: Option<Account<'info, TokenAccount>>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub system_program: Program<'info, System>,
+}

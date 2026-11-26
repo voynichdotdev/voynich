@@ -91,6 +91,8 @@ model Model {
   indexingIssue       String?
   policy              ModelPolicy?
   split               Split?
+  passPlan            PassPlan?
+  passes              Pass[]
   benchmarks          Benchmark[]
   versions            ModelVersion[]
   weights             Weights[]
@@ -558,4 +560,49 @@ model Benchmark {
   @@index([scoreBps(sort: Desc), publishedSlot(sort: Desc)])
   @@index([modelAddress, publishedSlot(sort: Desc)])
   @@map("benchmarks")
+}
+
+enum PassStatus {
+  open
+  closed
+}
+
+model PassPlan {
+  address      String  @id @db.VarChar(44)
+  modelAddress String  @unique @db.VarChar(44)
+  model        Model   @relation(fields: [modelAddress], references: [address])
+  authority    String  @db.VarChar(44)
+  mint         String? @db.VarChar(44)
+  pricePerCall Decimal @db.Decimal(20, 0)
+  minCalls     Int
+  maxCalls     Int
+  ttlSlots     BigInt
+  active       Boolean @default(true)
+  updatedSlot  BigInt
+
+  @@map("pass_plans")
+}
+
+model Pass {
+  address         String     @id @db.VarChar(44)
+  modelAddress    String     @db.VarChar(44)
+  model           Model      @relation(fields: [modelAddress], references: [address])
+  holder          String     @db.VarChar(44)
+  nonce           String
+  mint            String?    @db.VarChar(44)
+  pricePerCall    Decimal    @db.Decimal(20, 0)
+  callsTotal      Int
+  callsUsed       Int        @default(0)
+  escrowRemaining Decimal    @db.Decimal(20, 0)
+  returnedAmount  Decimal    @default(0) @db.Decimal(20, 0)
+  purchasedSlot   BigInt
+  expiresAtSlot   BigInt
+  closedSlot      BigInt?
+  status          PassStatus @default(open)
+  updatedSlot     BigInt
+
+  @@index([holder, purchasedSlot(sort: Desc)])
+  @@index([modelAddress, purchasedSlot(sort: Desc)])
+  @@index([status, expiresAtSlot])
+  @@map("passes")
 }

@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*, system_program};
 use anchor_spl::{associated_token, token::{self, CloseAccount, Token, TokenAccount, Transfer}};
-use crate::{contexts::{ClaimSplit, CloseSession, DepositBond, OpenCall, OpenSession, OpenSessionCall, RefundCall, SettleCall, SettleMeteredCall, WithdrawBond}, errors::VoynichError, state::{Call, Session}};
+use crate::{contexts::{BuyPass, ClaimSplit, ClosePass, CloseSession, DepositBond, OpenCall, OpenPassCall, OpenSession, OpenSessionCall, RefundCall, SettleCall, SettleMeteredCall, WithdrawBond}, errors::VoynichError, state::{Call, Pass, Session}};
 
 fn token_account(account: &Account<TokenAccount>, owner: Pubkey, mint: Pubkey, associated: bool) -> Result<()> {
     require_keys_eq!(account.owner, owner, VoynichError::InvalidTokenAccount);
@@ -363,4 +363,150 @@ pub fn withdraw_bond(ctx: &Context<WithdrawBond>, amount: u64) -> Result<()> {
 
 pub fn slash_bond(bond_info: &AccountInfo, caller_info: &AccountInfo, amount: u64) -> Result<()> {
     native(bond_info, caller_info, amount)
+}
+
+fn transfer_pass_tokens<'info>(
+    program: &Program<'info, Token>,
+    pass: &Account<'info, Pass>,
+    from: &Account<'info, TokenAccount>,
+    to: &AccountInfo<'info>,
+    amount: u64,
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    let nonce_bytes = pass.nonce.to_le_bytes();
+    let bump = [pass.bump];
+    let seeds = [
+        b"pass".as_ref(),
+        pass.model.as_ref(),
+        pass.holder.as_ref(),
+        nonce_bytes.as_ref(),
+        bump.as_ref(),
+    ];
+    token::transfer(
+        CpiContext::new_with_signer(
+            program.to_account_info(),
+            Transfer { from: from.to_account_info(), to: to.clone(), authority: pass.to_account_info() },
+            &[&seeds],
+        ),
+        amount,
+    )
+}
+
+fn close_pass_tokens<'info>(
+    program: &Program<'info, Token>,
+    pass: &Account<'info, Pass>,
+    escrow: &Account<'info, TokenAccount>,
+    destination: &AccountInfo<'info>,
+) -> Result<()> {
+    let nonce_bytes = pass.nonce.to_le_bytes();
+    let bump = [pass.bump];
+    let seeds = [
+        b"pass".as_ref(),
+        pass.model.as_ref(),
+        pass.holder.as_ref(),
+        nonce_bytes.as_ref(),
+        bump.as_ref(),
+    ];
+    token::close_account(CpiContext::new_with_signer(
+        program.to_account_info(),
+        CloseAccount {
+            account: escrow.to_account_info(),
+            destination: destination.clone(),
+            authority: pass.to_account_info(),
+        },
+        &[&seeds],
+    ))
+}
+
+pub fn deposit_pass(ctx: &Context<BuyPass>, amount: u64) -> Result<()> {
+    let pass = &ctx.accounts.pass;
+    if pass.mint == Pubkey::default() {
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.holder.to_account_info(),
+                    to: pass.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+    } else {
+        let mint = ctx.accounts.mint.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let source = ctx.accounts.holder_tokens.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let escrow = ctx.accounts.pass_escrow.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let program = ctx.accounts.token_program.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let ata_program = ctx.accounts.associated_token_program.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        require_keys_eq!(mint.key(), pass.mint, VoynichError::InvalidTokenAccount);
+        token_account(source, pass.holder, pass.mint, false)?;
+        require_keys_eq!(escrow.key(), associated_token::get_associated_token_address(&pass.key(), &pass.mint), VoynichError::InvalidTokenAccount);
+        associated_token::create_idempotent(CpiContext::new(ata_program.to_account_info(), associated_token::Create {
+            payer: ctx.accounts.holder.to_account_info(),
+            associated_token: escrow.to_account_info(),
+            authority: pass.to_account_info(),
+            mint: mint.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            token_program: program.to_account_info(),
+        }))?;
+        token::transfer(
+            CpiContext::new(
+                program.to_account_info(),
+                Transfer {
+                    from: source.to_account_info(),
+                    to: escrow.to_account_info(),
+                    authority: ctx.accounts.holder.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+    }
+    Ok(())
+}
+
+pub fn deposit_from_pass(ctx: &Context<OpenPassCall>, amount: u64) -> Result<()> {
+    let pass = &ctx.accounts.pass;
+    let call = &ctx.accounts.call;
+    if call.price_mint == Pubkey::default() {
+        native(&pass.to_account_info(), &call.to_account_info(), amount)?;
+    } else {
+        let mint = ctx.accounts.mint.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let source = ctx.accounts.pass_escrow.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let escrow = ctx.accounts.escrow_tokens.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let program = ctx.accounts.token_program.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let ata_program = ctx.accounts.associated_token_program.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        require_keys_eq!(mint.key(), call.price_mint, VoynichError::InvalidTokenAccount);
+        token_account(source, pass.key(), call.price_mint, true)?;
+        require_keys_eq!(escrow.key(), associated_token::get_associated_token_address(&call.key(), &call.price_mint), VoynichError::InvalidTokenAccount);
+        associated_token::create_idempotent(CpiContext::new(ata_program.to_account_info(), associated_token::Create {
+            payer: ctx.accounts.holder.to_account_info(),
+            associated_token: escrow.to_account_info(),
+            authority: call.to_account_info(),
+            mint: mint.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            token_program: program.to_account_info(),
+        }))?;
+        transfer_pass_tokens(program, pass, source, &escrow.to_account_info(), amount)?;
+    }
+    Ok(())
+}
+
+pub fn close_pass_escrow(ctx: &Context<ClosePass>, remaining: u64) -> Result<u64> {
+    let pass = &ctx.accounts.pass;
+    require_keys_eq!(ctx.accounts.holder.key(), pass.holder, VoynichError::InvalidRecipient);
+    if pass.mint == Pubkey::default() {
+        native(&pass.to_account_info(), &ctx.accounts.holder.to_account_info(), remaining)?;
+        Ok(remaining)
+    } else {
+        let program = ctx.accounts.token_program.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let escrow = ctx.accounts.pass_escrow.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        let destination = ctx.accounts.holder_tokens.as_ref().ok_or(VoynichError::InvalidTokenAccount)?;
+        token_account(escrow, pass.key(), pass.mint, true)?;
+        token_account(destination, pass.holder, pass.mint, false)?;
+        let amount = escrow.amount;
+        transfer_pass_tokens(program, pass, escrow, &destination.to_account_info(), amount)?;
+        close_pass_tokens(program, pass, escrow, &ctx.accounts.holder.to_account_info())?;
+        Ok(amount)
+    }
 }

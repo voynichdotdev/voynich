@@ -65,6 +65,12 @@ const voynich = {
   listBenchmarks: async (...args: Parameters<Voynich['listBenchmarks']>) => (await load()).listBenchmarks(...args),
   listModelBenchmarks: async (...args: Parameters<Voynich['listModelBenchmarks']>) => (await load()).listModelBenchmarks(...args),
   publishBenchmark: async (...args: Parameters<Voynich['publishBenchmark']>) => (await load(true)).publishBenchmark(...args),
+  getPassPlan: async (...args: Parameters<Voynich['getPassPlan']>) => (await load()).getPassPlan(...args),
+  setPassPlan: async (...args: Parameters<Voynich['setPassPlan']>) => (await load(true)).setPassPlan(...args),
+  buyPass: async (...args: Parameters<Voynich['buyPass']>) => (await load(true)).buyPass(...args),
+  listPasses: async (...args: Parameters<Voynich['listPasses']>) => (await load(args[0] === undefined)).listPasses(...args),
+  pass: async (...args: Parameters<Voynich['pass']>) => (await load(true)).pass(...args),
+  closePass: async (...args: Parameters<Voynich['closePass']>) => (await load(true)).closePass(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

@@ -152,6 +152,23 @@ export function buildApp() {
     const state = c.get('fixture'); const wallet = readParam(c, 'wallet', s.Address)
     return c.json({ wallet, models: state.models.filter(m => m.owner === wallet), ownerEarnings: state.earnings('owner', wallet), enclaves: state.enclaves.filter(e => e.operator === wallet), operatorEarnings: state.earnings('operator', wallet), calls: state.calls.filter(call => call.caller === wallet) })
   })
+  app.get('/v1/models/:id/pass-plan', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const plan = state.passPlans.get(model.address)
+    if (!plan) fail('PASS_PLAN_NOT_FOUND', 'No prepaid pass plan is configured for this model.')
+    return c.json(plan)
+  })
+  app.get('/v1/accounts/:wallet/passes', c => {
+    const state = c.get('fixture'); const wallet = readParam(c, 'wallet', s.Address)
+    const items = [...state.passes.values()].filter(p => p.holder === wallet)
+    return c.json({ items, asOf: new Date().toISOString() })
+  })
+  app.get('/v1/passes/:address', c => {
+    const state = c.get('fixture'); const address = readParam(c, 'address', s.Address)
+    const item = state.passes.get(address)
+    if (!item) fail('PASS_NOT_FOUND', 'This prepaid pass was not found.')
+    return c.json(item)
+  })
   app.get('/v1/calls/:id', c => c.json(c.get('fixture').call(readParam(c, 'id', s.Address))))
   app.get('/v1/bounties', c => {
     const state = c.get('fixture'); const q = readQuery(c, s.BountyQuery, queryKeys)
@@ -774,6 +791,115 @@ export function buildApp() {
     if (row.status === 'deprecated') fail('MEASUREMENT_DEPRECATED', 'This measurement is already deprecated.', { stage: 'build' })
     if (row.publisher !== body.wallet && body.wallet !== FIXTURE.owner) fail('UNAUTHORIZED', 'Only the measurement publisher or protocol admin can deprecate this measurement.', { stage: 'build' })
     return c.json(state.build('deprecate_measurement', [body.wallet], { measurement: row.address }, () => { row.status = 'deprecated'; state.emit('measurement.updated', row) }))
+  })
+  app.post('/v1/models/:id/pass-plan/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.SetPassPlanRequest)
+    state.owner(model, body.wallet)
+    if (model.priceUnit !== 'call') fail('INVALID_PASS', 'Prepaid pass plans require a per-call model.', { stage: 'build' })
+    if (body.active && BigInt(body.pricePerCall) > BigInt(model.price.amount)) {
+      fail('INVALID_PASS', 'Pass pricePerCall cannot exceed the model price.', { stage: 'build' })
+    }
+    const address = fixtureAddress(`pass-plan:${model.address}`)
+    const next: s.PassPlan = {
+      address,
+      model: model.address,
+      modelName: model.name,
+      authority: body.wallet,
+      mint: model.price.mint,
+      pricePerCall: body.pricePerCall,
+      minCalls: body.minCalls,
+      maxCalls: body.maxCalls,
+      ttlSlots: body.ttlSlots,
+      active: body.active,
+      updatedSlot: String(state.slot),
+    }
+    return c.json(state.build('set_pass_plan', [body.wallet], { model: model.address, passPlan: address }, () => {
+      state.passPlans.set(model.address, next)
+      state.emit('pass_plan.updated', next)
+    }))
+  })
+  app.post('/v1/passes/buy/build', async c => {
+    const state = c.get('fixture'); const body = await readJson(c, s.BuyPassRequest); const model = state.model(body.model)
+    if (model.status !== 'live') fail('MODEL_NOT_LIVE', 'This model is not accepting new calls.', { stage: 'build' })
+    const plan = state.passPlans.get(model.address)
+    if (!plan || !plan.active) fail('INVALID_PASS', 'No active prepaid pass plan is configured for this model.', { stage: 'build' })
+    if (body.callsTotal < plan.minCalls || body.callsTotal > plan.maxCalls) {
+      fail('INVALID_PASS', `callsTotal must be between ${plan.minCalls} and ${plan.maxCalls}.`, { stage: 'build' })
+    }
+    const nonce = body.nonce ?? String(Date.now())
+    const address = fixtureAddress(`pass:${model.address}:${body.wallet}:${nonce}`)
+    const escrow = BigInt(body.callsTotal) * BigInt(plan.pricePerCall)
+    const purchasedSlot = state.slot
+    const expiresAtSlot = purchasedSlot + BigInt(plan.ttlSlots)
+    const next: s.Pass = {
+      address,
+      model: model.address,
+      modelName: model.name,
+      holder: body.wallet,
+      nonce,
+      mint: plan.mint,
+      pricePerCall: plan.pricePerCall,
+      callsTotal: body.callsTotal,
+      callsUsed: 0,
+      callsRemaining: body.callsTotal,
+      escrowRemaining: String(escrow),
+      returnedAmount: '0',
+      purchasedSlot: String(purchasedSlot),
+      expiresAtSlot: String(expiresAtSlot),
+      closedSlot: null,
+      status: 'open',
+      updatedSlot: String(state.slot),
+    }
+    return c.json(state.build('buy_pass', [body.wallet], { model: model.address, passPlan: plan.address, pass: address }, () => {
+      state.passes.set(address, next)
+      state.emit('pass.updated', next)
+    }))
+  })
+  app.post('/v1/passes/call/build', async c => {
+    const state = c.get('fixture'); const body = await readJson(c, s.OpenPassCallRequest)
+    const pass = state.passes.get(body.pass)
+    if (!pass) fail('PASS_NOT_FOUND', 'This prepaid pass was not found.')
+    if (pass.holder !== body.wallet) fail('UNAUTHORIZED', 'Only the pass holder can spend calls from this pass.', { stage: 'build' })
+    if (pass.status !== 'open' || pass.callsUsed >= pass.callsTotal || state.slot > BigInt(pass.expiresAtSlot)) {
+      fail('INVALID_PASS', 'This pass is closed, expired, or has no remaining calls.', { stage: 'build' })
+    }
+    const model = state.model(pass.model); const enclave = state.liveEnclave(body.enclave); state.requireGrant(model, enclave)
+    const callAddress = fixtureAddress(`pass-call:${crypto.randomUUID()}`)
+    const price = { ...structuredClone(model.price), amount: pass.pricePerCall }
+    const callRow: s.Call = {
+      address: callAddress, caller: pass.holder, callerIsProgram: false, model: model.address, modelName: model.name,
+      enclave: enclave.address, inputHash: body.inputHash, answerMode: body.answerMode ?? 'sealed', price,
+      priceUnit: 'call', unitPrice: structuredClone(price), ceiling: null,
+      openedSlot: String(state.slot), deadlineSlot: String(state.slot + BigInt(fixtureConfig.callDeadlineSlots!)),
+      status: 'open', receipt: null, failure: null,
+    }
+    return c.json(state.build('open_pass_call', [body.wallet], { model: model.address, pass: pass.address, call: callAddress }, () => {
+      pass.callsUsed += 1
+      pass.callsRemaining = Math.max(0, pass.callsTotal - pass.callsUsed)
+      pass.escrowRemaining = String(BigInt(pass.escrowRemaining) - BigInt(pass.pricePerCall))
+      pass.updatedSlot = String(state.slot)
+      state.calls.unshift(callRow)
+      state.emit('call.updated', callRow)
+      state.emit('pass.updated', pass)
+    }))
+  })
+  app.post('/v1/passes/close/build', async c => {
+    const state = c.get('fixture'); const body = await readJson(c, s.ClosePassRequest)
+    const pass = state.passes.get(body.pass)
+    if (!pass) fail('PASS_NOT_FOUND', 'This prepaid pass was not found.')
+    if (pass.status !== 'open') fail('INVALID_PASS', 'This pass is already closed.', { stage: 'build' })
+    const expiredOrExhausted = state.slot > BigInt(pass.expiresAtSlot) || pass.callsUsed >= pass.callsTotal
+    if (pass.holder !== body.wallet && !expiredOrExhausted) {
+      fail('UNAUTHORIZED', 'Only the pass holder can close an active pass before expiry.', { stage: 'build' })
+    }
+    return c.json(state.build('close_pass', [body.wallet], { model: pass.model, pass: pass.address }, () => {
+      pass.returnedAmount = pass.escrowRemaining
+      pass.escrowRemaining = '0'
+      pass.closedSlot = String(state.slot)
+      pass.status = 'closed'
+      pass.updatedSlot = String(state.slot)
+      state.emit('pass.updated', pass)
+    }))
   })
   return app
 }

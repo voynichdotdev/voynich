@@ -2633,4 +2633,148 @@ test('Voynich program flows on the supplied local validator', { timeout: 240_000
     assert(decoded.receipts[0]!.equals(r1))
     assert(decoded.receipts[1]!.equals(r2))
   })
+
+  await t.test('Build 15 Step 1: PassPlan 20%-off, buy 3-call Pass, settle 2 discounted calls verifying exact Receipt splits, and close returning 3rd call lamports', async () => {
+    const { PASS_PLAN_SPACE, PASS_SPACE, passPlanPda, passPda, decodePassPlanAccount, decodePassAccount } = await import('../sdk/src/program.js')
+    await refresh(first)
+    const passModel = await createModel('pass-model')
+    await uploadAndSeal(passModel)
+    await execute([await ownerGrant(passModel, first)], [owner])
+
+    const discountedPrice = (PRICE * 80n) / 100n // 20% off
+    const planKey = passPlanPda(passModel.address, voynich.programId)
+
+    // 1. Non-owner rejected; invalid price_per_call > model.price rejected
+    const stranger = Keypair.generate()
+    const holder = Keypair.generate()
+    await execute([
+      SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: stranger.publicKey, lamports: 20_000_000 }),
+      SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: holder.publicKey, lamports: 100_000_000 }),
+    ], [])
+    await assert.rejects(
+      execute([await voynich.methods.setPassPlan({
+        pricePerCall: bn(discountedPrice), minCalls: 2, maxCalls: 10, ttlSlots: bn(500n), active: true,
+      }).accountsStrict({
+        owner: stranger.publicKey, model: passModel.address, passPlan: planKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [stranger]),
+      /Unauthorized/,
+    )
+    await assert.rejects(
+      execute([await voynich.methods.setPassPlan({
+        pricePerCall: bn(PRICE + 1n), minCalls: 2, maxCalls: 10, ttlSlots: bn(500n), active: true,
+      }).accountsStrict({
+        owner: owner.publicKey, model: passModel.address, passPlan: planKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [owner]),
+      /InvalidPass/,
+    )
+
+    // 2. Owner sets 20%-off PassPlan
+    await execute([await voynich.methods.setPassPlan({
+      pricePerCall: bn(discountedPrice), minCalls: 2, maxCalls: 10, ttlSlots: bn(500n), active: true,
+    }).accountsStrict({
+      owner: owner.publicKey, model: passModel.address, passPlan: planKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [owner])
+
+    const planInfo = await connection.getAccountInfo(planKey, 'confirmed')
+    assert.equal(planInfo?.data.length, PASS_PLAN_SPACE)
+    const decPlan = decodePassPlanAccount(planInfo!.data)
+    assert.equal(decPlan.pricePerCall.toString(), discountedPrice.toString())
+    assert.equal(decPlan.minCalls, 2)
+    assert.equal(decPlan.maxCalls, 10)
+    assert.equal(decPlan.active, true)
+
+    // 3. Holder buys a 3-call Pass (calls_total < min_calls rejected first)
+    const passNonce = 777n
+    const passKey = passPda(passModel.address, holder.publicKey, passNonce, voynich.programId)
+    await assert.rejects(
+      execute([await voynich.methods.buyPass(bn(passNonce), 1).accountsStrict({
+        holder: holder.publicKey, model: passModel.address, passPlan: planKey, pass: passKey,
+        mint: null, holderTokens: null, passEscrow: null, tokenProgram: null, associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [holder]),
+      /InvalidPass/,
+    )
+
+    await execute([await voynich.methods.buyPass(bn(passNonce), 3).accountsStrict({
+      holder: holder.publicKey, model: passModel.address, passPlan: planKey, pass: passKey,
+      mint: null, holderTokens: null, passEscrow: null, tokenProgram: null, associatedTokenProgram: null,
+      systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [holder])
+
+    const passInfo = await connection.getAccountInfo(passKey, 'confirmed')
+    assert.equal(passInfo?.data.length, PASS_SPACE)
+    const decPass0 = decodePassAccount(passInfo!.data)
+    assert.equal(decPass0.callsTotal, 3)
+    assert.equal(decPass0.callsUsed, 0)
+    assert.equal(decPass0.escrowRemaining.toString(), (discountedPrice * 3n).toString())
+    assert.equal(decPass0.status, 'open')
+
+    // 4. Settle 2 calls via open_pass_call and verify exact Receipt splits at discountedPrice!
+    const expectedOperator = (discountedPrice * BigInt(OPERATOR_BPS)) / 10_000n
+    const expectedProtocol = (discountedPrice * BigInt(PROTOCOL_BPS)) / 10_000n
+    const expectedOwner = discountedPrice - expectedOperator - expectedProtocol
+
+    for (let idx = 1; idx <= 2; idx++) {
+      const callNonce = BigInt(9000 + idx)
+      const callNonceBytes = Buffer.alloc(8)
+      callNonceBytes.writeBigUInt64LE(callNonce)
+      const callAddr = pda(voynich.programId, utf8('call'), holder.publicKey.toBytes(), callNonceBytes)
+      const inputHash = sha256(utf8(`pass-in-${idx}`))
+      const openIx = await voynich.methods.openPassCall(bn(callNonce), [...inputHash], { sealed: {} }, null).accountsStrict({
+        holder: holder.publicKey, pass: passKey, config, model: passModel.address, enclave: first.address,
+        attestationRecord: first.record, grant: pda(voynich.programId, utf8('grant'), passModel.address.toBytes(), first.address.toBytes()),
+        call: callAddr, mint: null, passEscrow: null, escrowTokens: null, tokenProgram: null, associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()
+      await execute([openIx], [holder])
+
+      const outputHash = sha256(utf8(`pass-out-${idx}`))
+      const sig = signReceipt(first.signing.secretKey.subarray(0, 32), callAddr.toBytes(), inputHash, outputHash)
+      const verifyIx = Ed25519Program.createInstructionWithPublicKey({
+        publicKey: first.signing.publicKey.toBytes(),
+        message: receiptMessage(callAddr.toBytes(), inputHash, outputHash),
+        signature: sig,
+      })
+      const receiptAddr = pda(voynich.programId, utf8('receipt'), callAddr.toBytes())
+      const settleIx = await voynich.methods.settleCall([...outputHash], [...sig], 0, Buffer.alloc(0)).accountsStrict({
+        payer: admin.publicKey, config, model: passModel.address, enclave: first.address, attestationRecord: first.record,
+        call: callAddr, receipt: receiptAddr, caller: holder.publicKey, owner: owner.publicKey, operator: first.operator.publicKey,
+        feeRecipient: feeRecipient.publicKey, instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        escrowTokens: null, ownerTokens: null, operatorTokens: null, protocolTokens: null, callerTokens: null, tokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()
+      await execute([verifyIx, settleIx], [])
+
+      const receipt = decodeReceiptAccount((await connection.getAccountInfo(receiptAddr, 'confirmed'))!.data)
+      assert.equal(receipt.total.toString(), discountedPrice.toString())
+      assert.equal(receipt.ownerAmount.toString(), expectedOwner.toString())
+      assert.equal(receipt.operatorAmount.toString(), expectedOperator.toString())
+      assert.equal(receipt.protocolAmount.toString(), expectedProtocol.toString())
+    }
+
+    const decPass2 = decodePassAccount((await connection.getAccountInfo(passKey, 'confirmed'))!.data)
+    assert.equal(decPass2.callsUsed, 2)
+    assert.equal(decPass2.escrowRemaining.toString(), discountedPrice.toString())
+
+    // 5. Stranger cannot close active unexpired pass with unused calls
+    await assert.rejects(
+      execute([await voynich.methods.closePass().accountsStrict({
+        closer: stranger.publicKey, pass: passKey, holder: holder.publicKey,
+        passEscrow: null, holderTokens: null, tokenProgram: null, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [stranger]),
+      /Unauthorized/,
+    )
+
+    // 6. Holder closes pass and receives exact 3rd unused call's lamports back!
+    const closeSig = await execute([await voynich.methods.closePass().accountsStrict({
+      closer: holder.publicKey, pass: passKey, holder: holder.publicKey,
+      passEscrow: null, holderTokens: null, tokenProgram: null, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [holder])
+    const closeTx = await transaction(closeSig)
+    assert.equal(solChange(closeTx, holder.publicKey), discountedPrice)
+
+    const decPassClosed = decodePassAccount((await connection.getAccountInfo(passKey, 'confirmed'))!.data)
+    assert.equal(decPassClosed.status, 'closed')
+    assert.equal(decPassClosed.escrowRemaining.toString(), '0')
+  })
 })

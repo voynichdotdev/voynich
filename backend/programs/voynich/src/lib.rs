@@ -56,4 +56,8 @@ pub mod voynich {
     pub fn deposit_bond(ctx: Context<DepositBond>, amount_lamports: u64) -> Result<()> { handlers::deposit_bond(ctx, amount_lamports) }
     pub fn withdraw_bond(ctx: Context<WithdrawBond>, amount_lamports: u64) -> Result<()> { handlers::withdraw_bond(ctx, amount_lamports) }
     pub fn publish_benchmark<'info>(ctx: Context<'_, '_, 'info, 'info, PublishBenchmark<'info>>, args: PublishBenchmarkArgs) -> Result<()> { handlers::publish_benchmark(ctx, args) }
+    pub fn set_pass_plan(ctx: Context<SetPassPlan>, args: SetPassPlanArgs) -> Result<()> { handlers::set_pass_plan(ctx, args) }
+    pub fn buy_pass(ctx: Context<BuyPass>, nonce: u64, calls_total: u32) -> Result<()> { handlers::buy_pass(ctx, nonce, calls_total) }
+    pub fn open_pass_call(ctx: Context<OpenPassCall>, nonce: u64, input_hash: [u8; 32], answer_mode: AnswerMode, callback: Option<CallbackSpec>) -> Result<()> { handlers::open_pass_call(ctx, nonce, input_hash, answer_mode, callback) }
+    pub fn close_pass(ctx: Context<ClosePass>) -> Result<()> { handlers::close_pass(ctx) }
 }

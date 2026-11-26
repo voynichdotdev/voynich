@@ -64,6 +64,14 @@ export function bondPda(enclave: Key, programId: Key = PROGRAM_ID): PublicKey {
 export function benchmarkPda(model: Key, name: string, programId: Key = PROGRAM_ID): PublicKey {
   return pda(key(programId), utf8('benchmark'), key(model).toBytes(), utf8(name))
 }
+export function passPlanPda(model: Key, programId: Key = PROGRAM_ID): PublicKey {
+  return pda(key(programId), utf8('pass-plan'), key(model).toBytes())
+}
+export function passPda(model: Key, holder: Key, nonce: bigint | number | string, programId: Key = PROGRAM_ID): PublicKey {
+  const bytes = new Uint8Array(8)
+  new DataView(bytes.buffer).setBigUint64(0, BigInt(nonce), true)
+  return pda(key(programId), utf8('pass'), key(model).toBytes(), key(holder).toBytes(), bytes)
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -80,6 +88,8 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     split: (model: Key) => splitPda(model, programId),
     bond: (enclave: Key) => bondPda(enclave, programId),
     benchmark: (model: Key, name: string) => benchmarkPda(model, name, programId),
+    passPlan: (model: Key) => passPlanPda(model, programId),
+    pass: (model: Key, holder: Key, nonce: bigint | number | string) => passPda(model, holder, nonce, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -1351,5 +1361,252 @@ export async function buildPublishBenchmarkTx(params: {
   const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
   return new VersionedTransaction(
     new TransactionMessage({ payerKey: publisher, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export const PASS_PLAN_SPACE = 138 as const
+export const PASS_SPACE = 154 as const
+
+export type DecodedPassPlanAccount = {
+  model: PublicKey
+  authority: PublicKey
+  mint: PublicKey
+  pricePerCall: BN
+  minCalls: number
+  maxCalls: number
+  ttlSlots: BN
+  active: boolean
+  updatedSlot: BN
+  bump: number
+}
+
+export function decodePassPlanAccount(data: Uint8Array): DecodedPassPlanAccount {
+  if (!matchesDisc(data, 'account:PassPlan') || data.length < PASS_PLAN_SPACE) {
+    throw new Error('Invalid PassPlan account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const authority = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const mint = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const pricePerCall = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const minCalls = view.getUint32(offset, true); offset += 4
+  const maxCalls = view.getUint32(offset, true); offset += 4
+  const ttlSlots = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const activeByte = data[offset++]!
+  if (activeByte > 1) throw new Error(`Invalid PassPlan active flag: ${activeByte}`)
+  const active = activeByte === 1
+  const updatedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const bump = data[offset++]!
+  return { model, authority, mint, pricePerCall, minCalls, maxCalls, ttlSlots, active, updatedSlot, bump }
+}
+
+export type DecodedPassAccount = {
+  model: PublicKey
+  holder: PublicKey
+  nonce: BN
+  mint: PublicKey
+  pricePerCall: BN
+  callsTotal: number
+  callsUsed: number
+  escrowRemaining: BN
+  purchasedSlot: BN
+  expiresAtSlot: BN
+  status: 'open' | 'closed'
+  bump: number
+}
+
+export function decodePassAccount(data: Uint8Array): DecodedPassAccount {
+  if (!matchesDisc(data, 'account:Pass') || data.length < PASS_SPACE) {
+    throw new Error('Invalid Pass account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const holder = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const nonce = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const mint = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const pricePerCall = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const callsTotal = view.getUint32(offset, true); offset += 4
+  const callsUsed = view.getUint32(offset, true); offset += 4
+  const escrowRemaining = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const purchasedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const expiresAtSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const statusByte = data[offset++]!
+  if (statusByte > 1) throw new Error(`Invalid Pass status: ${statusByte}`)
+  const status = statusByte === 0 ? 'open' : 'closed'
+  const bump = data[offset++]!
+  return { model, holder, nonce, mint, pricePerCall, callsTotal, callsUsed, escrowRemaining, purchasedSlot, expiresAtSlot, status, bump }
+}
+
+export async function buildSetPassPlanTx(params: {
+  connection: Connection
+  owner: Key
+  model: Key
+  pricePerCall: bigint | number | string
+  minCalls: number
+  maxCalls: number
+  ttlSlots: bigint | number | string
+  active: boolean
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const owner = key(params.owner)
+  const model = key(params.model)
+  const passPlan = passPlanPda(model, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .setPassPlan({
+      pricePerCall: new BN(String(params.pricePerCall)),
+      minCalls: params.minCalls,
+      maxCalls: params.maxCalls,
+      ttlSlots: new BN(String(params.ttlSlots)),
+      active: params.active,
+    })
+    .accountsStrict({
+      owner,
+      model,
+      passPlan,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: owner, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildBuyPassTx(params: {
+  connection: Connection
+  holder: Key
+  model: Key
+  nonce: bigint | number | string
+  callsTotal: number
+  mint?: Key | null
+  holderTokens?: Key | null
+  passEscrow?: Key | null
+  tokenProgram?: Key | null
+  associatedTokenProgram?: Key | null
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const holder = key(params.holder)
+  const model = key(params.model)
+  const passPlan = passPlanPda(model, programId)
+  const pass = passPda(model, holder, params.nonce, programId)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .buyPass(new BN(String(params.nonce)), params.callsTotal)
+    .accountsStrict({
+      holder,
+      model,
+      passPlan,
+      pass,
+      mint: params.mint ? key(params.mint) : null,
+      holderTokens: params.holderTokens ? key(params.holderTokens) : null,
+      passEscrow: params.passEscrow ? key(params.passEscrow) : null,
+      tokenProgram: params.tokenProgram ? key(params.tokenProgram) : null,
+      associatedTokenProgram: params.associatedTokenProgram ? key(params.associatedTokenProgram) : null,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: holder, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildOpenPassCallTx(params: {
+  connection: Connection
+  holder: Key
+  pass: Key
+  model: Key
+  enclave: Key
+  attestationRecord: Key
+  nonce: bigint | number | string
+  inputHash: string | Uint8Array
+  answerMode?: 'sealed' | 'open'
+  mint?: Key | null
+  passEscrow?: Key | null
+  escrowTokens?: Key | null
+  tokenProgram?: Key | null
+  associatedTokenProgram?: Key | null
+  policy?: Key | null
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const holder = key(params.holder)
+  const pass = key(params.pass)
+  const model = key(params.model)
+  const enclave = key(params.enclave)
+  const a = addresses(programId)
+  const call = a.call(holder, BigInt(params.nonce))
+  const hashBytes = typeof params.inputHash === 'string' ? fromHex(params.inputHash) : params.inputHash
+  const answerMode = params.answerMode === 'open' ? { open: {} } : { sealed: {} }
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .openPassCall(new BN(String(params.nonce)), [...hashBytes], answerMode, null)
+    .accountsStrict({
+      holder,
+      pass,
+      config: a.config,
+      model,
+      enclave,
+      attestationRecord: key(params.attestationRecord),
+      grant: a.grant(model, enclave),
+      call,
+      mint: params.mint ? key(params.mint) : null,
+      passEscrow: params.passEscrow ? key(params.passEscrow) : null,
+      escrowTokens: params.escrowTokens ? key(params.escrowTokens) : null,
+      tokenProgram: params.tokenProgram ? key(params.tokenProgram) : null,
+      associatedTokenProgram: params.associatedTokenProgram ? key(params.associatedTokenProgram) : null,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .remainingAccounts(params.policy ? [{ pubkey: key(params.policy), isWritable: false, isSigner: false }] : [])
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: holder, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildClosePassTx(params: {
+  connection: Connection
+  closer: Key
+  pass: Key
+  holder: Key
+  passEscrow?: Key | null
+  holderTokens?: Key | null
+  tokenProgram?: Key | null
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const closer = key(params.closer)
+  const pass = key(params.pass)
+  const holder = key(params.holder)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .closePass()
+    .accountsStrict({
+      closer,
+      pass,
+      holder,
+      passEscrow: params.passEscrow ? key(params.passEscrow) : null,
+      holderTokens: params.holderTokens ? key(params.holderTokens) : null,
+      tokenProgram: params.tokenProgram ? key(params.tokenProgram) : null,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: closer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
   )
 }

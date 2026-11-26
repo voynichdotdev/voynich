@@ -482,6 +482,54 @@ impl Benchmark {
         + 1;
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PassStatus { Open, Closed }
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
+pub struct SetPassPlanArgs {
+    pub price_per_call: u64,
+    pub min_calls: u32,
+    pub max_calls: u32,
+    pub ttl_slots: u64,
+    pub active: bool,
+}
+
+#[account]
+pub struct PassPlan {
+    pub model: Pubkey,
+    pub authority: Pubkey,
+    pub mint: Pubkey,
+    pub price_per_call: u64,
+    pub min_calls: u32,
+    pub max_calls: u32,
+    pub ttl_slots: u64,
+    pub active: bool,
+    pub updated_slot: u64,
+    pub bump: u8,
+}
+impl PassPlan {
+    pub const SPACE: usize = 8 + 32 * 3 + 8 + 4 + 4 + 8 + 1 + 8 + 1;
+}
+
+#[account]
+pub struct Pass {
+    pub model: Pubkey,
+    pub holder: Pubkey,
+    pub nonce: u64,
+    pub mint: Pubkey,
+    pub price_per_call: u64,
+    pub calls_total: u32,
+    pub calls_used: u32,
+    pub escrow_remaining: u64,
+    pub purchased_slot: u64,
+    pub expires_at_slot: u64,
+    pub status: PassStatus,
+    pub bump: u8,
+}
+impl Pass {
+    pub const SPACE: usize = 8 + 32 * 3 + 8 * 5 + 4 * 2 + 1 + 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -835,5 +883,44 @@ mod tests {
         b.try_serialize(&mut buf).unwrap();
         assert_eq!(Benchmark::SPACE, 843);
         assert_eq!(buf.len(), Benchmark::SPACE);
+    }
+
+    #[test]
+    fn worst_case_pass_accounts_fit_within_space() {
+        let plan = PassPlan {
+            model: Pubkey::new_unique(),
+            authority: Pubkey::new_unique(),
+            mint: Pubkey::new_unique(),
+            price_per_call: u64::MAX,
+            min_calls: 1,
+            max_calls: u32::MAX,
+            ttl_slots: u64::MAX,
+            active: true,
+            updated_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut plan_buf = Vec::new();
+        plan.try_serialize(&mut plan_buf).unwrap();
+        assert_eq!(PassPlan::SPACE, 138);
+        assert_eq!(plan_buf.len(), PassPlan::SPACE);
+
+        let pass = Pass {
+            model: Pubkey::new_unique(),
+            holder: Pubkey::new_unique(),
+            nonce: u64::MAX,
+            mint: Pubkey::new_unique(),
+            price_per_call: u64::MAX,
+            calls_total: u32::MAX,
+            calls_used: u32::MAX,
+            escrow_remaining: u64::MAX,
+            purchased_slot: u64::MAX,
+            expires_at_slot: u64::MAX,
+            status: PassStatus::Closed,
+            bump: 255,
+        };
+        let mut pass_buf = Vec::new();
+        pass.try_serialize(&mut pass_buf).unwrap();
+        assert_eq!(Pass::SPACE, 154);
+        assert_eq!(pass_buf.len(), Pass::SPACE);
     }
 }

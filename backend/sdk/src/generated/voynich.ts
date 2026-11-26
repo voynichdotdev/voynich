@@ -211,6 +211,172 @@ export type Voynich = {
       ]
     },
     {
+      "name": "buyPass",
+      "discriminator": [
+        57,
+        144,
+        218,
+        182,
+        67,
+        42,
+        234,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "passPlan",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pass",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "holder"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "holderTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "passEscrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "callsTotal",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "claimSplit",
       "discriminator": [
         129,
@@ -378,6 +544,114 @@ export type Voynich = {
               }
             ]
           }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closePass",
+      "discriminator": [
+        165,
+        74,
+        197,
+        223,
+        61,
+        96,
+        167,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "closer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pass",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pass.model",
+                "account": "pass"
+              },
+              {
+                "kind": "account",
+                "path": "pass.holder",
+                "account": "pass"
+              },
+              {
+                "kind": "account",
+                "path": "pass.nonce",
+                "account": "pass"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder",
+          "writable": true
+        },
+        {
+          "name": "passEscrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "holderTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         },
         {
           "name": "eventAuthority",
@@ -1868,6 +2142,271 @@ export type Voynich = {
         {
           "name": "ceiling",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "openPassCall",
+      "discriminator": [
+        53,
+        169,
+        0,
+        89,
+        95,
+        60,
+        142,
+        188
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "pass"
+          ]
+        },
+        {
+          "name": "pass",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pass.model",
+                "account": "pass"
+              },
+              {
+                "kind": "account",
+                "path": "pass.holder",
+                "account": "pass"
+              },
+              {
+                "kind": "account",
+                "path": "pass.nonce",
+                "account": "pass"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "enclave",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  99,
+                  108,
+                  97,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "enclave.signing_key",
+                "account": "enclave"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attestationRecord"
+        },
+        {
+          "name": "grant",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "enclave"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "holder"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "passEscrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "escrowTokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenProgram",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "inputHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "answerMode",
+          "type": {
+            "defined": {
+              "name": "answerMode"
+            }
+          }
+        },
+        {
+          "name": "callback",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "callbackSpec"
+              }
+            }
+          }
         }
       ]
     },
@@ -3843,6 +4382,123 @@ export type Voynich = {
       ]
     },
     {
+      "name": "setPassPlan",
+      "discriminator": [
+        129,
+        65,
+        100,
+        143,
+        23,
+        201,
+        26,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "passPlan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "setPassPlanArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "setPolicy",
       "discriminator": [
         40,
@@ -5291,6 +5947,32 @@ export type Voynich = {
       ]
     },
     {
+      "name": "pass",
+      "discriminator": [
+        40,
+        247,
+        140,
+        113,
+        56,
+        14,
+        57,
+        44
+      ]
+    },
+    {
+      "name": "passPlan",
+      "discriminator": [
+        194,
+        153,
+        247,
+        119,
+        210,
+        16,
+        50,
+        143
+      ]
+    },
+    {
       "name": "policy",
       "discriminator": [
         222,
@@ -5602,6 +6284,58 @@ export type Voynich = {
         156,
         200,
         196
+      ]
+    },
+    {
+      "name": "passClosed",
+      "discriminator": [
+        122,
+        76,
+        69,
+        52,
+        68,
+        10,
+        33,
+        223
+      ]
+    },
+    {
+      "name": "passPlanUpdated",
+      "discriminator": [
+        166,
+        227,
+        117,
+        122,
+        135,
+        88,
+        80,
+        115
+      ]
+    },
+    {
+      "name": "passPurchased",
+      "discriminator": [
+        11,
+        171,
+        162,
+        118,
+        129,
+        168,
+        151,
+        90
+      ]
+    },
+    {
+      "name": "passUsed",
+      "discriminator": [
+        131,
+        42,
+        120,
+        140,
+        122,
+        112,
+        205,
+        177
       ]
     },
     {
@@ -5933,6 +6667,11 @@ export type Voynich = {
       "code": 6036,
       "name": "invalidBenchmark",
       "msg": "The benchmark name, dataset, score, or receipt proofs are invalid."
+    },
+    {
+      "code": 6037,
+      "name": "invalidPass",
+      "msg": "The pass plan or prepaid pass is invalid, inactive, expired, or exhausted."
     }
   ],
   "types": [
@@ -7991,6 +8730,316 @@ export type Voynich = {
       }
     },
     {
+      "name": "pass",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pricePerCall",
+            "type": "u64"
+          },
+          {
+            "name": "callsTotal",
+            "type": "u32"
+          },
+          {
+            "name": "callsUsed",
+            "type": "u32"
+          },
+          {
+            "name": "escrowRemaining",
+            "type": "u64"
+          },
+          {
+            "name": "purchasedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "expiresAtSlot",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "passStatus"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "passClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pass",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "closer",
+            "type": "pubkey"
+          },
+          {
+            "name": "returnedAmount",
+            "type": "u64"
+          },
+          {
+            "name": "callsUsed",
+            "type": "u32"
+          },
+          {
+            "name": "callsTotal",
+            "type": "u32"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "passStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "passPlan",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pricePerCall",
+            "type": "u64"
+          },
+          {
+            "name": "minCalls",
+            "type": "u32"
+          },
+          {
+            "name": "maxCalls",
+            "type": "u32"
+          },
+          {
+            "name": "ttlSlots",
+            "type": "u64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updatedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "passPlanUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "passPlan",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pricePerCall",
+            "type": "u64"
+          },
+          {
+            "name": "minCalls",
+            "type": "u32"
+          },
+          {
+            "name": "maxCalls",
+            "type": "u32"
+          },
+          {
+            "name": "ttlSlots",
+            "type": "u64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updatedSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "passPurchased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pass",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pricePerCall",
+            "type": "u64"
+          },
+          {
+            "name": "callsTotal",
+            "type": "u32"
+          },
+          {
+            "name": "escrowRemaining",
+            "type": "u64"
+          },
+          {
+            "name": "purchasedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "expiresAtSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "passStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "open"
+          },
+          {
+            "name": "closed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "passUsed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pass",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "callsUsed",
+            "type": "u32"
+          },
+          {
+            "name": "callsTotal",
+            "type": "u32"
+          },
+          {
+            "name": "escrowRemaining",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "policy",
       "type": {
         "kind": "struct",
@@ -8543,6 +9592,34 @@ export type Voynich = {
       }
     },
     {
+      "name": "setPassPlanArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pricePerCall",
+            "type": "u64"
+          },
+          {
+            "name": "minCalls",
+            "type": "u32"
+          },
+          {
+            "name": "maxCalls",
+            "type": "u32"
+          },
+          {
+            "name": "ttlSlots",
+            "type": "u64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "split",
       "type": {
         "kind": "struct",
@@ -9030,6 +10107,172 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "buy_pass",
+      "discriminator": [
+        57,
+        144,
+        218,
+        182,
+        67,
+        42,
+        234,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pass_plan",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pass",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "holder"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "holder_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "pass_escrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "calls_total",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "claim_split",
       "discriminator": [
         129,
@@ -9197,6 +10440,114 @@ export const IDL: Voynich = {
               }
             ]
           }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_pass",
+      "discriminator": [
+        165,
+        74,
+        197,
+        223,
+        61,
+        96,
+        167,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "closer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pass",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pass.model",
+                "account": "Pass"
+              },
+              {
+                "kind": "account",
+                "path": "pass.holder",
+                "account": "Pass"
+              },
+              {
+                "kind": "account",
+                "path": "pass.nonce",
+                "account": "Pass"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder",
+          "writable": true
+        },
+        {
+          "name": "pass_escrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "holder_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
           "name": "event_authority",
@@ -10687,6 +12038,271 @@ export const IDL: Voynich = {
         {
           "name": "ceiling",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "open_pass_call",
+      "discriminator": [
+        53,
+        169,
+        0,
+        89,
+        95,
+        60,
+        142,
+        188
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "pass"
+          ]
+        },
+        {
+          "name": "pass",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pass.model",
+                "account": "Pass"
+              },
+              {
+                "kind": "account",
+                "path": "pass.holder",
+                "account": "Pass"
+              },
+              {
+                "kind": "account",
+                "path": "pass.nonce",
+                "account": "Pass"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "enclave",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  99,
+                  108,
+                  97,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "enclave.signing_key",
+                "account": "Enclave"
+              }
+            ]
+          }
+        },
+        {
+          "name": "attestation_record"
+        },
+        {
+          "name": "grant",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "enclave"
+              }
+            ]
+          }
+        },
+        {
+          "name": "call",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "holder"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "optional": true
+        },
+        {
+          "name": "pass_escrow",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "escrow_tokens",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "input_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "answer_mode",
+          "type": {
+            "defined": {
+              "name": "AnswerMode"
+            }
+          }
+        },
+        {
+          "name": "callback",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "CallbackSpec"
+              }
+            }
+          }
         }
       ]
     },
@@ -12662,6 +14278,123 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "set_pass_plan",
+      "discriminator": [
+        129,
+        65,
+        100,
+        143,
+        23,
+        201,
+        26,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "model"
+          ]
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pass_plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetPassPlanArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "set_policy",
       "discriminator": [
         40,
@@ -14110,6 +15843,32 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "Pass",
+      "discriminator": [
+        40,
+        247,
+        140,
+        113,
+        56,
+        14,
+        57,
+        44
+      ]
+    },
+    {
+      "name": "PassPlan",
+      "discriminator": [
+        194,
+        153,
+        247,
+        119,
+        210,
+        16,
+        50,
+        143
+      ]
+    },
+    {
       "name": "Policy",
       "discriminator": [
         222,
@@ -14421,6 +16180,58 @@ export const IDL: Voynich = {
         156,
         200,
         196
+      ]
+    },
+    {
+      "name": "PassClosed",
+      "discriminator": [
+        122,
+        76,
+        69,
+        52,
+        68,
+        10,
+        33,
+        223
+      ]
+    },
+    {
+      "name": "PassPlanUpdated",
+      "discriminator": [
+        166,
+        227,
+        117,
+        122,
+        135,
+        88,
+        80,
+        115
+      ]
+    },
+    {
+      "name": "PassPurchased",
+      "discriminator": [
+        11,
+        171,
+        162,
+        118,
+        129,
+        168,
+        151,
+        90
+      ]
+    },
+    {
+      "name": "PassUsed",
+      "discriminator": [
+        131,
+        42,
+        120,
+        140,
+        122,
+        112,
+        205,
+        177
       ]
     },
     {
@@ -14752,6 +16563,11 @@ export const IDL: Voynich = {
       "code": 6036,
       "name": "InvalidBenchmark",
       "msg": "The benchmark name, dataset, score, or receipt proofs are invalid."
+    },
+    {
+      "code": 6037,
+      "name": "InvalidPass",
+      "msg": "The pass plan or prepaid pass is invalid, inactive, expired, or exhausted."
     }
   ],
   "types": [
@@ -16810,6 +18626,316 @@ export const IDL: Voynich = {
       }
     },
     {
+      "name": "Pass",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_per_call",
+            "type": "u64"
+          },
+          {
+            "name": "calls_total",
+            "type": "u32"
+          },
+          {
+            "name": "calls_used",
+            "type": "u32"
+          },
+          {
+            "name": "escrow_remaining",
+            "type": "u64"
+          },
+          {
+            "name": "purchased_slot",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at_slot",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "PassStatus"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PassClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pass",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "closer",
+            "type": "pubkey"
+          },
+          {
+            "name": "returned_amount",
+            "type": "u64"
+          },
+          {
+            "name": "calls_used",
+            "type": "u32"
+          },
+          {
+            "name": "calls_total",
+            "type": "u32"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "PassStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PassPlan",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_per_call",
+            "type": "u64"
+          },
+          {
+            "name": "min_calls",
+            "type": "u32"
+          },
+          {
+            "name": "max_calls",
+            "type": "u32"
+          },
+          {
+            "name": "ttl_slots",
+            "type": "u64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PassPlanUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pass_plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_per_call",
+            "type": "u64"
+          },
+          {
+            "name": "min_calls",
+            "type": "u32"
+          },
+          {
+            "name": "max_calls",
+            "type": "u32"
+          },
+          {
+            "name": "ttl_slots",
+            "type": "u64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "updated_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PassPurchased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pass",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_per_call",
+            "type": "u64"
+          },
+          {
+            "name": "calls_total",
+            "type": "u32"
+          },
+          {
+            "name": "escrow_remaining",
+            "type": "u64"
+          },
+          {
+            "name": "purchased_slot",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PassStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Open"
+          },
+          {
+            "name": "Closed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PassUsed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pass",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "call",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "calls_used",
+            "type": "u32"
+          },
+          {
+            "name": "calls_total",
+            "type": "u32"
+          },
+          {
+            "name": "escrow_remaining",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Policy",
       "type": {
         "kind": "struct",
@@ -17357,6 +19483,34 @@ export const IDL: Voynich = {
           },
           {
             "name": "Closed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetPassPlanArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "price_per_call",
+            "type": "u64"
+          },
+          {
+            "name": "min_calls",
+            "type": "u32"
+          },
+          {
+            "name": "max_calls",
+            "type": "u32"
+          },
+          {
+            "name": "ttl_slots",
+            "type": "u64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
           }
         ]
       }

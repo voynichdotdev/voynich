@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BENCHMARK_SPACE, BN, BOND_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePolicyAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BENCHMARK_SPACE, BN, BOND_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, PASS_PLAN_SPACE, PASS_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePassAccount, decodePassPlanAccount, decodePolicyAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -1013,6 +1013,163 @@ export function builders(runtime: ChainRuntime) {
         .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
         .instruction()
       return ledger.build('publish_benchmark', publisher, [instruction], { model: row.key.toBase58(), benchmark: benchmark.toBase58() }, rent)
+    },
+    async setPassPlan(id: string, body: c.SetPassPlanRequest) {
+      const row = await model(id)
+      const owner = publicKey(body.wallet)
+      if (!row.value.owner.equals(owner)) fail('UNAUTHORIZED', 'Only the model owner can configure a prepaid pass plan.', { stage: 'build' })
+      if ('token' in row.value.priceUnit) fail('INVALID_PASS', 'Prepaid pass plans require a per-call model.', { stage: 'build' })
+      if (body.active && BigInt(body.pricePerCall) > BigInt(row.value.price.toString())) {
+        fail('INVALID_PASS', 'Pass pricePerCall cannot exceed the model price.', { stage: 'build' })
+      }
+      const passPlan = a.passPlan(row.key)
+      const existing = await runtime.rpc.connection.getAccountInfo(passPlan, 'confirmed')
+      const rent = existing ? 0n : BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(PASS_PLAN_SPACE))
+      const instruction = await voynich.methods
+        .setPassPlan({
+          pricePerCall: bn(body.pricePerCall),
+          minCalls: body.minCalls,
+          maxCalls: body.maxCalls,
+          ttlSlots: bn(body.ttlSlots),
+          active: body.active,
+        })
+        .accountsStrict({
+          owner,
+          model: row.key,
+          passPlan,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .instruction()
+      return ledger.build('set_pass_plan', owner, [instruction], { model: row.key.toBase58(), passPlan: passPlan.toBase58() }, rent)
+    },
+    async buyPass(body: c.BuyPassRequest) {
+      const row = await model(body.model)
+      if (!('live' in row.value.status)) fail('MODEL_NOT_LIVE', 'This model is not accepting new calls.', { stage: 'build' })
+      if ('token' in row.value.priceUnit) fail('INVALID_PASS', 'Prepaid passes require a per-call model.', { stage: 'build' })
+      const passPlanKey = a.passPlan(row.key)
+      const planInfo = await runtime.rpc.connection.getAccountInfo(passPlanKey, 'confirmed')
+      const chainPlan = planInfo && planInfo.owner.equals(runtime.programId) ? decodePassPlanAccount(planInfo.data) : null
+      if (!chainPlan || !chainPlan.active) fail('INVALID_PASS', 'No active prepaid pass plan is configured for this model.', { stage: 'build' })
+      if (body.callsTotal < chainPlan.minCalls || body.callsTotal > chainPlan.maxCalls) {
+        fail('INVALID_PASS', `callsTotal must be between ${chainPlan.minCalls} and ${chainPlan.maxCalls}.`, { stage: 'build' })
+      }
+      const holder = publicKey(body.wallet)
+      const nonce = body.nonce !== undefined ? BigInt(body.nonce) : randomBytes(8).readBigUInt64LE(0)
+      const pass = a.pass(row.key, holder, nonce)
+      const token = !chainPlan.mint.equals(PublicKey.default)
+      const escrowAmount = BigInt(body.callsTotal) * BigInt(chainPlan.pricePerCall.toString())
+      const passRent = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(PASS_SPACE))
+      const ataRent = token ? BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE)) : 0n
+      const requiredLamports = passRent + ataRent + (token ? 0n : escrowAmount)
+      const instruction = await voynich.methods
+        .buyPass(bn(nonce), body.callsTotal)
+        .accountsStrict({
+          holder,
+          model: row.key,
+          passPlan: passPlanKey,
+          pass,
+          mint: token ? chainPlan.mint : null,
+          holderTokens: token ? getAssociatedTokenAddressSync(chainPlan.mint, holder, false) : null,
+          passEscrow: token ? getAssociatedTokenAddressSync(chainPlan.mint, pass, true) : null,
+          tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+          associatedTokenProgram: token ? ASSOCIATED_TOKEN_PROGRAM_ID : null,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .instruction()
+      return ledger.build('buy_pass', holder, [instruction], { model: row.key.toBase58(), passPlan: passPlanKey.toBase58(), pass: pass.toBase58() }, requiredLamports)
+    },
+    async openPassCall(body: c.OpenPassCallRequest) {
+      const holder = publicKey(body.wallet)
+      const passKey = publicKey(body.pass)
+      const passInfo = await runtime.rpc.connection.getAccountInfo(passKey, 'confirmed')
+      const chainPass = passInfo && passInfo.owner.equals(runtime.programId) ? decodePassAccount(passInfo.data) : null
+      if (!chainPass) fail('PASS_NOT_FOUND', 'This prepaid pass was not found.')
+      if (!chainPass.holder.equals(holder)) fail('UNAUTHORIZED', 'Only the pass holder can spend calls from this pass.', { stage: 'build' })
+      if (chainPass.status !== 'open' || chainPass.callsUsed >= chainPass.callsTotal) {
+        fail('INVALID_PASS', 'This pass is closed or has no remaining calls.', { stage: 'build' })
+      }
+      const row = await model(chainPass.model.toBase58())
+      if (!('live' in row.value.status)) fail('MODEL_NOT_LIVE', 'This model is not accepting new calls.', { stage: 'build' })
+      const target = publicKey(body.enclave)
+      const entry = await enclave(target)
+      const grantInfo = await runtime.rpc.connection.getAccountInfo(a.grant(row.key, target), 'confirmed')
+      const grant = grantInfo && grantInfo.owner.equals(runtime.programId) ? decodeGrantAccount(grantInfo.data) : null
+      if (!grant || grant.revoked) fail('GRANT_REQUIRED', 'This enclave does not hold an active grant for the model.', { stage: 'build' })
+      const nonce = body.nonce !== undefined ? BigInt(body.nonce) : randomBytes(8).readBigUInt64LE(0)
+      const call = a.call(holder, nonce)
+      const token = !row.value.priceMint.equals(PublicKey.default)
+      const callRent = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(CALL_SPACE))
+      const ataRent = token ? BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE)) : 0n
+      const requiredLamports = callRent + ataRent
+      const answerMode = body.answerMode === 'open' ? { open: {} } : { sealed: {} }
+      const policyRemaining: { pubkey: PublicKey; isWritable: boolean; isSigner: boolean }[] = []
+      if ((row.value as { hasPolicy?: boolean }).hasPolicy) {
+        const policyKey = a.policy(row.key)
+        const policyInfo = await runtime.rpc.connection.getAccountInfo(policyKey, 'confirmed')
+        if (policyInfo) {
+          const policy = decodePolicyAccount(policyInfo.data)
+          if (policy.allowListEnabled && !policy.allowedCallers.some(c => c.equals(holder))) {
+            fail('POLICY_CALLER_DENIED', 'The pass holder is not on the model allow list.', { stage: 'build' })
+          }
+        }
+        policyRemaining.push({ pubkey: policyKey, isWritable: false, isSigner: false })
+      }
+      const instruction = await voynich.methods
+        .openPassCall(bn(nonce), [...fromHex(body.inputHash)], answerMode, null)
+        .accountsStrict({
+          holder,
+          pass: passKey,
+          config: a.config,
+          model: row.key,
+          enclave: target,
+          attestationRecord: entry.attestationRecord,
+          grant: a.grant(row.key, target),
+          call,
+          mint: token ? row.value.priceMint : null,
+          passEscrow: token ? getAssociatedTokenAddressSync(row.value.priceMint, passKey, true) : null,
+          escrowTokens: token ? getAssociatedTokenAddressSync(row.value.priceMint, call, true) : null,
+          tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+          associatedTokenProgram: token ? ASSOCIATED_TOKEN_PROGRAM_ID : null,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .remainingAccounts(policyRemaining)
+        .instruction()
+      return ledger.build('open_pass_call', holder, [instruction], { model: row.key.toBase58(), pass: passKey.toBase58(), call: call.toBase58() }, requiredLamports)
+    },
+    async closePass(body: c.ClosePassRequest) {
+      const closer = publicKey(body.wallet)
+      const passKey = publicKey(body.pass)
+      const passInfo = await runtime.rpc.connection.getAccountInfo(passKey, 'confirmed')
+      const chainPass = passInfo && passInfo.owner.equals(runtime.programId) ? decodePassAccount(passInfo.data) : null
+      if (!chainPass) fail('PASS_NOT_FOUND', 'This prepaid pass was not found.')
+      if (chainPass.status !== 'open') fail('INVALID_PASS', 'This pass is already closed.', { stage: 'build' })
+      const token = !chainPass.mint.equals(PublicKey.default)
+      const holderTokens = token ? getAssociatedTokenAddressSync(chainPass.mint, chainPass.holder, true) : null
+      const instructions: TransactionInstruction[] = []
+      let requiredLamports = 0n
+      if (token && holderTokens && !await runtime.rpc.connection.getAccountInfo(holderTokens, 'confirmed')) {
+        requiredLamports += BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+        instructions.push(createAssociatedTokenAccountIdempotentInstruction(closer, holderTokens, chainPass.holder, chainPass.mint))
+      }
+      instructions.push(
+        await voynich.methods
+          .closePass()
+          .accountsStrict({
+            closer,
+            pass: passKey,
+            holder: chainPass.holder,
+            passEscrow: token ? getAssociatedTokenAddressSync(chainPass.mint, passKey, true) : null,
+            holderTokens,
+            tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+            systemProgram: SystemProgram.programId,
+            ...events,
+          })
+          .instruction(),
+      )
+      return ledger.build('close_pass', closer, instructions, { model: chainPass.model.toBase58(), pass: passKey.toBase58() }, requiredLamports)
     },
   }
 }

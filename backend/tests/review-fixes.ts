@@ -6463,3 +6463,153 @@ test('Build 14 Step 2: compiled CLI benchmark run --suite and benchmark list + s
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 15 Step 1: PassPlan/Pass PDA helpers, decoders, offline tx builders, fixture routes, and SDK pass methods', async () => {
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const {
+    PASS_PLAN_SPACE, PASS_SPACE, addresses, passPlanPda, passPda,
+    decodePassPlanAccount, decodePassAccount,
+    buildSetPassPlanTx, buildBuyPassTx, buildOpenPassCallTx, buildClosePassTx,
+  } = await import('../sdk/src/program.js')
+  const { SetPassPlanRequest } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { sha256, toHex, utf8 } = await import('voynich/crypto')
+  const { createVoynich } = await import('../sdk/src/client.js')
+  const { buildApp } = await import('../src/app.js')
+
+  assert.equal(PASS_PLAN_SPACE, 138)
+  assert.equal(PASS_SPACE, 154)
+  const modelKey = Keypair.generate().publicKey
+  const authorityKey = Keypair.generate().publicKey
+  const holderKey = Keypair.generate().publicKey
+  const enclaveKey = Keypair.generate().publicKey
+  const attRecordKey = Keypair.generate().publicKey
+  assert(passPlanPda(modelKey).equals(addresses().passPlan(modelKey)))
+  assert(passPda(modelKey, holderKey, 42n).equals(addresses().pass(modelKey, holderKey, 42n)))
+
+  // 1. decodePassPlanAccount round-trip
+  const planBuf = Buffer.alloc(PASS_PLAN_SPACE)
+  Buffer.from(sha256(utf8('account:PassPlan')).subarray(0, 8)).copy(planBuf, 0)
+  let off = 8
+  modelKey.toBuffer().copy(planBuf, off); off += 32
+  authorityKey.toBuffer().copy(planBuf, off); off += 32
+  PublicKey.default.toBuffer().copy(planBuf, off); off += 32
+  planBuf.writeBigUInt64LE(8_000_000n, off); off += 8
+  planBuf.writeUInt32LE(2, off); off += 4
+  planBuf.writeUInt32LE(100, off); off += 4
+  planBuf.writeBigUInt64LE(50_000n, off); off += 8
+  planBuf[off++] = 1
+  planBuf.writeBigUInt64LE(474500100n, off); off += 8
+  planBuf[off++] = 253
+  assert.equal(off, PASS_PLAN_SPACE)
+
+  const decPlan = decodePassPlanAccount(planBuf)
+  assert(decPlan.model.equals(modelKey))
+  assert(decPlan.authority.equals(authorityKey))
+  assert(decPlan.mint.equals(PublicKey.default))
+  assert.equal(decPlan.pricePerCall.toString(), '8000000')
+  assert.equal(decPlan.minCalls, 2)
+  assert.equal(decPlan.maxCalls, 100)
+  assert.equal(decPlan.ttlSlots.toString(), '50000')
+  assert.equal(decPlan.active, true)
+  assert.equal(decPlan.updatedSlot.toString(), '474500100')
+  assert.equal(decPlan.bump, 253)
+
+  // 2. decodePassAccount round-trip
+  const passBuf = Buffer.alloc(PASS_SPACE)
+  Buffer.from(sha256(utf8('account:Pass')).subarray(0, 8)).copy(passBuf, 0)
+  off = 8
+  modelKey.toBuffer().copy(passBuf, off); off += 32
+  holderKey.toBuffer().copy(passBuf, off); off += 32
+  passBuf.writeBigUInt64LE(99n, off); off += 8
+  PublicKey.default.toBuffer().copy(passBuf, off); off += 32
+  passBuf.writeBigUInt64LE(8_000_000n, off); off += 8
+  passBuf.writeUInt32LE(5, off); off += 4
+  passBuf.writeUInt32LE(2, off); off += 4
+  passBuf.writeBigUInt64LE(24_000_000n, off); off += 8
+  passBuf.writeBigUInt64LE(474500200n, off); off += 8
+  passBuf.writeBigUInt64LE(474550200n, off); off += 8
+  passBuf[off++] = 0 // open
+  passBuf[off++] = 251
+  assert.equal(off, PASS_SPACE)
+
+  const decPass = decodePassAccount(passBuf)
+  assert(decPass.model.equals(modelKey))
+  assert(decPass.holder.equals(holderKey))
+  assert.equal(decPass.nonce.toString(), '99')
+  assert.equal(decPass.pricePerCall.toString(), '8000000')
+  assert.equal(decPass.callsTotal, 5)
+  assert.equal(decPass.callsUsed, 2)
+  assert.equal(decPass.escrowRemaining.toString(), '24000000')
+  assert.equal(decPass.status, 'open')
+  assert.equal(decPass.bump, 251)
+
+  // 3. Offline tx builders
+  const dummyConn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const bh = Keypair.generate().publicKey.toBase58()
+  const passKey = passPda(modelKey, holderKey, 99n)
+  assert.equal((await buildSetPassPlanTx({ connection: dummyConn, owner: authorityKey, model: modelKey, pricePerCall: 8_000_000n, minCalls: 2, maxCalls: 100, ttlSlots: 50_000n, active: true, recentBlockhash: bh })).message.compiledInstructions.length, 1)
+  assert.equal((await buildBuyPassTx({ connection: dummyConn, holder: holderKey, model: modelKey, nonce: 99n, callsTotal: 5, recentBlockhash: bh })).message.compiledInstructions.length, 1)
+  assert.equal((await buildOpenPassCallTx({ connection: dummyConn, holder: holderKey, pass: passKey, model: modelKey, enclave: enclaveKey, attestationRecord: attRecordKey, nonce: 1n, inputHash: toHex(sha256(utf8('in'))), recentBlockhash: bh })).message.compiledInstructions.length, 1)
+  assert.equal((await buildClosePassTx({ connection: dummyConn, closer: holderKey, pass: passKey, holder: holderKey, recentBlockhash: bh })).message.compiledInstructions.length, 1)
+
+  // 4. Schema rejects active plan with maxCalls < minCalls or 0 ttlSlots
+  assert.equal(SetPassPlanRequest.safeParse({ wallet: authorityKey.toBase58(), pricePerCall: '8000000', minCalls: 5, maxCalls: 2, ttlSlots: '100', active: true }).success, false)
+  assert.equal(SetPassPlanRequest.safeParse({ wallet: authorityKey.toBase58(), pricePerCall: '8000000', minCalls: 2, maxCalls: 10, ttlSlots: '0', active: true }).success, false)
+
+  // 5. Fixture API + SDK getPassPlan / setPassPlan / buyPass / listPasses / pass(address).call(...) / closePass
+  const app = buildApp()
+  const makeSdk = (wallet: string) => {
+    const signer = {
+      publicKey: new PublicKey(wallet),
+      async signTransaction(vtx: import('@solana/web3.js').VersionedTransaction) { return vtx },
+    }
+    const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = new Request(input, init)
+      const headers = new Headers(req.headers)
+      headers.set('X-Fixture-Session', 'pass-test-session')
+      return app.request(new Request(req, { headers }))
+    }) as typeof fetch
+    return createVoynich({ apiUrl: 'http://localhost', signer, fetch: fetchFixture, pollMs: 5 })
+  }
+
+  const ownerSdk = makeSdk(FIXTURE.owner)
+  const callerSdk = makeSdk(FIXTURE.caller)
+
+  assert.equal(await callerSdk.getPassPlan('sketch-32'), null)
+  const model = await ownerSdk.model('sketch-32')
+  const discounted = BigInt(model.price.amount) * 80n / 100n
+  const plan = await ownerSdk.setPassPlan('sketch-32', {
+    pricePerCall: discounted,
+    minCalls: 2,
+    maxCalls: 20,
+    ttlSlots: 10_000,
+    active: true,
+  })
+  assert.equal(plan.pricePerCall, String(discounted))
+  assert.equal(plan.active, true)
+
+  const bought = await callerSdk.buyPass('sketch-32', 3)
+  assert.equal(bought.callsTotal, 3)
+  assert.equal(bought.callsUsed, 0)
+  assert.equal(bought.callsRemaining, 3)
+  assert.equal(bought.escrowRemaining, String(discounted * 3n))
+
+  const listed = await callerSdk.listPasses()
+  assert.equal(listed.items.length, 1)
+  assert.equal(listed.items[0]!.address, bought.address)
+
+  const handle = callerSdk.pass(bought.address)
+  const callRes = await handle.call(new Array<number>(784).fill(0), { answerMode: 'open' })
+  assert.equal(callRes.receipt.payments.total, String(discounted))
+
+  const afterOne = await handle.refresh()
+  assert.equal(afterOne.callsUsed, 1)
+  assert.equal(afterOne.callsRemaining, 2)
+  assert.equal(afterOne.escrowRemaining, String(discounted * 2n))
+
+  const closed = await handle.close()
+  assert.equal(closed.pass.status, 'closed')
+  assert.equal(closed.pass.escrowRemaining, '0')
+  assert.equal(closed.pass.returnedAmount, String(discounted * 2n))
+})
