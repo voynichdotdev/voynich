@@ -1,0 +1,100 @@
+/* The verifiable benchmarks leaderboard. */
+
+.board { min-width: 0; }
+.cols, .entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.3fr) minmax(0, 1.1fr) minmax(0, 0.72fr) minmax(0, 0.9fr) minmax(0, 1.45fr);
+  column-gap: 16px;
+  align-items: center;
+}
+.cols {
+  height: 36px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
+}
+.cols > span, .cell { min-width: 0; }
+.right { text-align: right; justify-self: end; }
+
+.entry {
+  padding-block: var(--s4);
+  border-bottom: 1px solid var(--line);
+  transition: background-color var(--step-1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .entry:hover { background: var(--surface); }
+}
+
+.modelCell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.modelRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.modelLink {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.versionBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-tile);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.suiteCell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.suiteName { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+.metaLine { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-3); }
+.uriLink { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+
+.scoreCell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.scoreFig { font-family: var(--font-mono); font-weight: 500; font-size: 16px; font-variant-numeric: tabular-nums; color: var(--ochre); white-space: nowrap; }
+.scoreTrack { flex: 1; max-width: 112px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-tile); overflow: hidden; }
+.scoreFill { height: 100%; background: var(--ochre); }
+
+.passed { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+
+.receipts { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.receiptPill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-tile);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  white-space: nowrap;
+  transition: border-color var(--step-1), color var(--step-1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .receiptPill:hover { border-color: var(--ochre); color: var(--text); }
+}
+
+.cellLabel { display: none; font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--text-3); }
+.cliFoot { margin-top: var(--s5); padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.cliCode { display: block; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-tile); font-size: 12px; color: var(--text); overflow-x: auto; white-space: nowrap; }
+.more { display: flex; justify-content: center; padding-top: var(--s5); }
+
+@media (max-width: 1023px) {
+  .cols { display: none; }
+  .entry { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--s3); align-items: start; }
+  .modelCell, .receiptsCell { grid-column: 1 / -1; }
+  .cell { display: flex; flex-direction: column; gap: 4px; }
+  .cellLabel { display: block; }
+  .right { text-align: left; justify-self: stretch; }
+}
+@media (prefers-reduced-motion: reduce) { .entry, .receiptPill { transition: none; } }

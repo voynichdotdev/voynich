@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
+import { loadModelBenchmarks } from '@/lib/benchmarks'
 import { loadMeasurements } from '@/lib/measurements'
 import { loadModelPolicy } from '@/lib/policy'
 import { loadModelSplit } from '@/lib/splits'
@@ -24,12 +25,13 @@ export default async function ModelPage({ params, searchParams }: Props) {
   const name = decodeURIComponent(id)
   const fixture = fixtureFrom(sp)
   const client = api(fixture)
-  const [model, enclaves, receipts, measurements, versions] = await Promise.all([
+  const [model, enclaves, receipts, measurements, versions, benchmarks] = await Promise.all([
     read(client.model(name)),
     read(client.modelEnclaves(name)),
     read(client.modelReceipts(name, { limit: 8 })),
     loadMeasurements(client),
     loadModelVersions(client, name),
+    loadModelBenchmarks(client, name),
   ])
   const q = fixture ? `?fixture=${fixture}` : ''
 
@@ -54,5 +56,5 @@ export default async function ModelPage({ params, searchParams }: Props) {
     loadModelSplit(client, model.data),
   ])
 
-  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, versions }} />
+  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, versions, benchmarks }} />
 }

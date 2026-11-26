@@ -120,6 +120,16 @@ a.row:focus-visible { outline-offset: -2px; }
 .splitBarFill { height: 100%; background: var(--ochre); }
 .splitActionCell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .splitFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--line); }
+.receiptPills { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.receiptPill {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 7px;
+  border: 1px solid var(--line-2); border-radius: var(--r-tile);
+  background: var(--surface-2); font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-2); white-space: nowrap; transition: border-color var(--step-1), color var(--step-1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .receiptPill:hover { border-color: var(--ochre); color: var(--text); }
+}
 .splitRows { display: flex; flex-direction: column; gap: 8px; }
 .splitEditorRow { display: grid; grid-template-columns: minmax(0, 1fr) 128px auto; gap: 8px; align-items: center; }
 @media (max-width: 639px) {

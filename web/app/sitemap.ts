@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = siteUrl()
-  const places = ['', '/models', '/bounties', '/seal', '/enclaves', '/receipts', '/sealing', '/operators', '/docs']
+  const places = ['', '/models', '/benchmarks', '/bounties', '/seal', '/enclaves', '/receipts', '/sealing', '/operators', '/docs']
   const docs: string[] = []
   try {
     const index = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'content/docs/index.json'), 'utf8')) as { groups: { pages: { slug: string }[] }[] }

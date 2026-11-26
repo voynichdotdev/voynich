@@ -439,6 +439,44 @@ It prints the status of the transaction: `id`, `status` and `signature`.
 
 `voynich model` followed by another word fails with `Use model price, model policy, model split, model versions, model upgrade, model retire, or model revoke.` The last of them, `voynich model revoke`, is on [grant](/docs/cli/grant#voynich-model-revoke).
 
+## voynich benchmark
+
+Lists verifiable receipt-backed benchmarks or runs an evaluation suite against a live model and anchors its score on chain in an 843-byte `Benchmark` PDA (`["benchmark", model, name]`). The same from code is [listBenchmarks, listModelBenchmarks and publishBenchmark](/docs/sdk/models-and-enclaves#listbenchmarks-listmodelbenchmarks-and-publishbenchmark).
+
+```bash
+voynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <0..10000>] [--name <slug>]
+voynich benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest] [--enclave <key>]
+```
+
+<Fields>
+<Field name="list [<model>]" type="read">
+Reads `GET /v1/benchmarks` (or `GET /v1/models/{id}/benchmarks` when `<model>` is given; no wallet required) and filters optionally by `--evaluator <pubkey>`, `--min-score-bps <0..10000>`, and `--name <slug>`. Prints the `BenchmarksPage` JSON.
+</Field>
+<Field name="run <model> --suite <json-file>" type="permissionless write">
+Hashes the raw suite file bytes (`datasetSha256`), validates 1 to 16 cases, executes real encrypted calls via `client.call(...)`, scores each returned answer (`label === expectedLabel` for classifiers, `text.includes(expectedContains)` for text models), computes `scoreBps = Math.floor(passedCount * 10000 / sampleCount)`, and publishes the receipt-backed `Benchmark` PDA via `publish_benchmark`. Any wallet may run and publish.
+</Field>
+<Field name="--name, --dataset-uri" type="optional overrides">
+Override `name` (1 to 32 byte slug) and `datasetUri` (1 to 160 bytes) from the suite JSON file.
+</Field>
+<Field name="--answer-mode, --strategy, --enclave" type="call options">
+Passed to each evaluation call: `--answer-mode` (`sealed` by default, or `open`), `--strategy` (`balanced`, `cheapest`, or `fastest`), and optional `--enclave <key>`.
+</Field>
+</Fields>
+
+### Suite JSON format
+
+```json
+{
+  "name": "quickdraw-smoke-v1",
+  "datasetUri": "https://github.com/voynichdotdev/voynich/blob/main/backend/models/sketch-32/eval-suite.json",
+  "cases": [
+    { "input": { "strokes": [...], "width": 56, "height": 56 }, "expectedLabel": "house" }
+  ]
+}
+```
+
+Each case supplies `input` (sketch input, numeric array, or text prompt) and at least one of `expectedLabel` or `expectedContains` (1 to 16 cases per suite; a ready-to-run sample sits at `backend/models/sketch-32/eval-suite.json`). `voynich benchmark run` logs per-case `PASS`/`FAIL` and receipt addresses to stderr and prints the published `BenchmarkRecord` plus per-case results as JSON on stdout.
+
 ## Failures
 
 The two list commands exit with code `1` and print the API's code and message when the API refuses the request. The API's codes are in the [HTTP API overview](/docs/api/overview).

@@ -1076,11 +1076,11 @@ The slot the benchmark was published in.
 
 ## `GET /v1/benchmarks`
 
-Lists verifiable receipt-backed benchmarks across all models (`BenchmarksPage`). Accepts `cursor`, `limit` ([Pagination](/docs/api/overview#pagination)), and optional filters `model` (name or address) and `name` (benchmark slug).
+Lists verifiable receipt-backed benchmarks across all models (`BenchmarksPage`), backing the site's [`/benchmarks`](/benchmarks) leaderboard. Accepts `cursor`, `limit` ([Pagination](/docs/api/overview#pagination)), and optional filters `model` (name or address) and `name` (benchmark slug).
 
 ## `GET /v1/models/{id}/benchmarks`
 
-Lists all published `BenchmarkRecord` entries for model `{id}` (`BenchmarksPage`). Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
+Lists all published `BenchmarkRecord` entries for model `{id}` (`BenchmarksPage`), backing the **Benchmarks** panel on `/models/{id}` with clickable receipt links to `/receipts/{receipt}`. Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
 
 ## `POST /v1/models/{id}/benchmarks/build`
 

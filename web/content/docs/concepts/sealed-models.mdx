@@ -203,6 +203,10 @@ voynich call text-1m --text "Q: What is a sealed adapter?
 A:" --open
 ```
 
+## Verifiable benchmarks
+
+Any wallet (owner or third-party evaluator) can anchor an immutable, receipt-backed evaluation score for a model in an 843-byte `Benchmark` PDA (`["benchmark", model, name]`) via [`publish_benchmark`](/docs/program/instructions#publishbenchmark) or [`voynich benchmark run`](/docs/cli/models#voynich-benchmark). During publication, the program verifies 1 to 16 unique canonical `Receipt` PDAs in remaining accounts against `model` across all Receipt eras, checks `score_bps == floor(passed_count * 10_000 / sample_count)`, and snapshots `model.effective_version()`. On the site, [`/benchmarks`](/benchmarks) lists the live receipt-backed leaderboard across all models and `/models/<name>` displays each model's **Benchmarks** panel with score percentage, `passed / total`, version, dataset hash, and clickable receipt links straight to `/receipts/<id>`.
+
 ## Statuses
 
 | Status | The model is | What can happen |

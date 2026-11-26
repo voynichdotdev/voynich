@@ -8,6 +8,7 @@ const COLS: { title: string; links: { href: string; label: string }[] }[] = [
   { title: 'Use', links: [
     { href: `/models/${SKETCH32.id}`, label: `Call ${SKETCH32.name}` },
     { href: '/models', label: 'Models' },
+    { href: '/benchmarks', label: 'Benchmarks' },
     { href: '/bounties', label: 'Bounties' },
     { href: '/seal', label: 'Seal a model' },
     { href: '/receipts', label: 'Verify a receipt' },

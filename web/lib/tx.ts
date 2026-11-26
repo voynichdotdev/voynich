@@ -102,6 +102,12 @@ export function errorMessage(e: unknown): string {
   if (code === 'INVALID_BOND') {
     return x?.body?.error?.message || 'Bond amount must be positive and within the available bonded balance.'
   }
+  if (code === 'BENCHMARK_NOT_FOUND') {
+    return x?.body?.error?.message || 'No benchmark record exists at this address.'
+  }
+  if (code === 'INVALID_BENCHMARK') {
+    return x?.body?.error?.message || 'Benchmark receipts, counts, and score must match settled on-chain receipts for this model.'
+  }
   if (x?.body?.error?.message) return x.body.error.message
   if (e instanceof TypeError) return 'The API did not answer. Check the connection and try again.'
   if (x?.name === 'ZodError') return 'The API answered in a form this site does not read. Reload the page and try again.'

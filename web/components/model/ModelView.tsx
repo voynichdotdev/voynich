@@ -9,6 +9,7 @@ import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelSplit, ModelVers
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
+import { benchmarkRunCliCommand, formatScorePct, loadModelBenchmarks, type BenchmarkRecord } from '@/lib/benchmarks'
 import { computeUptimePct, formatBondSol } from '@/lib/bonds'
 import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
@@ -38,6 +39,7 @@ type Props = {
     policy?: ModelPolicy | null
     split?: ModelSplit | null
     versions?: ModelVersions | null
+    benchmarks?: BenchmarkRecord[]
   }
 }
 
@@ -54,6 +56,7 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
   const [policy, setPolicy] = useState<ModelPolicy | null>(initial.policy ?? null)
   const [modelSplit, setModelSplit] = useState<ModelSplit | null>(initial.split ?? null)
   const [versions, setVersions] = useState<ModelVersions | null>(initial.versions ?? null)
+  const [benchmarks, setBenchmarks] = useState<BenchmarkRecord[]>(initial.benchmarks ?? [])
   const [config, setConfig] = useState<Config | null>(null)
   const [claimTx, setClaimTx] = useState<ClaimTx | null>(null)
   const id = initial.model.address
@@ -61,12 +64,13 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
 
   const refresh = useCallback(async () => {
     const client = api(fixture)
-    const [m, e, r, ms, vs] = await Promise.all([
+    const [m, e, r, ms, vs, bs] = await Promise.all([
       read(client.model(id)),
       read(client.modelEnclaves(id)),
       read(client.modelReceipts(id, { limit: 8 })),
       loadMeasurements(client),
       loadModelVersions(client, id),
+      loadModelBenchmarks(client, id),
     ])
     const nextModel = m.ok ? m.data : model
     if (m.ok) setModel(m.data)
@@ -74,6 +78,7 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
     setReceipts(r)
     setMeasurements(ms)
     if (vs) setVersions(vs)
+    setBenchmarks(bs)
     const [nextPolicy, nextSplit] = await Promise.all([
       loadModelPolicy(client, nextModel),
       loadModelSplit(client, nextModel),
@@ -369,6 +374,62 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
         </section>
 
         {live ? null : facts}
+
+        <section className={`panel ${s.full}`} aria-labelledby="benchmarks">
+          <div className="panel-head">
+            <div className={s.splitHeadMeta}>
+              <h2 id="benchmarks">Benchmarks</h2>
+              <span className={s.kindBadge}>{group(benchmarks.length)}</span>
+            </div>
+            <Link href={`/benchmarks${q}`} className="link t-small" data-arrow>All benchmarks</Link>
+          </div>
+          {benchmarks.length === 0 ? (
+            <div className="panel-body">
+              <p className="t-small dim">No on-chain benchmarks published for this model yet. Anyone can anchor a receipt-backed score from the CLI.</p>
+            </div>
+          ) : (
+            <ul
+              className={s.list}
+              style={{ '--cols': 'minmax(0, 1.1fr) minmax(0, 0.55fr) minmax(0, 1fr) minmax(0, 0.75fr) minmax(0, 1.15fr) minmax(0, 1.45fr)' } as React.CSSProperties}
+            >
+              <li className={s.listHead} aria-hidden="true">
+                <span>Suite</span>
+                <span>Version</span>
+                <span>Score</span>
+                <span className={s.num}>Passed</span>
+                <span>Dataset</span>
+                <span>Receipts</span>
+              </li>
+              {benchmarks.map((b) => (
+                <li key={b.address} className={s.row}>
+                  <span data-label="Suite" className="mono">{b.name}</span>
+                  <span data-label="Version"><span className={s.kindBadge}>v{b.modelVersion}</span></span>
+                  <span data-label="Score" className={s.splitShareCell}>
+                    <span className="mono ochre">{formatScorePct(b.scoreBps)}</span>
+                    <span className={s.splitBarTrack} aria-hidden="true">
+                      <span className={s.splitBarFill} style={{ width: `${Math.min(100, b.scoreBps / 100)}%` }} />
+                    </span>
+                  </span>
+                  <span data-label="Passed" className={`mono ${s.num}`}>{group(b.passedCount)} / {group(b.sampleCount)}</span>
+                  <span data-label="Dataset">
+                    <Hash value={b.datasetSha256} chars={6} label="dataset hash" />
+                  </span>
+                  <span data-label="Receipts" className={s.receiptPills}>
+                    {b.receipts.slice(0, 4).map((r) => (
+                      <Link key={r} href={`/receipts/${r}${q}`} className={s.receiptPill} title={r}>
+                        {short(r, 4)}
+                      </Link>
+                    ))}
+                    {b.receipts.length > 4 ? <span className={s.kindBadge}>+{b.receipts.length - 4}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className={s.splitFoot}>
+            <code className={`mono ${s.upgradeCode}`}>{benchmarkRunCliCommand(model.name)}</code>
+          </div>
+        </section>
 
         <section className={`panel ${s.full}`} aria-labelledby="versions">
           <div className="panel-head">

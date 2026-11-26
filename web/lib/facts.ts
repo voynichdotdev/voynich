@@ -158,6 +158,7 @@ export const TOKEN = {
 
 export const PLACES = [
   { href: '/models', label: 'Models' },
+  { href: '/benchmarks', label: 'Benchmarks' },
   { href: '/bounties', label: 'Bounties' },
   { href: '/seal', label: 'Seal' },
   { href: '/enclaves', label: 'Enclaves' },

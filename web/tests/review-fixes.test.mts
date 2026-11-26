@@ -10,6 +10,7 @@ import { ADAPTER_MAGIC, ADAPTER_VERSION, applyOnnxAdapter, decodeAdapter, encode
 import { ciphertextMerkleRoot, decryptCallOutput, encryptCallOutput, fromHex, generateEncryptionKeyPair, merkleRootFromLeaves, openWeightsChunk, pieceMessage, sealWeights, sha256, signPiece, signReceipt, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece } from 'voynich/crypto'
 import { decodeModelBaseBytes as sdkDecodeModelBaseBytes, decodeReceiptAccount as sdkDecodeReceiptAccount } from 'voynich/program'
 import { fetchBountyAfterSettle, parseSolToLamports, refreshBounties } from '@/lib/bounties'
+import { benchmarkRunCliCommand, formatScorePct, loadBenchmarks, loadModelBenchmarks } from '@/lib/benchmarks'
 import { DEFAULT_BOND_SLASH_BPS, bondCliCommand, computeUptimePct, formatBondSol, loadEnclaveBond } from '@/lib/bonds'
 import { STREAM_PIECES_MAX_ENTRIES, STREAM_PIECES_STORAGE_KEY, STREAM_PIECES_TTL_MS, decodeOpenAnswer, decodeOutput, effectiveShareBps, eligibleEnclaves, follow, followStream, formatLatency, getSavedStreamPiece, loadLastPieceFromApi, loadSavedStreamPieces, parseCeiling, parseTensor, pickEnclave, removeSavedStreamPiece, saveStreamPiece, selectEnclave, settleMeteredStream, verifyBrowserStreamPiece, type CallState } from '@/lib/call'
 import { explorerUrl, siteUrl } from '@/lib/env'
@@ -3070,6 +3071,70 @@ test('Build 13 Step 2: operator bond helpers, uptime calculation, CLI command, e
 
   const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
   for (const sym of ['formatBondSol', 'computeUptimePct', 'Bond &amp; uptime']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+})
+
+test('Build 14 Step 2: benchmark helpers, CLI hint, error mapping, /benchmarks leaderboard, and /models/[id] Benchmarks wiring', async () => {
+  assert.equal(formatScorePct(10000), '100%')
+  assert.equal(formatScorePct(9250), '92.5%')
+  assert.equal(formatScorePct(8733), '87.33%')
+  assert.equal(benchmarkRunCliCommand('sketch-32'), 'voynich benchmark run sketch-32 --suite eval-suite.json')
+  assert.equal(benchmarkRunCliCommand('text-1m', 'suite.json'), 'voynich benchmark run text-1m --suite suite.json')
+
+  const modelAddr = Keypair.generate().publicKey.toBase58()
+  const r1 = Keypair.generate().publicKey.toBase58()
+  const r2 = Keypair.generate().publicKey.toBase58()
+  const sampleBench = {
+    address: Keypair.generate().publicKey.toBase58(),
+    model: modelAddr,
+    modelName: 'sketch-32',
+    publisher: Keypair.generate().publicKey.toBase58(),
+    name: 'quickdraw-4',
+    modelVersion: 1,
+    datasetSha256: 'aa'.repeat(32),
+    datasetUri: 'https://voynich.dev/eval/sketch-32.json',
+    sampleCount: 4,
+    passedCount: 4,
+    scoreBps: 10000,
+    receipts: [r1, r2],
+    publishedSlot: '474000000',
+  }
+  const page = { items: [sampleBench], page: { nextCursor: null, hasMore: false }, asOf: '2026-11-26T00:00:00Z' }
+  const okClient = {
+    benchmarks: async () => page,
+    modelBenchmarks: async () => page,
+  } as unknown as Parameters<typeof loadBenchmarks>[0]
+  const failClient = {
+    benchmarks: async () => { throw new Error('offline') },
+    modelBenchmarks: async () => { throw new Error('offline') },
+  } as unknown as Parameters<typeof loadBenchmarks>[0]
+
+  assert.deepEqual(await loadBenchmarks(okClient), page)
+  assert.equal(await loadBenchmarks(failClient), null)
+  assert.deepEqual(await loadModelBenchmarks(okClient, modelAddr), [sampleBench])
+  assert.deepEqual(await loadModelBenchmarks(failClient, modelAddr), [])
+
+  assert.ok(errorMessage({ body: { error: { code: 'BENCHMARK_NOT_FOUND' } } }).includes('benchmark'))
+  assert.ok(errorMessage({ body: { error: { code: 'INVALID_BENCHMARK' } } }).includes('receipts'))
+
+  assert.ok(PLACES.some((p) => p.href === '/benchmarks' && p.label === 'Benchmarks'))
+  const sitemapEntries = sitemapMod.default()
+  assert.ok(sitemapEntries.some((e) => e.url.endsWith('/benchmarks')))
+
+  const footerSrc = fs.readFileSync(path.join(ROOT, 'components/nav/Footer.tsx'), 'utf8')
+  assert.ok(footerSrc.includes("href: '/benchmarks'"))
+
+  const benchPageSrc = fs.readFileSync(path.join(ROOT, 'app/benchmarks/page.tsx'), 'utf8')
+  for (const sym of ['Benchmarks', 'formatScorePct', 'benchmarkRunCliCommand', '/receipts/', 'datasetSha256']) {
+    assert.ok(benchPageSrc.includes(sym), `/benchmarks page must include ${sym}`)
+  }
+
+  const modelPageSrc = fs.readFileSync(path.join(ROOT, 'app/models/[id]/page.tsx'), 'utf8')
+  assert.ok(modelPageSrc.includes('loadModelBenchmarks') && modelPageSrc.includes('benchmarks'))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['Benchmarks', 'formatScorePct', 'benchmarkRunCliCommand', 'loadModelBenchmarks', '/receipts/']) {
     assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
   }
 })
