@@ -1,0 +1,74 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model this prepaid pass is bound to."
+  },
+  {
+    "field": "holder",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The wallet that purchased the pass, signs `open_pass_call`, and receives any unspent escrow on `close_pass`."
+  },
+  {
+    "field": "nonce",
+    "type": "u64",
+    "offset": "72",
+    "meaning": "Holder-chosen u64 nonce deriving the Pass PDA `[\"pass\", model, holder, nonce_le]`."
+  },
+  {
+    "field": "mint",
+    "type": "pubkey",
+    "offset": "80",
+    "meaning": "The mint of the prepaid escrow. The default (all-zero) address means native SOL."
+  },
+  {
+    "field": "price_per_call",
+    "type": "u64",
+    "offset": "112",
+    "meaning": "Discounted price per call snapshotted from `PassPlan` at purchase."
+  },
+  {
+    "field": "calls_total",
+    "type": "u32",
+    "offset": "120",
+    "meaning": "Total number of prepaid calls funded in this pass."
+  },
+  {
+    "field": "calls_used",
+    "type": "u32",
+    "offset": "124",
+    "meaning": "Number of calls opened from this pass so far."
+  },
+  {
+    "field": "escrow_remaining",
+    "type": "u64",
+    "offset": "128",
+    "meaning": "Unspent prepaid escrow remaining in the pass (`(calls_total - calls_used) * price_per_call` while open; `0` once closed)."
+  },
+  {
+    "field": "purchased_slot",
+    "type": "u64",
+    "offset": "136",
+    "meaning": "The slot the pass was purchased in."
+  },
+  {
+    "field": "expires_at_slot",
+    "type": "u64",
+    "offset": "144",
+    "meaning": "The last slot `open_pass_call` may debit this pass (`purchased_slot + ttl_slots`)."
+  },
+  {
+    "field": "status",
+    "type": "PassStatus",
+    "offset": "152",
+    "meaning": "`Open` (`0`) or `Closed` (`1`)."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "153",
+    "meaning": "The PDA bump."
+  }
+]

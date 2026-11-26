@@ -1,0 +1,38 @@
+[
+  {
+    "field": "pass",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "holder",
+    "type": "pubkey"
+  },
+  {
+    "field": "closer",
+    "type": "pubkey"
+  },
+  {
+    "field": "returned_amount",
+    "type": "u64"
+  },
+  {
+    "field": "calls_used",
+    "type": "u32"
+  },
+  {
+    "field": "calls_total",
+    "type": "u32"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  },
+  {
+    "field": "status",
+    "type": "PassStatus"
+  }
+]

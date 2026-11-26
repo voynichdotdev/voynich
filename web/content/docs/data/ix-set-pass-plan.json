@@ -1,0 +1,50 @@
+[
+  {
+    "account": "owner",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The model's owner. Signs and pays the 138-byte PassPlan PDA's rent on creation."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "pass_plan",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"pass-plan\", model]`",
+    "is": "The PassPlan PDA at `[\"pass-plan\", model]`, created if needed or updated in place."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

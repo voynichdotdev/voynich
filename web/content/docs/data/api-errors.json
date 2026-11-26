@@ -180,6 +180,21 @@
     "meaning": "The benchmark name, dataset, score, or receipt proofs are invalid."
   },
   {
+    "code": "PASS_PLAN_NOT_FOUND",
+    "status": "404",
+    "meaning": "This model has no prepaid pass plan configured."
+  },
+  {
+    "code": "PASS_NOT_FOUND",
+    "status": "404",
+    "meaning": "No prepaid pass has this address."
+  },
+  {
+    "code": "INVALID_PASS",
+    "status": "422",
+    "meaning": "The pass plan or prepaid pass is invalid, inactive, expired, or exhausted."
+  },
+  {
     "code": "GRANT_REQUIRED",
     "status": "409",
     "meaning": "The enclave holds no live grant for the model."

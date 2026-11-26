@@ -1,0 +1,42 @@
+[
+  {
+    "field": "pass",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "holder",
+    "type": "pubkey"
+  },
+  {
+    "field": "nonce",
+    "type": "u64"
+  },
+  {
+    "field": "mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "price_per_call",
+    "type": "u64"
+  },
+  {
+    "field": "calls_total",
+    "type": "u32"
+  },
+  {
+    "field": "escrow_remaining",
+    "type": "u64"
+  },
+  {
+    "field": "purchased_slot",
+    "type": "u64"
+  },
+  {
+    "field": "expires_at_slot",
+    "type": "u64"
+  }
+]

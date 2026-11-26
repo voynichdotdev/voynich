@@ -257,5 +257,12 @@
     "hex": "`0x1794`",
     "message": "The benchmark name, dataset, score, or receipt proofs are invalid.",
     "raisedWhen": "In `publish_benchmark`: invalid slug `name` (outside 1 to 32 bytes), invalid `dataset_uri` (outside 1 to 160 bytes or bad scheme/whitespace), `sample_count == 0`, `passed_count > sample_count`, `score_bps != floor(passed_count * 10_000 / sample_count)`, `receipts` empty, > 16, or duplicated, or a remaining account that is not a canonical `Receipt` PDA owned by the Voynich program for `model`."
+  },
+  {
+    "name": "InvalidPass",
+    "code": "6037",
+    "hex": "`0x1795`",
+    "message": "The pass plan or prepaid pass is invalid, inactive, expired, or exhausted.",
+    "raisedWhen": "In `set_pass_plan`: model is not `PriceUnit::Call`, or when active `price_per_call == 0`, `price_per_call > model.price`, `min_calls == 0`, `max_calls < min_calls`, or `ttl_slots == 0`. In `buy_pass`: plan is inactive, mint mismatch, or `calls_total` outside `min_calls..=max_calls`. In `open_pass_call`: pass is closed, expired, exhausted, mismatched on model/mint, or lacks escrow. In `close_pass`: pass is already closed, or a non-holder tried to close it while still open, unexpired, and unexhausted."
   }
 ]

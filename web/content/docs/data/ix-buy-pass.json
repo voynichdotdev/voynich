@@ -1,0 +1,98 @@
+[
+  {
+    "account": "holder",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The buyer wallet. Pays Pass PDA rent and deposits `calls_total * pass_plan.price_per_call`."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "pass_plan",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"pass-plan\", model]`",
+    "is": "The model's active PassPlan PDA at `[\"pass-plan\", model]`."
+  },
+  {
+    "account": "pass",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"pass\", model, holder, nonce]`",
+    "is": "The 154-byte Pass PDA at `[\"pass\", model, holder, nonce_le]`, created here."
+  },
+  {
+    "account": "mint",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The pass plan's mint. Only for an SPL mint."
+  },
+  {
+    "account": "holder_tokens",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The holder's token account for `mint`. Only for an SPL mint."
+  },
+  {
+    "account": "pass_escrow",
+    "writable": "yes",
+    "signer": "",
+    "optional": "yes",
+    "address": "",
+    "is": "The Pass PDA's associated token account for `mint`, created here. Only for an SPL mint."
+  },
+  {
+    "account": "token_program",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`",
+    "is": "The SPL Token program. Only for a price in a mint."
+  },
+  {
+    "account": "associated_token_program",
+    "writable": "",
+    "signer": "",
+    "optional": "yes",
+    "address": "`ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL`",
+    "is": "The Associated Token program. Only for a price in a mint."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

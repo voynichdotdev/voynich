@@ -25,6 +25,8 @@ The `voynich` program is an Anchor program. Its address on a cluster is `program
 | Split | PDA `["split", model]` | 526 bytes | the model's owner |
 | Bond | PDA `["bond", enclave]` | 107 bytes | the enclave's operator |
 | Benchmark | PDA `["benchmark", model, name]` | 843 bytes | the publisher (permissionless) |
+| PassPlan | PDA `["pass-plan", model]` | 138 bytes | the model's owner |
+| Pass | PDA `["pass", model, holder, nonce]` | 154 bytes | the pass holder |
 
 In a seed, `name` is the model's name as UTF-8, an address is its 32 bytes, and `nonce` is 8 bytes little-endian.
 
@@ -149,3 +151,19 @@ Immutable per-model verifiable benchmark score, at PDA `["benchmark", model, nam
 <Rows data="account-benchmark" columns="field,type,meaning" />
 
 `name` is a 1 to 32 byte ASCII slug (`[a-z0-9-]`), `dataset_uri` is 1 to 160 bytes (`https://`, `http://`, `ipfs://`, or `hf://`, no whitespace or control characters), `score_bps` equals `floor(passed_count * 10_000 / sample_count)`, and `receipts` lists 1 to 16 unique canonical `Receipt` PDAs verified on chain against `model` across all Receipt eras during `publish_benchmark`.
+
+## PassPlan
+
+Optional per-model discounted prepaid pass plan, at PDA `["pass-plan", model]` (`PassPlan::SPACE = 138` bytes). Created, updated, or deactivated by `set_pass_plan` for per-call (`PriceUnit::Call`) models.
+
+<Rows data="account-pass-plan" columns="field,type,offset,meaning" />
+
+When `active` is true, `0 < price_per_call <= model.price`, `min_calls >= 1`, `max_calls >= min_calls`, and `ttl_slots > 0`.
+
+## Pass
+
+One per purchased prepaid call pack, at PDA `["pass", model, holder, nonce_le]` (`Pass::SPACE = 154` bytes). Created by `buy_pass`, debited by `open_pass_call`, and closed by `close_pass`.
+
+<Rows data="account-pass" columns="field,type,offset,meaning" />
+
+`status` is one byte: 0 `Open`, 1 `Closed`. A SOL pass holds `escrow_remaining` lamports inside the Pass PDA above rent; an SPL pass holds `escrow_remaining` in its associated token account `pass_escrow`. Calls opened through `open_pass_call` write the exact same `Call` PDA with `call.price = pass.price_per_call`, keeping `Policy`, `Grant` quoted share, `settle_call`, `refund_call`, `Receipt`, and enclave verification unchanged.

@@ -1,0 +1,10 @@
+[
+  {
+    "argument": "nonce",
+    "type": "u64"
+  },
+  {
+    "argument": "calls_total",
+    "type": "u32"
+  }
+]

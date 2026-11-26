@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 40 instructions.
+The program has 44 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -452,3 +452,45 @@ Remaining accounts must carry the exact `Receipt` accounts listed in `args.recei
 
 - **Checks.** `name` is a 1 to 32 byte ASCII slug (`[a-z0-9-]`), `dataset_uri` is 1 to 160 bytes starting with `https://`, `http://`, `ipfs://`, or `hf://` with no whitespace or control characters, `sample_count > 0`, `passed_count <= sample_count`, `score_bps == floor(passed_count * 10_000 / sample_count)`, `1 <= receipts.len() <= 16` with all unique pubkeys, `remaining_accounts.len() == receipts.len()`, and each remaining account `i` matches `receipts[i]`, is owned by the Voynich program, has `data.len() >= 72`, starts with `Receipt::DISCRIMINATOR`, records `model.key()` at bytes `40..72`, and derives canonically from `["receipt", data[8..40]]` across all Receipt eras (`InvalidBenchmark`).
 - **Effects.** Initializes the `Benchmark` PDA recording `model_version = model.effective_version()` and `published_slot = clock.slot`, and emits `BenchmarkPublished`.
+
+## set_pass_plan
+
+Creates, updates, or deactivates a per-call model's 138-byte `PassPlan` PDA at `["pass-plan", model]`.
+
+<Rows data="ix-set-pass-plan-args" />
+
+<Rows data="ix-set-pass-plan" />
+
+- **Checks.** `owner` is `model.owner` (`Unauthorized`). `model.price_unit == PriceUnit::Call` (`InvalidPass`). When `active` is true: `0 < price_per_call <= model.price`, `min_calls >= 1`, `max_calls >= min_calls`, and `ttl_slots > 0` (`InvalidPass`).
+- **Effects.** Initializes (if needed, rent paid by `owner`) or updates `PassPlan` with `mint = model.price_mint` and `updated_slot = clock.slot`, and emits `PassPlanUpdated`.
+
+## buy_pass
+
+Creates a 154-byte `Pass` PDA at `["pass", model, holder, nonce_le]` prepaying `calls_total * pass_plan.price_per_call` in SOL or SPL.
+
+<Rows data="ix-buy-pass-args" />
+
+<Rows data="ix-buy-pass" />
+
+- **Checks.** `pass_plan.active == true`, `pass_plan.mint == model.price_mint`, and `min_calls <= calls_total <= max_calls` (`InvalidPass`). Checked multiplication `calls_total * price_per_call` does not overflow (`ArithmeticOverflow`). For an SPL mint, `holder_tokens` and `pass_escrow` match `mint` (`InvalidTokenAccount`).
+- **Effects.** Initializes `Pass` in `Open` with `expires_at_slot = clock.slot + pass_plan.ttl_slots`, transfers `calls_total * price_per_call` into the Pass PDA (SOL) or `pass_escrow` (SPL), and emits `PassPurchased`.
+
+## open_pass_call
+
+Opens a per-call `Call` signed by `holder`, debiting `pass.price_per_call` directly from the `Pass` PDA into `Call` escrow at the discounted rate.
+
+<Rows data="ix-open-pass-call-args" />
+
+<Rows data="ix-open-pass-call" />
+
+- **Checks.** `holder` matches `pass.holder` (`Unauthorized`). `pass.status == Open`, `pass.model == model.key()`, `pass.mint == model.price_mint`, `pass.calls_used < pass.calls_total`, `clock.slot <= pass.expires_at_slot`, and `pass.escrow_remaining >= pass.price_per_call` (`InvalidPass`). Model, Grant (with any quoted operator share), attestation, optional `Policy` remaining account, and optional `callback` pass the same checks as `open_call`.
+- **Effects.** Debits `pass.price_per_call` from `pass` into `call` escrow, increments `pass.calls_used`, decrements `pass.escrow_remaining`, writes the canonical `Call` PDA at `["call", holder, nonce_le]` with `call.price = pass.price_per_call`, and emits `CallOpened` and `PassUsed`.
+
+## close_pass
+
+Sweeps remaining `pass.escrow_remaining` back to `holder` and marks the `Pass` PDA `Closed`.
+
+<Rows data="ix-close-pass" />
+
+- **Checks.** `pass.status == Open` (`InvalidPass`). `closer` is `pass.holder` (at any slot) or any wallet once `clock.slot > pass.expires_at_slot` or `pass.calls_used == pass.calls_total` (`Unauthorized` / `InvalidPass`). `holder` matches `pass.holder` (`InvalidRecipient`).
+- **Effects.** Returns `pass.escrow_remaining` to `holder` (for SOL directly in lamports; for SPL transferring to `holder_tokens` and closing `pass_escrow`), sets `pass.status = Closed` and `pass.escrow_remaining = 0`, and emits `PassClosed`.

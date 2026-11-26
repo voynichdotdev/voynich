@@ -238,5 +238,29 @@
     "arguments": "`args: PublishBenchmarkArgs`",
     "signers": "`publisher`",
     "does": "Permissionlessly creates an 843-byte Benchmark PDA (`[\"benchmark\", model, name]`) verifying 1 to 16 canonical Receipt PDAs for `model` in remaining accounts."
+  },
+  {
+    "instruction": "set_pass_plan",
+    "arguments": "`args: SetPassPlanArgs`",
+    "signers": "`owner`",
+    "does": "Creates or updates a per-call model's 138-byte PassPlan PDA (`[\"pass-plan\", model]`) setting discounted `price_per_call`, `min_calls..=max_calls`, `ttl_slots`, and `active`."
+  },
+  {
+    "instruction": "buy_pass",
+    "arguments": "`nonce: u64`, `calls_total: u32`",
+    "signers": "`holder`",
+    "does": "Creates a 154-byte Pass PDA (`[\"pass\", model, holder, nonce_le]`) prepaying `calls_total * pass_plan.price_per_call` in SOL or SPL."
+  },
+  {
+    "instruction": "open_pass_call",
+    "arguments": "`nonce: u64`, `input_hash: [u8; 32]`, `answer_mode: AnswerMode`, `callback: Option<CallbackSpec>`",
+    "signers": "`holder`",
+    "does": "Opens a per-call Call signed by `holder`, debiting `pass.price_per_call` from the Pass PDA into Call escrow at the discounted rate."
+  },
+  {
+    "instruction": "close_pass",
+    "arguments": "",
+    "signers": "`closer`",
+    "does": "Sweeps `pass.escrow_remaining` back to `holder` and marks the Pass `Closed`. Callable by `holder` anytime or anyone once expired or exhausted."
   }
 ]

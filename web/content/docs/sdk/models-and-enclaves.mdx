@@ -20,6 +20,12 @@ Eight read functions read what the API indexes from the chain (none needs a wall
 | `listBenchmarks(query?, options?)` | A page of verifiable benchmarks across all models (`BenchmarksPage`). | [`GET /v1/benchmarks`](/docs/api/models#get-v1benchmarks) |
 | `listModelBenchmarks(modelId, query?, options?)` | A page of verifiable benchmarks for one model (`BenchmarksPage`). | [`GET /v1/models/{id}/benchmarks`](/docs/api/models#get-v1modelsidbenchmarks) |
 | `publishBenchmark(modelId, input, options?)` | Signs `publish_benchmark` and returns the indexed `BenchmarkRecord`. | [`POST /v1/models/{id}/benchmarks/build`](/docs/api/models#post-v1modelsidbenchmarksbuild) |
+| `getPassPlan(modelId, options?)` | The model's `PassPlan`, or `null` when none is configured. | [`GET /v1/models/{id}/pass-plan`](/docs/api/models#get-v1modelsidpass-plan) |
+| `setPassPlan(modelId, input, options?)` | Signs `set_pass_plan` as the model owner and returns the indexed `PassPlan`. | [`POST /v1/models/{id}/pass-plan/build`](/docs/api/models#post-v1modelsidpass-planbuild) |
+| `buyPass(modelId, callsTotal, options?)` | Signs `buy_pass` and returns the indexed `Pass`. | [`POST /v1/passes/buy/build`](/docs/api/accounts-and-stats#post-v1passesbuybuild) |
+| `listPasses(wallet?, signal?)` | Prepaid passes held by `wallet` (or the signer's wallet). | [`GET /v1/accounts/{wallet}/passes`](/docs/api/accounts-and-stats#get-v1accountswalletpasses) |
+| `pass(address)` | Handle `{ address, call(input, opts?), refresh(), close() }` for spending or closing a prepaid `Pass`. | [`GET /v1/passes/{address}`](/docs/api/accounts-and-stats#get-v1passesaddress) |
+| `closePass(address, options?)` | Signs `close_pass` and returns `{ pass, transaction }`. | [`POST /v1/passes/close/build`](/docs/api/accounts-and-stats#post-v1passesclosebuild) |
 | `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
 | `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
 | `getBond(enclaveKey, options?)` | The enclave's `OperatorBond`, or `null` when none exists. | [`GET /v1/enclaves/{key}/bond`](/docs/api/enclaves#get-v1enclaveskeybond) |
@@ -127,6 +133,25 @@ console.log(published.scoreBps, published.modelVersion, published.receipts)
 ```
 
 `listBenchmarks(query?)` reads `GET /v1/benchmarks` (filtering optionally by `model`, `name`, `limit`, `cursor`). `listModelBenchmarks(modelId, query?)` reads `GET /v1/models/{id}/benchmarks`. `publishBenchmark(modelId, input, options?)` is permissionless (any configured signer, `WALLET_REQUIRED`), computes `scoreBps = Math.floor((passedCount * 10000) / sampleCount)` when omitted, submits `publish_benchmark` with the cited `Receipt` PDAs in remaining accounts, waits for indexing, and resolves to `BenchmarkRecord`.
+
+## Prepaid passes (`getPassPlan`, `setPassPlan`, `buyPass`, `pass`, `closePass`)
+
+```ts
+const plan = await voynich.setPassPlan('sketch-32', {
+  pricePerCall: 800_000n,
+  minCalls: 3,
+  maxCalls: 100,
+  ttlSlots: 100_000n,
+  active: true,
+})
+
+const purchased = await voynich.buyPass('sketch-32', 10)
+const handle = voynich.pass(purchased.address)
+const res = await handle.call(drawing)
+const { pass: closed } = await handle.close()
+```
+
+`getPassPlan(modelId)` reads `GET /v1/models/{id}/pass-plan` and returns `null` on `PASS_PLAN_NOT_FOUND`. `setPassPlan(modelId, input)` requires the model owner's signer (`WALLET_REQUIRED`). `buyPass(modelId, callsTotal, opts?)` funds a 154-byte `Pass` PDA at `plan.pricePerCall * callsTotal`. Pass `pass: purchased.address` in `call(modelId, input, { pass })` or use `voynich.pass(address).call(input)` to spend prepaid calls at the discounted rate, and `closePass(address)` (or `handle.close()`) to reclaim any unused escrow.
 
 ## enclaves and enclave
 

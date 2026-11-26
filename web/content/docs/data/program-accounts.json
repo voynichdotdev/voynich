@@ -54,6 +54,18 @@
     "bytes": ""
   },
   {
+    "account": "Pass",
+    "discriminator": "`28f78c71380e392c`",
+    "fields": 12,
+    "bytes": "154"
+  },
+  {
+    "account": "PassPlan",
+    "discriminator": "`c299f777d210328f`",
+    "fields": 10,
+    "bytes": "138"
+  },
+  {
     "account": "Policy",
     "discriminator": "`de8707a3ebb12144`",
     "fields": 9,

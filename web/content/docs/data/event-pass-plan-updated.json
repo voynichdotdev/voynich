@@ -1,0 +1,42 @@
+[
+  {
+    "field": "pass_plan",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "authority",
+    "type": "pubkey"
+  },
+  {
+    "field": "mint",
+    "type": "pubkey"
+  },
+  {
+    "field": "price_per_call",
+    "type": "u64"
+  },
+  {
+    "field": "min_calls",
+    "type": "u32"
+  },
+  {
+    "field": "max_calls",
+    "type": "u32"
+  },
+  {
+    "field": "ttl_slots",
+    "type": "u64"
+  },
+  {
+    "field": "active",
+    "type": "bool"
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64"
+  }
+]

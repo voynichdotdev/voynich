@@ -184,5 +184,29 @@
     "discriminator": "`c2e2f4f677a5c427`",
     "emittedBy": "`publish_benchmark`",
     "says": "A verifiable receipt-backed Benchmark PDA was published for a model."
+  },
+  {
+    "event": "PassPlanUpdated",
+    "discriminator": "`a6e3757a87585073`",
+    "emittedBy": "`set_pass_plan`",
+    "says": "A model's prepaid PassPlan PDA was created, updated, or deactivated."
+  },
+  {
+    "event": "PassPurchased",
+    "discriminator": "`0baba27681a8975a`",
+    "emittedBy": "`buy_pass`",
+    "says": "A caller purchased a prepaid Pass PDA funded with `calls_total * price_per_call`."
+  },
+  {
+    "event": "PassUsed",
+    "discriminator": "`832a788c7a70cdb1`",
+    "emittedBy": "`open_pass_call`",
+    "says": "One prepaid call was debited from a Pass PDA to open a discounted Call."
+  },
+  {
+    "event": "PassClosed",
+    "discriminator": "`7a4c4534440a21df`",
+    "emittedBy": "`close_pass`",
+    "says": "A Pass PDA was closed and its remaining escrow returned to `holder`."
   }
 ]

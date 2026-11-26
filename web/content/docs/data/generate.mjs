@@ -238,6 +238,32 @@ const FIELDS = {
     published_slot: 'The slot the benchmark was published in.',
     bump: 'The PDA bump.',
   },
+  PassPlan: {
+    model: 'The per-call Model this prepaid pass plan belongs to.',
+    authority: 'The model owner authorized to update or deactivate this pass plan.',
+    mint: 'The mint of the pass price. The default (all-zero) address means native SOL.',
+    price_per_call: 'Discounted unit price per prepaid call in base units of `mint` (`0 < price_per_call <= model.price` when active).',
+    min_calls: 'Minimum calls per purchased pass (`>= 1`).',
+    max_calls: 'Maximum calls per purchased pass (`>= min_calls`).',
+    ttl_slots: 'Pass validity window in slots from purchase (`> 0`).',
+    active: 'Whether new passes may currently be bought under this plan.',
+    updated_slot: 'The slot the pass plan was last created or updated in.',
+    bump: 'The PDA bump.',
+  },
+  Pass: {
+    model: 'The Model this prepaid pass is bound to.',
+    holder: 'The wallet that purchased the pass, signs `open_pass_call`, and receives any unspent escrow on `close_pass`.',
+    nonce: 'Holder-chosen u64 nonce deriving the Pass PDA `["pass", model, holder, nonce_le]`.',
+    mint: 'The mint of the prepaid escrow. The default (all-zero) address means native SOL.',
+    price_per_call: 'Discounted price per call snapshotted from `PassPlan` at purchase.',
+    calls_total: 'Total number of prepaid calls funded in this pass.',
+    calls_used: 'Number of calls opened from this pass so far.',
+    escrow_remaining: 'Unspent prepaid escrow remaining in the pass (`(calls_total - calls_used) * price_per_call` while open; `0` once closed).',
+    purchased_slot: 'The slot the pass was purchased in.',
+    expires_at_slot: 'The last slot `open_pass_call` may debit this pass (`purchased_slot + ttl_slots`).',
+    status: '`Open` (`0`) or `Closed` (`1`).',
+    bump: 'The PDA bump.',
+  },
 }
 
 const accounts = idl.accounts.map((account) => {
@@ -305,6 +331,10 @@ const SAYS = {
   deposit_bond: 'Creates (if needed) and tops up an enclave\'s 107-byte Bond PDA (`["bond", enclave]`) with `amount_lamports` of slashable SOL.',
   withdraw_bond: 'Withdraws up to `bonded_lamports` of unslashed SOL from an enclave\'s Bond PDA back to `operator` while preserving rent-exemption.',
   publish_benchmark: 'Permissionlessly creates an 843-byte Benchmark PDA (`["benchmark", model, name]`) verifying 1 to 16 canonical Receipt PDAs for `model` in remaining accounts.',
+  set_pass_plan: 'Creates or updates a per-call model\'s 138-byte PassPlan PDA (`["pass-plan", model]`) setting discounted `price_per_call`, `min_calls..=max_calls`, `ttl_slots`, and `active`.',
+  buy_pass: 'Creates a 154-byte Pass PDA (`["pass", model, holder, nonce_le]`) prepaying `calls_total * pass_plan.price_per_call` in SOL or SPL.',
+  open_pass_call: 'Opens a per-call Call signed by `holder`, debiting `pass.price_per_call` from the Pass PDA into Call escrow at the discounted rate.',
+  close_pass: 'Sweeps `pass.escrow_remaining` back to `holder` and marks the Pass `Closed`. Callable by `holder` anytime or anyone once expired or exhausted.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -537,6 +567,35 @@ const ACCOUNTS = {
     publisher: 'Any wallet (owner or third-party evaluator) publishing the benchmark and paying the 843-byte Benchmark PDA\'s rent.',
     benchmark: 'The Benchmark PDA at `["benchmark", model, name]`, created here.',
   },
+  set_pass_plan: {
+    owner: 'The model\'s owner. Signs and pays the 138-byte PassPlan PDA\'s rent on creation.',
+    pass_plan: 'The PassPlan PDA at `["pass-plan", model]`, created if needed or updated in place.',
+  },
+  buy_pass: {
+    holder: 'The buyer wallet. Pays Pass PDA rent and deposits `calls_total * pass_plan.price_per_call`.',
+    pass_plan: 'The model\'s active PassPlan PDA at `["pass-plan", model]`.',
+    pass: 'The 154-byte Pass PDA at `["pass", model, holder, nonce_le]`, created here.',
+    mint: 'The pass plan\'s mint. Only for an SPL mint.',
+    holder_tokens: 'The holder\'s token account for `mint`. Only for an SPL mint.',
+    pass_escrow: 'The Pass PDA\'s associated token account for `mint`, created here. Only for an SPL mint.',
+  },
+  open_pass_call: {
+    holder: 'The pass holder. Signs and pays the Call account rent.',
+    pass: 'The open Pass PDA debited by `pass.price_per_call`.',
+    enclave: 'The Enclave chosen to answer.',
+    grant: 'That enclave\'s Grant for the model, not revoked.',
+    call: 'The Call PDA at `["call", holder, nonce_le]`, created here with `call.price = pass.price_per_call`.',
+    mint: 'The pass mint. Only for an SPL mint.',
+    pass_escrow: 'The Pass PDA\'s associated token account. Only for an SPL mint.',
+    escrow_tokens: 'The Call\'s associated token account for `mint`, created here. Only for an SPL mint.',
+  },
+  close_pass: {
+    closer: 'Either `pass.holder` (at any slot) or any wallet once `clock.slot > pass.expires_at_slot` or `pass.calls_used == pass.calls_total`.',
+    pass: 'The open Pass PDA being closed.',
+    holder: 'The pass holder receiving `pass.escrow_remaining` and any closed SPL escrow rent.',
+    pass_escrow: 'The Pass PDA\'s associated token account. Only for an SPL mint.',
+    holder_tokens: 'The holder\'s token account for `mint`. Only for an SPL mint.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -612,6 +671,10 @@ const EVENTS = {
   BondWithdrawn: ['withdraw_bond', 'An enclave operator withdrew unslashed SOL from the enclave\'s Bond PDA.'],
   BondSlashed: ['refund_call', 'A timed-out call slashed the enclave\'s Bond PDA and paid the slash directly to `call.caller`.'],
   BenchmarkPublished: ['publish_benchmark', 'A verifiable receipt-backed Benchmark PDA was published for a model.'],
+  PassPlanUpdated: ['set_pass_plan', 'A model\'s prepaid PassPlan PDA was created, updated, or deactivated.'],
+  PassPurchased: ['buy_pass', 'A caller purchased a prepaid Pass PDA funded with `calls_total * price_per_call`.'],
+  PassUsed: ['open_pass_call', 'One prepaid call was debited from a Pass PDA to open a discounted Call.'],
+  PassClosed: ['close_pass', 'A Pass PDA was closed and its remaining escrow returned to `holder`.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -662,6 +725,7 @@ const RAISED = {
   InvalidSplit: 'In `set_split`: more than 8 recipients, duplicate or default recipient wallets, `share_bps == 0`, shares not summing to 10,000, or rewriting recipients while unclaimed balance remains (`accrued > claimed`). In `settle_call` / `settle_metered_call`: `model.has_split` is true but the canonical Split PDA (or SPL escrow) was omitted from remaining accounts. In `claim_split`: `recipient` is not in `split.recipients` or has zero claimable balance.',
   InvalidBond: 'In `deposit_bond`: `amount_lamports == 0`. In `withdraw_bond`: `amount_lamports == 0` or `amount_lamports > bond.bonded_lamports`. In `refund_call`: a remaining account was passed for slashing that is not the canonical writable `Bond` PDA (`["bond", call.enclave]`) owned by the Voynich program.',
   InvalidBenchmark: 'In `publish_benchmark`: invalid slug `name` (outside 1 to 32 bytes), invalid `dataset_uri` (outside 1 to 160 bytes or bad scheme/whitespace), `sample_count == 0`, `passed_count > sample_count`, `score_bps != floor(passed_count * 10_000 / sample_count)`, `receipts` empty, > 16, or duplicated, or a remaining account that is not a canonical `Receipt` PDA owned by the Voynich program for `model`.',
+  InvalidPass: 'In `set_pass_plan`: model is not `PriceUnit::Call`, or when active `price_per_call == 0`, `price_per_call > model.price`, `min_calls == 0`, `max_calls < min_calls`, or `ttl_slots == 0`. In `buy_pass`: plan is inactive, mint mismatch, or `calls_total` outside `min_calls..=max_calls`. In `open_pass_call`: pass is closed, expired, exhausted, mismatched on model/mint, or lacks escrow. In `close_pass`: pass is already closed, or a non-holder tried to close it while still open, unexpired, and unexhausted.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -729,6 +793,9 @@ const API_ERRORS = {
   INVALID_BOND: 'The operator bond deposit, withdrawal, or remaining account is invalid.',
   BENCHMARK_NOT_FOUND: 'No benchmark record matches this model and name.',
   INVALID_BENCHMARK: 'The benchmark name, dataset, score, or receipt proofs are invalid.',
+  PASS_PLAN_NOT_FOUND: 'This model has no prepaid pass plan configured.',
+  PASS_NOT_FOUND: 'No prepaid pass has this address.',
+  INVALID_PASS: 'The pass plan or prepaid pass is invalid, inactive, expired, or exhausted.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

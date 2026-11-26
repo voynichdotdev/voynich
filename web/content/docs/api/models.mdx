@@ -1088,6 +1088,54 @@ Builds [`publish_benchmark`](/docs/program/instructions#publishbenchmark) to anc
 
 Body (`PublishBenchmarkRequest`): `{ wallet, name, datasetSha256, datasetUri, sampleCount, passedCount, scoreBps?, receipts }` (`scoreBps` defaults to `Math.floor((passedCount * 10000) / sampleCount)`). Returns a [Build](/docs/api/transactions#build) with `action: "publish_benchmark"` and `addresses: { model, benchmark }`. Answers `MODEL_NOT_FOUND`, `INVALID_BENCHMARK` (`422`), or `INSUFFICIENT_FUNDS`.
 
+## PassPlan
+
+A model's on-chain 138-byte `PassPlan` PDA (`["pass-plan", model]`) configuring discounted prepaid call packs.
+
+<Fields>
+<Field name="address" type="address" required>
+The `PassPlan` PDA address.
+</Field>
+<Field name="model" type="address" required>
+The Model address.
+</Field>
+<Field name="modelName" type="string or null">
+The model's slug name when indexed.
+</Field>
+<Field name="authority" type="address" required>
+The model owner authorized to update or deactivate the plan.
+</Field>
+<Field name="mint" type="address or null" required>
+SPL Token mint, or `null` for SOL.
+</Field>
+<Field name="pricePerCall" type="amount" required>
+Discounted base-unit price per prepaid call (`<= model.price.amount` when active).
+</Field>
+<Field name="minCalls" type="integer (>= 1)" required>
+Minimum calls per purchased pass.
+</Field>
+<Field name="maxCalls" type="integer (>= minCalls)" required>
+Maximum calls per purchased pass.
+</Field>
+<Field name="ttlSlots" type="slot count" required>
+Pass validity window in slots from purchase.
+</Field>
+<Field name="active" type="boolean" required>
+Whether callers may currently purchase passes under this plan.
+</Field>
+<Field name="updatedSlot" type="slot" required>
+The slot the plan was last updated in.
+</Field>
+</Fields>
+
+## `GET /v1/models/{id}/pass-plan`
+
+Reads the [PassPlan](#passplan) for model `{id}`. Answers `MODEL_NOT_FOUND` or `PASS_PLAN_NOT_FOUND` (`404`) when no plan is configured.
+
+## `POST /v1/models/{id}/pass-plan/build`
+
+Builds [`set_pass_plan`](/docs/program/instructions#setpassplan) as the model owner. Body (`SetPassPlanRequest`): `{ wallet, pricePerCall, minCalls, maxCalls, ttlSlots, active }`. Returns a [Build](/docs/api/transactions#build) with `action: "set_pass_plan"` and `addresses: { model, passPlan }`. Answers `MODEL_NOT_FOUND`, `INVALID_PASS` (`422`), `INSUFFICIENT_FUNDS`, or `SIMULATION_FAILED` if `wallet` is not `model.owner`.
+
 ## Read next
 
 <Cards>

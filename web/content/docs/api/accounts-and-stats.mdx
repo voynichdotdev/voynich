@@ -120,6 +120,84 @@ The model's 8 latest [Receipt](/docs/api/calls-and-receipts#receipt) objects, la
 
 Next: call the model as in [Call a model in five minutes](/docs/start/call-a-model).
 
+## Pass
+
+A purchased 154-byte prepaid `Pass` PDA (`["pass", model, holder, nonce_le]`) holding discounted calls for one model.
+
+<Fields>
+<Field name="address" type="address" required>
+The `Pass` PDA address.
+</Field>
+<Field name="model" type="address" required>
+The Model address.
+</Field>
+<Field name="modelName" type="string or null">
+The model's slug name when indexed.
+</Field>
+<Field name="holder" type="address" required>
+The wallet that purchased and spends the pass.
+</Field>
+<Field name="nonce" type="decimal string" required>
+Holder-chosen u64 nonce.
+</Field>
+<Field name="mint" type="address or null" required>
+SPL Token mint, or `null` for SOL.
+</Field>
+<Field name="pricePerCall" type="amount" required>
+Discounted unit price per call snapshotted at purchase.
+</Field>
+<Field name="callsTotal" type="integer" required>
+Total calls funded in this pass.
+</Field>
+<Field name="callsUsed" type="integer" required>
+Calls opened from this pass so far.
+</Field>
+<Field name="callsRemaining" type="integer" required>
+Unused calls left (`callsTotal - callsUsed`).
+</Field>
+<Field name="escrowRemaining" type="amount" required>
+Unspent prepaid escrow left in the pass (`"0"` once closed).
+</Field>
+<Field name="returnedAmount" type="amount" required>
+Unused escrow returned to `holder` on `close_pass` (`"0"` while open).
+</Field>
+<Field name="purchasedSlot" type="slot" required>
+The slot the pass was purchased in.
+</Field>
+<Field name="expiresAtSlot" type="slot" required>
+The last slot `open_pass_call` may debit this pass.
+</Field>
+<Field name="closedSlot" type="slot or null" required>
+The slot the pass was closed in, or `null` while open.
+</Field>
+<Field name="status" type="'open' | 'closed'" required>
+Whether the pass is currently open or closed.
+</Field>
+<Field name="updatedSlot" type="slot" required>
+The slot of the latest pass event.
+</Field>
+</Fields>
+
+## `GET /v1/accounts/{wallet}/passes`
+
+Lists prepaid [Pass](#pass) accounts held by `{wallet}` (`AccountPasses`: `{ items, asOf }`).
+
+## `GET /v1/passes/{address}`
+
+Reads one [Pass](#pass) by its PDA address. Answers `PASS_NOT_FOUND` (`404`) when none exists.
+
+## `POST /v1/passes/buy/build`
+
+Builds [`buy_pass`](/docs/program/instructions#buypass). Body (`BuyPassRequest`): `{ wallet, model, callsTotal, nonce? }`. Returns a [Build](/docs/api/transactions#build) with `action: "buy_pass"` and `addresses: { model, passPlan, pass }`. Answers `MODEL_NOT_FOUND`, `PASS_PLAN_NOT_FOUND`, `INVALID_PASS` (`422`), or `INSUFFICIENT_FUNDS`.
+
+## `POST /v1/passes/call/build`
+
+Builds [`open_pass_call`](/docs/program/instructions#openpasscall) debiting one prepaid call from `pass` at `pass.pricePerCall`. Body (`OpenPassCallRequest`): `{ wallet, pass, enclave, inputHash, answerMode?, nonce? }`. Returns a [Build](/docs/api/transactions#build) with `action: "open_pass_call"` and `addresses: { model, pass, call }`.
+
+## `POST /v1/passes/close/build`
+
+Builds [`close_pass`](/docs/program/instructions#closepass) sweeping `escrowRemaining` back to `holder`. Body (`ClosePassRequest`): `{ wallet, pass }` (`wallet` is `holder` anytime, or any closer after `expiresAtSlot` or exhaustion). Returns a [Build](/docs/api/transactions#build) with `action: "close_pass"` and `addresses: { model, pass }`.
+
 ## Read next
 
 <Cards>

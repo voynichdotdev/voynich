@@ -1,0 +1,22 @@
+[
+  {
+    "argument": "price_per_call",
+    "type": "u64"
+  },
+  {
+    "argument": "min_calls",
+    "type": "u32"
+  },
+  {
+    "argument": "max_calls",
+    "type": "u32"
+  },
+  {
+    "argument": "ttl_slots",
+    "type": "u64"
+  },
+  {
+    "argument": "active",
+    "type": "bool"
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The per-call Model this prepaid pass plan belongs to."
+  },
+  {
+    "field": "authority",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The model owner authorized to update or deactivate this pass plan."
+  },
+  {
+    "field": "mint",
+    "type": "pubkey",
+    "offset": "72",
+    "meaning": "The mint of the pass price. The default (all-zero) address means native SOL."
+  },
+  {
+    "field": "price_per_call",
+    "type": "u64",
+    "offset": "104",
+    "meaning": "Discounted unit price per prepaid call in base units of `mint` (`0 < price_per_call <= model.price` when active)."
+  },
+  {
+    "field": "min_calls",
+    "type": "u32",
+    "offset": "112",
+    "meaning": "Minimum calls per purchased pass (`>= 1`)."
+  },
+  {
+    "field": "max_calls",
+    "type": "u32",
+    "offset": "116",
+    "meaning": "Maximum calls per purchased pass (`>= min_calls`)."
+  },
+  {
+    "field": "ttl_slots",
+    "type": "u64",
+    "offset": "120",
+    "meaning": "Pass validity window in slots from purchase (`> 0`)."
+  },
+  {
+    "field": "active",
+    "type": "bool",
+    "offset": "128",
+    "meaning": "Whether new passes may currently be bought under this plan."
+  },
+  {
+    "field": "updated_slot",
+    "type": "u64",
+    "offset": "129",
+    "meaning": "The slot the pass plan was last created or updated in."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "137",
+    "meaning": "The PDA bump."
+  }
+]
