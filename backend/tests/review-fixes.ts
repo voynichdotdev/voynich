@@ -6354,3 +6354,112 @@ test('Build 14 Step 1: Benchmark PDA helpers, decodeBenchmarkAccount, buildPubli
   assert.equal(globalList.items.length, 1)
   assert.equal(globalList.items[0]!.scoreBps, 9000)
 })
+
+test('Build 14 Step 2: compiled CLI benchmark run --suite and benchmark list + sketch-32 eval-suite.json', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, readFileSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { Keypair } = await import('@solana/web3.js')
+  const { sha256, toHex } = await import('voynich/crypto')
+  const { buildApp } = await import('../src/app.js')
+
+  const execFileAsync = promisify(execFile)
+
+  // 1. Validate shipped sample suite file backend/models/sketch-32/eval-suite.json
+  const sampleSuitePath = resolve('models/sketch-32/eval-suite.json')
+  const sampleSuite = JSON.parse(readFileSync(sampleSuitePath, 'utf8')) as {
+    name: string
+    datasetUri: string
+    cases: { expectedLabel: string; input: { width: number; height: number; strokes: number[][][] } }[]
+  }
+  assert.equal(sampleSuite.name, 'quickdraw-smoke-v1')
+  assert(sampleSuite.datasetUri.startsWith('https://'))
+  assert.equal(sampleSuite.cases.length, 4)
+  assert.deepEqual(sampleSuite.cases.map(c => c.expectedLabel), ['house', 'ladder', 'envelope', 'star'])
+
+  // 2. Spin up fixture HTTP server with persistent X-Fixture-Session
+  const fixtureApp = buildApp()
+  const wrapperApp = new (await import('hono')).Hono()
+  wrapperApp.all('*', async c => {
+    const url = new URL(c.req.url)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('X-Fixture-Session', 'cli-benchmark-test')
+    const bodyText = c.req.method !== 'GET' && c.req.method !== 'HEAD' ? await c.req.text() : undefined
+    return fixtureApp.request(new Request(url.toString(), {
+      method: c.req.method,
+      headers,
+      body: bodyText,
+    }))
+  })
+  const server = serve({ fetch: wrapperApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b14s2-cli-'))
+  const kp = Keypair.generate()
+  const keyPath = join(scratch, 'evaluator.json')
+  writeFileSync(keyPath, JSON.stringify([...kp.secretKey]))
+
+  // Fixture sketch-32 returns label 'cat'; 1 match + 1 mismatch => 1/2 = 5000 bps
+  const tempSuitePath = join(scratch, 'suite.json')
+  const tempSuiteJson = JSON.stringify({
+    name: 'cli-smoke-v1',
+    datasetUri: 'https://voynich.dev/datasets/cli-smoke-v1.json',
+    cases: [
+      { expectedLabel: 'cat', input: sampleSuite.cases[0]!.input },
+      { expectedLabel: 'house', input: sampleSuite.cases[1]!.input },
+    ],
+  }, null, 2)
+  writeFileSync(tempSuitePath, tempSuiteJson)
+  const expectedSha = toHex(sha256(new Uint8Array(Buffer.from(tempSuiteJson, 'utf8'))))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  try {
+    const runCli = async (args: string[]) => {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, ...args], { cwd: resolve('.'), encoding: 'utf8' })
+      return JSON.parse(stdout) as Record<string, unknown>
+    }
+
+    // Run benchmark via compiled CLI
+    const runRes = await runCli([
+      'benchmark', 'run', 'sketch-32',
+      '--suite', tempSuitePath,
+      '--answer-mode', 'open',
+      '--strategy', 'balanced',
+      '--keypair', keyPath,
+      '--json',
+    ])
+    assert.equal(runRes.sampleCount, 2)
+    assert.equal(runRes.passedCount, 1)
+    assert.equal(runRes.scoreBps, 5000)
+    assert.equal(runRes.datasetSha256, expectedSha)
+    const bench = runRes.benchmark as Record<string, unknown>
+    assert.equal(bench.name, 'cli-smoke-v1')
+    assert.equal(bench.scoreBps, 5000)
+    assert.equal((bench.receipts as string[]).length, 2)
+    assert.notEqual((bench.receipts as string[])[0], (bench.receipts as string[])[1])
+    const results = runRes.results as { passed: boolean; actualLabel: string }[]
+    assert.equal(results.length, 2)
+    assert.equal(results[0]!.passed, true)
+    assert.equal(results[0]!.actualLabel, 'cat')
+    assert.equal(results[1]!.passed, false)
+
+    // List globally and by model + min-score-bps filter
+    const listAll = await runCli(['benchmark', 'list', '--json']) as { items: Record<string, unknown>[] }
+    assert.equal(listAll.items.length, 1)
+    assert.equal(listAll.items[0]!.name, 'cli-smoke-v1')
+
+    const listModelPass = await runCli(['benchmark', 'list', 'sketch-32', '--min-score-bps', '4000', '--json']) as { items: Record<string, unknown>[] }
+    assert.equal(listModelPass.items.length, 1)
+
+    const listModelHigh = await runCli(['benchmark', 'list', 'sketch-32', '--min-score-bps', '9000', '--json']) as { items: Record<string, unknown>[] }
+    assert.equal(listModelHigh.items.length, 0)
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

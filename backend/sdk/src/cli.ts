@@ -7,9 +7,10 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Connection, Keypair, PublicKey } from '@solana/web3.js'
-import { ApiClientError, createClient, decodeManifest, type MeasurementStatus, type PriceUnit } from '@voynich/contract'
+import { ApiClientError, createClient, decodeManifest, type AnswerMode, type MeasurementStatus, type PriceUnit } from '@voynich/contract'
 import { fromBase64, fromHex, sha256, signSealDerivation, streamInitialHash, streamNextHash, toHex, verifyPiece } from './crypto.js'
 import { createVoynich, type RoutingStrategy } from './client.js'
+import type { SketchInput } from './preprocess.js'
 import { PROGRAM_ID, decodeMeasurementAccount, measurementPda } from './program.js'
 import { loadOwnerFile, saveOwnerFile } from './owner-file.js'
 import { resolveCliSealBase } from './seal-base.js'
@@ -33,6 +34,8 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   budget: { type: 'string' }, 'ttl-slots': { type: 'string' }, 'delegate-gas': { type: 'string' }, 'delegate-out': { type: 'string' },
   wallet: { type: 'string' }, session: { type: 'string' }, delegate: { type: 'string' },
   recipient: { type: 'string', multiple: true },
+  evaluator: { type: 'string' }, 'min-score-bps': { type: 'string' },
+  suite: { type: 'string' }, name: { type: 'string' }, 'dataset-uri': { type: 'string' }, 'answer-mode': { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } })
 if (values['api-url'] ?? values.api) process.env.VOYNICH_API_URL = values['api-url'] ?? values.api
@@ -91,6 +94,7 @@ async function configureCliSigner(): Promise<void> {
     || (command === 'model' && argument === 'policy' && ['set', 'clear'].includes(third ?? ''))
     || (command === 'model' && argument === 'split' && ['set', 'claim'].includes(third ?? ''))
     || (command === 'measurement' && ['publish', 'deprecate'].includes(argument ?? ''))
+    || (command === 'benchmark' && argument === 'run')
     || (command === 'session' && ['open', 'close'].includes(argument ?? ''))
     || (command === 'session' && argument === 'list' && !values.wallet)
   ) {
@@ -159,10 +163,147 @@ async function loadCliKeypair(): Promise<Keypair> {
   return Keypair.fromSecretKey(Uint8Array.from(decoded))
 }
 async function main(): Promise<unknown> {
-  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
+  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
   await configureCliSigner()
   if (command === 'models') return voynich.models()
   if (command === 'enclaves') return voynich.enclaves()
+  if (command === 'benchmark') {
+    const action = required(argument, 'benchmark subcommand (list or run)')
+    if (action === 'list') {
+      const evaluator = values.evaluator?.trim() || undefined
+      const name = values.name?.trim() || undefined
+      let minScoreBps: number | undefined
+      if (values['min-score-bps'] !== undefined) {
+        minScoreBps = Number(values['min-score-bps'])
+        if (!Number.isInteger(minScoreBps) || minScoreBps < 0 || minScoreBps > 10_000) {
+          throw new Error('--min-score-bps must be an integer between 0 and 10000.')
+        }
+      }
+      const query = { ...(name ? { name } : {}), limit: 100 }
+      const page = third
+        ? await voynich.listModelBenchmarks(third, query)
+        : await voynich.listBenchmarks(query)
+      const items = page.items.filter(item =>
+        (evaluator === undefined || item.publisher === evaluator)
+        && (minScoreBps === undefined || item.scoreBps >= minScoreBps),
+      )
+      return { ...page, items }
+    }
+    if (action === 'run') {
+      const modelId = required(third, 'model')
+      const suitePath = required(values.suite, '--suite <json-file>')
+      const rawSuiteBytes = new Uint8Array(await readFile(suitePath))
+      const datasetSha256 = toHex(sha256(rawSuiteBytes))
+      const parsed = JSON.parse(new TextDecoder().decode(rawSuiteBytes)) as {
+        name?: unknown
+        datasetUri?: unknown
+        cases?: unknown
+      }
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.cases)) {
+        throw new Error('Suite JSON must contain a cases array.')
+      }
+      if (parsed.cases.length < 1 || parsed.cases.length > 16) {
+        throw new Error('Suite cases must contain between 1 and 16 test cases.')
+      }
+      const name = (values.name ?? (typeof parsed.name === 'string' ? parsed.name : undefined))?.trim()
+      if (!name || Buffer.byteLength(name, 'utf8') > 32) {
+        throw new Error('Benchmark name must be 1..32 UTF-8 bytes (set in suite JSON or via --name).')
+      }
+      const datasetUri = (values['dataset-uri'] ?? (typeof parsed.datasetUri === 'string' ? parsed.datasetUri : undefined))?.trim()
+      if (!datasetUri || Buffer.byteLength(datasetUri, 'utf8') > 160) {
+        throw new Error('Benchmark datasetUri must be 1..160 UTF-8 bytes (set in suite JSON or via --dataset-uri).')
+      }
+      let answerMode: AnswerMode = 'sealed'
+      if (values['answer-mode'] !== undefined) {
+        const norm = values['answer-mode'].trim().toLowerCase()
+        if (norm !== 'open' && norm !== 'sealed') throw new Error('--answer-mode must be open or sealed.')
+        answerMode = norm
+      }
+      const strategy = parseStrategy(values.strategy)
+      type SuiteCase = { input: SketchInput | number[] | string; expectedLabel?: string; expectedContains?: string }
+      const cases: SuiteCase[] = parsed.cases.map((entry, idx) => {
+        if (!entry || typeof entry !== 'object') throw new Error(`Suite case #${idx + 1} must be an object.`)
+        const item = entry as Record<string, unknown>
+        if (item.input === undefined) throw new Error(`Suite case #${idx + 1} is missing input.`)
+        const expectedLabel = typeof item.expectedLabel === 'string' ? item.expectedLabel : undefined
+        const expectedContains = typeof item.expectedContains === 'string' ? item.expectedContains : undefined
+        if (expectedLabel === undefined && expectedContains === undefined) {
+          throw new Error(`Suite case #${idx + 1} must specify expectedLabel or expectedContains.`)
+        }
+        return { input: item.input as SketchInput | number[] | string, expectedLabel, expectedContains }
+      })
+
+      const signer = await loadCliKeypair()
+      const client = createVoynich({
+        apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+        rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+        signer,
+      })
+
+      const receipts: string[] = []
+      const caseResults: {
+        index: number
+        passed: boolean
+        expectedLabel?: string
+        expectedContains?: string
+        actualLabel?: string
+        actualText?: string
+        receipt: string
+        call: string
+      }[] = []
+      let passedCount = 0
+
+      for (let i = 0; i < cases.length; i++) {
+        const testCase = cases[i]!
+        stderr.write(`benchmark: case ${i + 1}/${cases.length} calling ${modelId}...\n`)
+        const res = await client.call(modelId, testCase.input, {
+          answerMode,
+          ...(strategy ? { strategy } : {}),
+          ...(values.enclave ? { enclave: values.enclave } : {}),
+        })
+        const actualLabel = 'label' in res.output ? res.output.label : undefined
+        const actualText = 'text' in res.output ? res.output.text : undefined
+        const labelOk = testCase.expectedLabel === undefined ? true : actualLabel === testCase.expectedLabel
+        const textOk = testCase.expectedContains === undefined ? true : (typeof actualText === 'string' && actualText.includes(testCase.expectedContains))
+        const passed = labelOk && textOk
+        if (passed) passedCount++
+        receipts.push(res.receipt.address)
+        caseResults.push({
+          index: i,
+          passed,
+          ...(testCase.expectedLabel !== undefined ? { expectedLabel: testCase.expectedLabel } : {}),
+          ...(testCase.expectedContains !== undefined ? { expectedContains: testCase.expectedContains } : {}),
+          ...(actualLabel !== undefined ? { actualLabel } : {}),
+          ...(actualText !== undefined ? { actualText } : {}),
+          receipt: res.receipt.address,
+          call: res.receipt.call,
+        })
+        stderr.write(`benchmark: case ${i + 1}/${cases.length} ${passed ? 'PASS' : 'FAIL'} (receipt ${res.receipt.address})\n`)
+      }
+
+      const sampleCount = cases.length
+      const scoreBps = Math.floor((passedCount * 10_000) / sampleCount)
+      stderr.write(`benchmark: publishing ${name} (${passedCount}/${sampleCount}, ${scoreBps} bps)...\n`)
+      const benchmark = await client.publishBenchmark(modelId, {
+        name,
+        datasetSha256,
+        datasetUri,
+        sampleCount,
+        passedCount,
+        scoreBps,
+        receipts,
+      })
+      return {
+        benchmark,
+        scoreBps,
+        passedCount,
+        sampleCount,
+        datasetSha256,
+        results: caseResults,
+      }
+    }
+    throw new Error('Use benchmark list [<model>] or benchmark run <model> --suite <json-file>.')
+  }
   if (command === 'measurement') {
     const action = required(argument, 'measurement subcommand (list, show, publish, deprecate, or verify)')
     if (action === 'list') {
