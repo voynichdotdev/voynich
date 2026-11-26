@@ -6613,3 +6613,120 @@ test('Build 15 Step 1: PassPlan/Pass PDA helpers, decoders, offline tx builders,
   assert.equal(closed.pass.escrowRemaining, '0')
   assert.equal(closed.pass.returnedAmount, String(discounted * 2n))
 })
+
+test('Build 15 Step 2: crank buildExpiredPassCloseInstructions (SOL & SPL) + compiled CLI pass plan/buy/list/close and call --pass', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } = await import('@solana/spl-token')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { chainPrograms } = await import('../sdk/src/program.js')
+  const { buildExpiredPassCloseInstructions } = await import('../src/chain/crank.js')
+  const { buildApp } = await import('../src/app.js')
+
+  const execFileAsync = promisify(execFile)
+
+  // 1. crank buildExpiredPassCloseInstructions for SOL and SPL (with idempotent holder ATA)
+  const { voynich: voynichProgram } = chainPrograms(new Connection('http://127.0.0.1:9704', 'confirmed'))
+  const closer = Keypair.generate().publicKey
+  const passKey = Keypair.generate().publicKey
+  const holder = Keypair.generate().publicKey
+  const splMint = Keypair.generate().publicKey
+
+  const solIxs = await buildExpiredPassCloseInstructions(voynichProgram, closer, passKey, { holder, mint: PublicKey.default })
+  assert.equal(solIxs.length, 1)
+
+  const splIxs = await buildExpiredPassCloseInstructions(voynichProgram, closer, passKey, { holder, mint: splMint })
+  assert.equal(splIxs.length, 2)
+  assert(splIxs[0]!.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID))
+  const expectedHolderAta = getAssociatedTokenAddressSync(splMint, holder, true)
+  assert(splIxs[1]!.keys.some(k => k.pubkey.equals(expectedHolderAta)))
+
+  // 2. Compiled CLI: pass plan show|set, pass buy, pass list, call --pass, pass close
+  const ownerKp = Keypair.generate()
+  const callerKp = Keypair.generate()
+  const fixtureApp = buildApp()
+  const wrapperApp = new (await import('hono')).Hono()
+  wrapperApp.all('*', async c => {
+    const url = new URL(c.req.url)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('X-Fixture-Session', 'cli-pass-test')
+    let bodyText: string | undefined
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      bodyText = (await c.req.text()).replaceAll(ownerKp.publicKey.toBase58(), FIXTURE.owner)
+    }
+    const res = await fixtureApp.request(new Request(url.toString(), {
+      method: c.req.method,
+      headers,
+      body: bodyText,
+    }))
+    return res
+  })
+  const server = serve({ fetch: wrapperApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b15s2-cli-'))
+  const ownerKeyPath = join(scratch, 'owner.json')
+  const callerKeyPath = join(scratch, 'caller.json')
+  const inputPath = join(scratch, 'input.json')
+  writeFileSync(ownerKeyPath, JSON.stringify([...ownerKp.secretKey]))
+  writeFileSync(callerKeyPath, JSON.stringify([...callerKp.secretKey]))
+  writeFileSync(inputPath, JSON.stringify(new Array<number>(784).fill(0)))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  try {
+    const runCli = async (args: string[]) => {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, ...args], { cwd: resolve('.'), encoding: 'utf8' })
+      return JSON.parse(stdout) as Record<string, unknown>
+    }
+
+    const emptyPlan = await runCli(['pass', 'plan', 'show', 'sketch-32', '--json'])
+    assert.equal(emptyPlan.passPlan, null)
+
+    const modelRes = await (await fetch(`${apiUrl}/v1/models/sketch-32`)).json() as { price: { amount: string } }
+    const discounted = (BigInt(modelRes.price.amount) * 80n) / 100n
+
+    const setPlan = await runCli([
+      'pass', 'plan', 'set', 'sketch-32',
+      '--price', String(discounted),
+      '--min-calls', '2',
+      '--max-calls', '20',
+      '--ttl-slots', '10000',
+      '--keypair', ownerKeyPath,
+      '--json',
+    ])
+    assert.equal(setPlan.pricePerCall, String(discounted))
+    assert.equal(setPlan.active, true)
+
+    const shownPlan = await runCli(['pass', 'plan', 'show', 'sketch-32', '--json'])
+    assert.equal(shownPlan.pricePerCall, String(discounted))
+
+    const bought = await runCli(['pass', 'buy', 'sketch-32', '--calls', '3', '--keypair', callerKeyPath, '--json'])
+    assert.equal(bought.callsTotal, 3)
+    assert.equal(bought.callsUsed, 0)
+    assert.equal(bought.escrowRemaining, String(discounted * 3n))
+    const passAddr = bought.address as string
+
+    const listed = await runCli(['pass', 'list', '--keypair', callerKeyPath, '--json']) as { items: Record<string, unknown>[] }
+    assert.equal(listed.items.length, 1)
+    assert.equal(listed.items[0]!.address, passAddr)
+
+    const called = await runCli(['call', 'sketch-32', inputPath, '--open', '--pass', passAddr, '--keypair', callerKeyPath, '--json'])
+    const receipt = called.receipt as { payments: { total: string } }
+    assert.equal(receipt.payments.total, String(discounted))
+
+    const closed = await runCli(['pass', 'close', passAddr, '--keypair', callerKeyPath, '--json']) as { pass: Record<string, unknown> }
+    assert.equal(closed.pass.status, 'closed')
+    assert.equal(closed.pass.callsUsed, 1)
+    assert.equal(closed.pass.returnedAmount, String(discounted * 2n))
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

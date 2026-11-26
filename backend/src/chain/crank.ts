@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { Keypair, PublicKey, SystemProgram, type TransactionInstruction } from '@solana/web3.js'
 import type { Prisma } from '@prisma/client'
 import { createAssociatedTokenAccountIdempotentInstruction, createBurnCheckedInstruction, getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, unpackMint, type Mint } from '@solana/spl-token'
-import { bondPda, decodeBondAccount, decodeCallAccount, decodeSessionAccount, eventAccounts, type DecodedCallAccount, type DecodedSessionAccount } from 'voynich/program'
+import { bondPda, decodeBondAccount, decodeCallAccount, decodePassAccount, decodeSessionAccount, eventAccounts, type DecodedCallAccount, type DecodedPassAccount, type DecodedSessionAccount } from 'voynich/program'
 import { createKeeperRuntime } from '../engines/keeper/runtime.js'
 import { createScheduler } from '../engines/keeper/scheduler.js'
 import { createJournal } from '../engines/keeper/journal.js'
@@ -80,6 +80,32 @@ export async function buildExpiredSessionCloseInstructions(
   ]
 }
 
+export async function buildExpiredPassCloseInstructions(
+  voynichProgram: ChainRuntime['programs']['voynich'],
+  closer: PublicKey,
+  passKey: PublicKey,
+  chainPass: Pick<DecodedPassAccount, 'holder' | 'mint'>,
+): Promise<TransactionInstruction[]> {
+  const token = !chainPass.mint.equals(PublicKey.default)
+  const holderTokens = token ? getAssociatedTokenAddressSync(chainPass.mint, chainPass.holder, true) : null
+  return [
+    ...(token ? [createAssociatedTokenAccountIdempotentInstruction(closer, holderTokens!, chainPass.holder, chainPass.mint)] : []),
+    await voynichProgram.methods
+      .closePass()
+      .accountsStrict({
+        closer,
+        pass: passKey,
+        holder: chainPass.holder,
+        passEscrow: token ? getAssociatedTokenAddressSync(chainPass.mint, passKey, true) : null,
+        holderTokens,
+        tokenProgram: token ? TOKEN_PROGRAM_ID : null,
+        systemProgram: SystemProgram.programId,
+        ...eventAccounts(voynichProgram.programId),
+      })
+      .instruction(),
+  ]
+}
+
 export function readKey(value: string | undefined, name: string): Keypair {
   if (!value?.trim()) throw new Error(`Set ${name} before starting this crank role.`)
   try {
@@ -136,6 +162,25 @@ export async function runCrank(runtime: ChainRuntime) {
       if (slot <= BigInt(chainSession.expiresAtSlot.toString())) return
       await journal.execute(`close-session:${sess.address}`, () =>
         buildExpiredSessionCloseInstructions(programs.voynich, keeper.publicKey, sessionKey, chainSession),
+      )
+    })))
+  }
+
+  const sweepPasses = async () => {
+    const slot = await runtime.readModel.currentSlot()
+    const openPasses = await db.pass.findMany({ where: { status: 'open' }, orderBy: { expiresAtSlot: 'asc' }, take: 100 })
+    const closable = openPasses.filter(p => p.expiresAtSlot < slot || p.callsUsed >= p.callsTotal).slice(0, 50)
+    await Promise.all(closable.map(passRow => scheduler.safely(`close-pass:${passRow.address}`, async () => {
+      const passKey = new PublicKey(passRow.address)
+      const info = await rpc.connection.getAccountInfo(passKey, 'confirmed')
+      if (!info || !info.owner.equals(programs.voynich.programId)) return
+      const chainPass = decodePassAccount(info.data)
+      if (chainPass.status !== 'open') return
+      const expired = slot > BigInt(chainPass.expiresAtSlot.toString())
+      const exhausted = chainPass.callsUsed >= chainPass.callsTotal
+      if (!expired && !exhausted) return
+      await journal.execute(`close-pass:${passRow.address}`, () =>
+        buildExpiredPassCloseInstructions(programs.voynich, keeper.publicKey, passKey, chainPass),
       )
     })))
   }
@@ -375,6 +420,7 @@ export async function runCrank(runtime: ChainRuntime) {
     { name: 'resume', everyMs: 0, run: () => journal.resume() },
     { name: 'refunds', everyMs: 2000, run: refund },
     { name: 'sessions', everyMs: 5000, run: sweepSessions },
+    { name: 'passes', everyMs: 5000, run: sweepPasses },
     { name: 'trading-fees', everyMs: 30_000, run: claimTradingFees },
     { name: 'buybacks', everyMs: 5000, run: buyback },
   ], { onError: (task, error) => console.error(JSON.stringify({ event: 'crank_task_failed', task, name: error instanceof Error ? error.name : 'Error', message: error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, '[url]') : 'Unknown error' })) })
