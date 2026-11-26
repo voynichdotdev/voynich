@@ -37,6 +37,7 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   evaluator: { type: 'string' }, 'min-score-bps': { type: 'string' },
   suite: { type: 'string' }, name: { type: 'string' }, 'dataset-uri': { type: 'string' }, 'answer-mode': { type: 'string' },
   'min-calls': { type: 'string' }, inactive: { type: 'boolean' }, calls: { type: 'string' }, pass: { type: 'string' },
+  referrer: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } })
 if (values['api-url'] ?? values.api) process.env.VOYNICH_API_URL = values['api-url'] ?? values.api
@@ -94,6 +95,7 @@ async function configureCliSigner(): Promise<void> {
     || (command === 'model' && ['price', 'retire', 'revoke', 'upgrade'].includes(argument ?? ''))
     || (command === 'model' && argument === 'policy' && ['set', 'clear'].includes(third ?? ''))
     || (command === 'model' && argument === 'split' && ['set', 'claim'].includes(third ?? ''))
+    || (command === 'model' && argument === 'referral' && ['set', 'claim'].includes(third ?? ''))
     || (command === 'measurement' && ['publish', 'deprecate'].includes(argument ?? ''))
     || (command === 'benchmark' && argument === 'run')
     || (command === 'pass' && (['buy', 'close'].includes(argument ?? '') || (argument === 'plan' && third === 'set') || (argument === 'list' && !values.wallet)))
@@ -165,7 +167,7 @@ async function loadCliKeypair(): Promise<Keypair> {
   return Keypair.fromSecretKey(Uint8Array.from(decoded))
 }
 async function main(): Promise<unknown> {
-  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--pass <pass-address>] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich pass plan show <model> | pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <n> [--inactive] | pass buy <model> --calls <n> | pass list [--wallet <pubkey>] | pass close <pass-address>\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
+  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--pass <pass-address>] [--referrer <wallet>] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich pass plan show <model> | pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <n> [--inactive] | pass buy <model> --calls <n> | pass list [--wallet <pubkey>] | pass close <pass-address>\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model referral show <model> | model referral set <model> --share-bps <n> [--inactive] | model referral claim <model> [--referrer <wallet>]\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
   await configureCliSigner()
   if (command === 'models') return voynich.models()
   if (command === 'enclaves') return voynich.enclaves()
@@ -658,6 +660,7 @@ async function main(): Promise<unknown> {
       ...(values.ceiling !== undefined ? { ceiling: values.ceiling } : {}),
       ...(sessionAuth ? { session: sessionAuth } : {}),
       ...(values.pass ? { pass: values.pass } : {}),
+      ...(values.referrer ? { referrer: values.referrer } : {}),
     })
   }
   if (command === 'enclave') {
@@ -868,6 +871,40 @@ async function main(): Promise<unknown> {
         return split
       }
       throw new Error('Use model split show <model>, model split set <model>, or model split claim <model>.')
+    }
+    if (argument === 'referral') {
+      const action = required(third, 'referral subcommand (show, set, or claim)')
+      const modelId = required(fourth, 'model')
+      if (action === 'show') {
+        const cfg = await voynich.getReferralConfig(modelId)
+        return cfg ?? { model: modelId, referralConfig: null }
+      }
+      if (action === 'set') {
+        const shareBps = values.inactive && values['share-bps'] === undefined
+          ? 0
+          : Number(required(values['share-bps'], '--share-bps <0..2500>'))
+        if (!Number.isSafeInteger(shareBps) || shareBps < 0 || shareBps > 2500) {
+          throw new Error('--share-bps must be an integer between 0 and 2500.')
+        }
+        const signer = await loadCliKeypair()
+        const client = createVoynich({
+          apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+          rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+          signer,
+        })
+        return client.setReferralConfig(modelId, { shareBps, active: !values.inactive })
+      }
+      if (action === 'claim') {
+        const signer = await loadCliKeypair()
+        const client = createVoynich({
+          apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+          rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+          signer,
+        })
+        const target = values.referrer?.trim() || undefined
+        return client.claimReferral(modelId, target)
+      }
+      throw new Error('Use model referral show <model>, model referral set <model> --share-bps <n> [--inactive], or model referral claim <model> [--referrer <wallet>].')
     }
     const modelId = required(third, 'model')
     if (argument === 'versions') return voynich.listVersions(modelId)

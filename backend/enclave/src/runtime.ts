@@ -18,7 +18,7 @@ import {
 } from 'voynich/crypto'
 import { streamSSE } from 'hono/streaming'
 import { applyOnnxAdapter } from 'voynich/adapter'
-import { BN, addresses, chainPrograms, decodeAttestation, decodeCallAccount, decodeConfigAccount, decodeGrantAccount, decodePolicyAccount, decodeReceiptAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts, splitPda, type DecodedPolicyAccount } from 'voynich/program'
+import { BN, addresses, callReferralPda, chainPrograms, decodeAttestation, decodeCallAccount, decodeCallReferralAccount, decodeConfigAccount, decodeGrantAccount, decodePolicyAccount, decodeReceiptAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts, referralPda, splitPda, type DecodedCallReferralAccount, type DecodedPolicyAccount } from 'voynich/program'
 import { defaultBaseCacheDir, fetchVerifiedBase, type BaseModelRef } from './base-cache.js'
 import { EnclaveRateLimiter, isRegionAllowed, parseEnclaveRegion } from './policy.js'
 import { loadTokenizer, type LoadedTokenizer } from './tokenizer.js'
@@ -50,6 +50,34 @@ export function buildSplitSettlementAccounts(
     remainingAccounts: [
       { pubkey: splitKey, isWritable: true, isSigner: false },
       ...(isSpl ? [{ pubkey: getAssociatedTokenAddressSync(priceMint, splitKey, true), isWritable: true, isSigner: false }] : []),
+    ],
+  }
+}
+
+export function buildReferralSettlementAccounts(
+  programId: PublicKey,
+  callAddress: PublicKey,
+  model: PublicKey,
+  callReferral: Pick<DecodedCallReferralAccount, 'call' | 'model' | 'referrer' | 'settled'> | null,
+  priceMint: PublicKey,
+): {
+  callReferralKey: PublicKey | null
+  referralKey: PublicKey | null
+  remainingAccounts: Array<{ pubkey: PublicKey; isWritable: boolean; isSigner: boolean }>
+} {
+  if (!callReferral || callReferral.settled || !callReferral.call.equals(callAddress) || !callReferral.model.equals(model)) {
+    return { callReferralKey: null, referralKey: null, remainingAccounts: [] }
+  }
+  const callReferralKey = callReferralPda(callAddress, programId)
+  const referralKey = referralPda(model, callReferral.referrer, programId)
+  const isSpl = !priceMint.equals(PublicKey.default)
+  return {
+    callReferralKey,
+    referralKey,
+    remainingAccounts: [
+      { pubkey: callReferralKey, isWritable: true, isSigner: false },
+      { pubkey: referralKey, isWritable: true, isSigner: false },
+      ...(isSpl ? [{ pubkey: getAssociatedTokenAddressSync(priceMint, referralKey, true), isWritable: true, isSigner: false }] : []),
     ],
   }
 }
@@ -1196,7 +1224,19 @@ export class EnclaveRuntime {
       hasSplit,
       call.priceMint,
     )
-    const prepareOwners = [call.owner, call.operator, call.feeRecipient, call.caller, ...(splitKey ? [splitKey] : [])]
+    let callRefDecoded: DecodedCallReferralAccount | null = null
+    const callRefInfo = await this.rpc.connection.getAccountInfo(this.pda.callReferral(address), 'confirmed').catch(() => null)
+    if (callRefInfo && callRefInfo.owner.equals(this.programs.voynich.programId)) {
+      try { callRefDecoded = decodeCallReferralAccount(callRefInfo.data) } catch { callRefDecoded = null }
+    }
+    const { referralKey, remainingAccounts: referralRemaining } = buildReferralSettlementAccounts(
+      this.programs.voynich.programId,
+      address,
+      call.model,
+      callRefDecoded,
+      call.priceMint,
+    )
+    const prepareOwners = [call.owner, call.operator, call.feeRecipient, call.caller, ...(splitKey ? [splitKey] : []), ...(referralKey ? [referralKey] : [])]
     const prepare = token ? [...new Map(prepareOwners.map(owner => [owner.toBase58(), owner])).values()].map(owner => createAssociatedTokenAccountIdempotentInstruction(this.operator.publicKey, ata(owner), owner, call.priceMint)) : []
     const callbackRemaining = !call.callbackProgram.equals(PublicKey.default)
       ? [
@@ -1204,7 +1244,7 @@ export class EnclaveRuntime {
           ...call.callbackAccounts.map(account => ({ pubkey: account.pubkey, isWritable: account.isWritable, isSigner: false })),
         ]
       : []
-    const settleRemaining = [...callbackRemaining, ...splitRemaining]
+    const settleRemaining = [...callbackRemaining, ...splitRemaining, ...referralRemaining]
     const accounts = {
       payer: this.operator.publicKey, config: this.pda.config, model: call.model, enclave: this.enclave,
       attestationRecord: this.record, call: address, receipt, caller: call.caller, owner: call.owner,

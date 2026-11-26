@@ -6859,3 +6859,105 @@ test('Build 16 Step 1: ReferralConfig/Referral/CallReferral PDA helpers, decoder
   assert.equal(claimed.referral.claimed, String(expectedRef))
   assert.equal(claimed.referral.claimable, '0')
 })
+
+test('Build 16 Step 2: enclave buildReferralSettlementAccounts (SOL & SPL coexisting with Split) + compiled CLI model referral show/set/claim and call --referrer', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { Keypair, PublicKey } = await import('@solana/web3.js')
+  const { getAssociatedTokenAddressSync } = await import('@solana/spl-token')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { PROGRAM_ID, callReferralPda, referralPda } = await import('../sdk/src/program.js')
+  const { buildReferralSettlementAccounts, buildSplitSettlementAccounts } = await import('../enclave/src/runtime.js')
+  const { buildApp } = await import('../src/app.js')
+
+  const execFileAsync = promisify(execFile)
+
+  // 1. Enclave referral remainingAccounts helper coexisting with Split (SOL & SPL)
+  const modelKey = Keypair.generate().publicKey
+  const callKey = Keypair.generate().publicKey
+  const referrerKey = Keypair.generate().publicKey
+  const splMint = Keypair.generate().publicKey
+
+  const noneRes = buildReferralSettlementAccounts(PROGRAM_ID, callKey, modelKey, null, PublicKey.default)
+  assert.equal(noneRes.remainingAccounts.length, 0)
+  const settledRes = buildReferralSettlementAccounts(PROGRAM_ID, callKey, modelKey, { call: callKey, model: modelKey, referrer: referrerKey, settled: true }, PublicKey.default)
+  assert.equal(settledRes.remainingAccounts.length, 0)
+
+  const solSplit = buildSplitSettlementAccounts(PROGRAM_ID, modelKey, true, PublicKey.default)
+  const solRef = buildReferralSettlementAccounts(PROGRAM_ID, callKey, modelKey, { call: callKey, model: modelKey, referrer: referrerKey, settled: false }, PublicKey.default)
+  assert.equal(solRef.remainingAccounts.length, 2)
+  assert(solRef.callReferralKey!.equals(callReferralPda(callKey, PROGRAM_ID)))
+  assert(solRef.referralKey!.equals(referralPda(modelKey, referrerKey, PROGRAM_ID)))
+  assert.equal([...solSplit.remainingAccounts, ...solRef.remainingAccounts].length, 3)
+
+  const splSplit = buildSplitSettlementAccounts(PROGRAM_ID, modelKey, true, splMint)
+  const splRef = buildReferralSettlementAccounts(PROGRAM_ID, callKey, modelKey, { call: callKey, model: modelKey, referrer: referrerKey, settled: false }, splMint)
+  assert.equal(splRef.remainingAccounts.length, 3)
+  assert(splRef.remainingAccounts[2]!.pubkey.equals(getAssociatedTokenAddressSync(splMint, splRef.referralKey!, true)))
+  assert.equal([...splSplit.remainingAccounts, ...splRef.remainingAccounts].length, 5)
+
+  // 2. Compiled CLI: model referral show|set|claim + call --referrer
+  const ownerKp = Keypair.generate()
+  const callerKp = Keypair.generate()
+  const referrerKp = Keypair.generate()
+  const fixtureApp = buildApp()
+  const wrapperApp = new (await import('hono')).Hono()
+  wrapperApp.all('*', async c => {
+    const url = new URL(c.req.url)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('X-Fixture-Session', 'cli-referral-test')
+    let bodyText: string | undefined
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      bodyText = (await c.req.text()).replaceAll(ownerKp.publicKey.toBase58(), FIXTURE.owner)
+    }
+    return fixtureApp.request(new Request(url.toString(), { method: c.req.method, headers, body: bodyText }))
+  })
+  const server = serve({ fetch: wrapperApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b16s2-cli-'))
+  const ownerKeyPath = join(scratch, 'owner.json')
+  const callerKeyPath = join(scratch, 'caller.json')
+  const refKeyPath = join(scratch, 'referrer.json')
+  const inputPath = join(scratch, 'input.json')
+  writeFileSync(ownerKeyPath, JSON.stringify([...ownerKp.secretKey]))
+  writeFileSync(callerKeyPath, JSON.stringify([...callerKp.secretKey]))
+  writeFileSync(refKeyPath, JSON.stringify([...referrerKp.secretKey]))
+  writeFileSync(inputPath, JSON.stringify(new Array<number>(784).fill(0)))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  try {
+    const runCli = async (args: string[]) => {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, ...args], { cwd: resolve('.'), encoding: 'utf8' })
+      return JSON.parse(stdout) as Record<string, unknown>
+    }
+
+    const emptyCfg = await runCli(['model', 'referral', 'show', 'sketch-32', '--json'])
+    assert.equal(emptyCfg.referralConfig, null)
+
+    const setCfg = await runCli(['model', 'referral', 'set', 'sketch-32', '--share-bps', '500', '--keypair', ownerKeyPath, '--json'])
+    assert.equal(setCfg.shareBps, 500)
+    assert.equal(setCfg.active, true)
+
+    const shownCfg = await runCli(['model', 'referral', 'show', 'sketch-32', '--json'])
+    assert.equal(shownCfg.shareBps, 500)
+
+    const called = await runCli(['call', 'sketch-32', inputPath, '--open', '--referrer', referrerKp.publicKey.toBase58(), '--keypair', callerKeyPath, '--json'])
+    const receipt = called.receipt as { payments: { owner: { amount: string } } }
+    const expectedRef = (BigInt(receipt.payments.owner.amount) * 500n) / 10000n
+    assert(expectedRef > 0n)
+
+    const claimed = await runCli(['model', 'referral', 'claim', 'sketch-32', '--keypair', refKeyPath, '--json']) as { referral: Record<string, unknown> }
+    assert.equal(claimed.referral.claimed, String(expectedRef))
+    assert.equal(claimed.referral.claimable, '0')
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})
