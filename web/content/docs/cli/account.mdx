@@ -132,6 +132,7 @@ For a call that is `refundable` or `refunded`: `code`, `message` and `refundStat
 | A model with the status `sealed` | [`voynich grant <model> <enclave>`](/docs/cli/grant) makes it live. |
 | A model with the status `live` | [`voynich model price <model>`](/docs/cli/models#voynich-model-price) sets its price, [`voynich model retire <model>`](/docs/cli/models#voynich-model-retire) retires it. |
 | Active caller sessions (also shown under **Active sessions** on `/account`) | [`voynich session list`](/docs/cli/call#voynich-session) lists them; `voynich session close <address>` reclaims unspent budget. |
+| Prepaid call passes (also shown under **Passes** on `/account`) | [`voynich pass list`](/docs/cli/call#voynich-pass) lists them; `voynich pass close <address>` reclaims unused escrow. |
 
 ## Failures
 

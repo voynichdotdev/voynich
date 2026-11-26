@@ -5,12 +5,13 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import type { Account, Call, Earnings, Session } from '@voynich/contract'
+import type { Account, Call, Earnings, Pass, Session } from '@voynich/contract'
 import { FIXTURE } from '@voynich/contract/fixtures'
 import { api, read, type Read } from '@/lib/api'
 import { loadLastPieceFromApi, loadSavedStreamPieces, removeSavedStreamPiece, type SavedStreamPiece } from '@/lib/call'
 import { LINKS, SKETCH32 } from '@/lib/facts'
 import { group, hardware, money, short } from '@/lib/format'
+import { closeModelPass, loadAccountPasses } from '@/lib/passes'
 import { closeBrowserSession, loadAccountSessions } from '@/lib/sessions'
 import { play } from '@/lib/sound'
 import { errorMessage, send, type TxStageName } from '@/lib/tx'
@@ -34,6 +35,7 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
   const [sample, setSample] = useState<string | null | undefined>(!walletAddress && (fixture || as) ? undefined : null)
   const [r, setR] = useState<Read<Account> | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
+  const [passes, setPasses] = useState<Pass[]>([])
   const [names, setNames] = useState<Names>({})
   const address = walletAddress ?? w.address ?? sample ?? null
   const canSign = !!address && w.address === address
@@ -57,13 +59,15 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
 
   const load = useCallback(async (who: string) => {
     const client = api(fixture)
-    const [account, list, sess] = await Promise.all([
+    const [account, list, sess, ps] = await Promise.all([
       read(client.account(who)),
       read(client.models({ limit: 100 })),
       loadAccountSessions(client, who),
+      loadAccountPasses(client, who),
     ])
     if (list.ok) setNames(Object.fromEntries(list.data.items.map((m) => [m.address, m.name])))
     setSessions(sess)
+    setPasses(ps)
     return account
   }, [fixture])
 
@@ -94,19 +98,23 @@ export function AccountView({ fixture, as = null, walletAddress = null }: { fixt
         held={held}
         names={names}
         sessions={sessions}
+        passes={passes}
         wallet={address}
         canSign={canSign}
         onChange={(calls) => { if (r?.ok) setR({ ok: true, data: { ...r.data, calls } }) }}
         onSessionsChange={setSessions}
+        onPassesChange={setPasses}
       />
     </div>
   )
 }
 
-function Regions({ fixture, held, names, sessions, wallet: who, canSign, onChange, onSessionsChange }: { fixture: string | null; held: Held; names: Names; sessions: Session[]; wallet: string | null; canSign: boolean; onChange: (calls: Call[]) => void; onSessionsChange: (sessions: Session[]) => void }) {
+function Regions({ fixture, held, names, sessions, passes, wallet: who, canSign, onChange, onSessionsChange, onPassesChange }: { fixture: string | null; held: Held; names: Names; sessions: Session[]; passes: Pass[]; wallet: string | null; canSign: boolean; onChange: (calls: Call[]) => void; onSessionsChange: (sessions: Session[]) => void; onPassesChange: (passes: Pass[]) => void }) {
   const [pending, setPending] = useState<{ call: string; kind: 'refund' | 'settle'; stage: 'building' | TxStageName } | null>(null)
   const [closingSession, setClosingSession] = useState<{ address: string; stage: 'building' | TxStageName } | null>(null)
   const [sessionErrors, setSessionErrors] = useState<Record<string, string>>({})
+  const [closingPass, setClosingPass] = useState<{ address: string; stage: 'building' | TxStageName } | null>(null)
+  const [passErrors, setPassErrors] = useState<Record<string, string>>({})
   const [loadingPiece, setLoadingPiece] = useState<string | null>(null)
   const [savedPieces, setSavedPieces] = useState<Record<string, SavedStreamPiece>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -226,6 +234,35 @@ function Regions({ fixture, held, names, sessions, wallet: who, canSign, onChang
     }
   }
 
+  const closePass = async (p: Pass) => {
+    if (closingPass || !who) return
+    const client = api(fixture)
+    setPassErrors((e) => ({ ...e, [p.address]: '' }))
+    setClosingPass({ address: p.address, stage: 'building' })
+    try {
+      await closeModelPass(client, { wallet: who, pass: p.address }, (stage) => {
+        setClosingPass({ address: p.address, stage })
+      })
+      play('refund')
+      onPassesChange(
+        passes.map((x) =>
+          x.address === p.address
+            ? { ...x, status: 'closed' as const, callsRemaining: 0, escrowRemaining: '0', returnedAmount: p.escrowRemaining }
+            : x,
+        ),
+      )
+      toast({
+        state: 'refunded',
+        text: `${money({ amount: p.escrowRemaining, decimals: 9, symbol: 'SOL' })} SOL reclaimed from pass`,
+      })
+    } catch (e) {
+      play('failed')
+      setPassErrors((x) => ({ ...x, [p.address]: errorMessage(e) }))
+    } finally {
+      setClosingPass(null)
+    }
+  }
+
   const quiet = held.is === 'connect' ? 'No wallet connected' : held.is === 'failed' ? 'Not read' : held.is === 'loading' ? null : 'None yet'
   // What a side region says when it has no rows of its own to show.
   const aside = (none: React.ReactNode, about: React.ReactNode) =>
@@ -287,6 +324,63 @@ function Regions({ fixture, held, names, sessions, wallet: who, canSign, onChang
                         )}
                       </span>
                       {sessionErrors[sess.address] ? <p className={`t-small bad ${s.why}`} role="alert">{sessionErrors[sess.address]}</p> : null}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+        ) : null}
+
+        {held.is === 'data' ? (
+          <section className="panel" aria-labelledby="passes">
+            <div className="panel-head">
+              <h2 id="passes">Passes</h2>
+              <span className="mono dim">{group(passes.filter((x) => x.status === 'open').length)} open</span>
+            </div>
+            {passes.length === 0 ? (
+              <div className="panel-body">
+                <p className="t-small dim">No prepaid call passes yet. Buy a discounted call pass on any model page with an active pass plan.</p>
+              </div>
+            ) : (
+              <ul className={s.calls}>
+                <li className={`${s.sessionRow} ${s.callHead}`} aria-hidden="true"><span>State</span><span>Model</span><span className={s.num}>Credits</span><span className={s.num}>Escrow</span><span className={s.num}>Expires</span><span /></li>
+                {passes.map((p) => {
+                  const busy = closingPass?.address === p.address
+                  const modelName = p.modelName ?? names[p.model] ?? null
+                  const priceUnit = { amount: p.escrowRemaining, decimals: 9, symbol: 'SOL' }
+                  return (
+                    <li key={p.address} className={s.sessionRow} data-state={p.status}>
+                      <span className={s.state}><State state={p.status === 'open' ? 'live' : 'sealed'} label={p.status === 'open' ? 'Open' : 'Closed'} /></span>
+                      <span className={s.model}>
+                        <Link className="link mono" href={`/models/${modelName ?? p.model}${q(fixture)}`}>{modelName ?? short(p.model, 4)}</Link>
+                        <span className="t-small dim" style={{ marginLeft: 8 }}>{p.callsRemaining} left</span>
+                      </span>
+                      <span className={s.num}><span className="t-label">Credits</span><span className="mono">{p.callsUsed} / {p.callsTotal}</span></span>
+                      <span className={s.num}><span className="t-label">Escrow</span><Amount value={priceUnit} /></span>
+                      <span className={s.num}><span className="t-label">Expires</span><span className="mono">{group(p.expiresAtSlot)}</span></span>
+                      <span className={s.act} aria-live="polite">
+                        {p.status === 'open' && canSign ? (
+                          <button
+                            type="button"
+                            className="btn"
+                            data-size="s"
+                            data-kind="primary"
+                            data-pending={busy || undefined}
+                            disabled={!!closingPass}
+                            onClick={() => void closePass(p)}
+                          >
+                            {busy
+                              ? <><StateTile state="pending" size={14} />{closingPass.stage === 'signing' ? 'Awaiting signature' : closingPass.stage === 'confirming' ? 'Confirming' : 'Building'}</>
+                              : 'Close & reclaim'}
+                          </button>
+                        ) : p.status === 'open' ? (
+                          <span className="t-small dim">Open</span>
+                        ) : (
+                          <span className="t-small dim">Reclaimed</span>
+                        )}
+                      </span>
+                      {passErrors[p.address] ? <p className={`t-small bad ${s.why}`} role="alert">{passErrors[p.address]}</p> : null}
                     </li>
                   )
                 })}

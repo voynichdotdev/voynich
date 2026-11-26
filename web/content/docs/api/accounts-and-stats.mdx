@@ -196,7 +196,7 @@ Builds [`open_pass_call`](/docs/program/instructions#openpasscall) debiting one 
 
 ## `POST /v1/passes/close/build`
 
-Builds [`close_pass`](/docs/program/instructions#closepass) sweeping `escrowRemaining` back to `holder`. Body (`ClosePassRequest`): `{ wallet, pass }` (`wallet` is `holder` anytime, or any closer after `expiresAtSlot` or exhaustion). Returns a [Build](/docs/api/transactions#build) with `action: "close_pass"` and `addresses: { model, pass }`.
+Builds [`close_pass`](/docs/program/instructions#closepass) sweeping `escrowRemaining` back to `holder`. Body (`ClosePassRequest`): `{ wallet, pass }` (`wallet` is `holder` anytime, or any closer after `expiresAtSlot` or exhaustion). Returns a [Build](/docs/api/transactions#build) with `action: "close_pass"` and `addresses: { model, pass }`. The protocol's `crank` service automatically sweeps expired (`expiresAtSlot < currentSlot`) or exhausted (`callsUsed >= callsTotal`) open passes every 5 seconds back to `holder` (creating the holder's SPL ATA idempotently when needed).
 
 ## Read next
 

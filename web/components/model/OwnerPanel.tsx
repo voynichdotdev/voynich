@@ -3,11 +3,12 @@
 // What the model's owner does from its page: set the price and the operator's share, grant an enclave, retire.
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { fromBase64, toBase64, type Build, type Enclave, type GrantedEnclave, type Model, type ModelPolicy, type ModelSplit, type PriceUnit } from '@voynich/contract'
+import { fromBase64, toBase64, type Build, type Enclave, type GrantedEnclave, type Model, type ModelPolicy, type ModelSplit, type PassPlan, type PriceUnit } from '@voynich/contract'
 import { wrapKey } from 'voynich/crypto'
 import { api, read } from '@/lib/api'
 import { bps, hardware, short, units } from '@/lib/format'
 import { loadModelKey, openKeyFile, parseKeyFile, saveModelKey, setVaultPassword, unlockVault, useVault, type SealedKeyFile } from '@/lib/keys'
+import { passPlanCliCommand } from '@/lib/passes'
 import { policyEquals, policyToDraft, validatePolicyDraft, type PolicyDraft } from '@/lib/policy'
 import { SPLIT_LIMITS, formatSplitPct, splitEquals, splitSetCliCommand, splitToDraft, validateSplitDraft, type SplitRowDraft } from '@/lib/splits'
 import { effectiveModelVersion, upgradeCliCommand } from '@/lib/versions'
@@ -59,9 +60,9 @@ function toBase(text: string, decimals: number): string | null {
   return (BigInt(m[1]!) * 10n ** BigInt(decimals) + BigInt(frac.padEnd(decimals, '0') || '0')).toString()
 }
 
-type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; split?: ModelSplit | null; currentVersion?: number; onChanged: () => void }
+type Props = { model: Model; fixture: string | null; signer: string; grants: GrantedEnclave[]; policy?: ModelPolicy | null; split?: ModelSplit | null; passPlan?: PassPlan | null; currentVersion?: number; onChanged: () => void }
 
-export function OwnerPanel({ model, fixture, signer, grants, policy = null, split = null, currentVersion, onChanged }: Props) {
+export function OwnerPanel({ model, fixture, signer, grants, policy = null, split = null, passPlan = null, currentVersion, onChanged }: Props) {
   const client = api(fixture)
   const protocol = model.protocolShareBps ?? 0
   const activeVersion = currentVersion ?? effectiveModelVersion(model)
@@ -186,6 +187,37 @@ export function OwnerPanel({ model, fixture, signer, grants, policy = null, spli
     setSplitRows((prev) => prev.map((row, idx) => (idx === index ? { ...row, ...patch } : row)))
     splitTx.clear()
   }
+
+  // ---- pass plan (per-call models only)
+  const [passActive, setPassActive] = useState(passPlan?.active ?? true)
+  const [passPriceText, setPassPriceText] = useState(() => {
+    const raw = passPlan?.pricePerCall ?? ((BigInt(model.price.amount) * 80n) / 100n).toString()
+    return units(raw, model.price.decimals, model.price.decimals).replaceAll(',', '')
+  })
+  const [passMinText, setPassMinText] = useState(String(passPlan?.minCalls ?? 5))
+  const [passMaxText, setPassMaxText] = useState(String(passPlan?.maxCalls ?? 100))
+  const [passTtlText, setPassTtlText] = useState(passPlan?.ttlSlots ?? '216000')
+  const [passCopied, setPassCopied] = useState(false)
+  const passActiveId = useId()
+  const passTx = useTx(fixture, onChanged)
+  const passPriceRaw = toBase(passPriceText, model.price.decimals)
+  const passMin = /^\d+$/.test(passMinText.trim()) ? Number(passMinText.trim()) : NaN
+  const passMax = /^\d+$/.test(passMaxText.trim()) ? Number(passMaxText.trim()) : NaN
+  const passTtlValid = /^\d+$/.test(passTtlText.trim()) && BigInt(passTtlText.trim()) > 0n
+  const passErr = passPriceRaw === null || BigInt(passPriceRaw) <= 0n || BigInt(passPriceRaw) > BigInt(model.price.amount)
+    ? `Enter a pass price between 0 and spot (${units(model.price.amount, model.price.decimals, model.price.decimals)} ${model.price.symbol}).`
+    : !Number.isInteger(passMin) || passMin < 1 || !Number.isInteger(passMax) || passMax < passMin
+      ? 'Min calls must be at least 1 and max calls at least min calls.'
+      : !passTtlValid
+        ? 'TTL slots must be a positive whole number.'
+        : ''
+  const passCliCmd = passPlanCliCommand(model.name, {
+    pricePerCall: passPriceRaw ?? model.price.amount,
+    minCalls: Number.isInteger(passMin) && passMin >= 1 ? passMin : 5,
+    maxCalls: Number.isInteger(passMax) && passMax >= 1 ? passMax : 100,
+    ttlSlots: passTtlValid ? passTtlText.trim() : '216000',
+    active: passActive,
+  })
 
   return (
     <section className={`panel ${s.owner}`} aria-labelledby="owner">
@@ -562,6 +594,89 @@ export function OwnerPanel({ model, fixture, signer, grants, policy = null, spli
           </button>
         </div>
       </form>
+
+      {model.priceUnit !== 'token' ? (
+        <form
+          id="owner-pass-plan"
+          className={s.policySection}
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (passErr || !passPriceRaw) return
+            void passTx.run(() =>
+              client.setPassPlan(model.address, {
+                wallet: signer,
+                pricePerCall: passPriceRaw,
+                minCalls: passMin,
+                maxCalls: passMax,
+                ttlSlots: passTtlText.trim(),
+                active: passActive,
+              }),
+            )
+          }}
+        >
+          <div className={s.policyHead}>
+            <h3 className="t-h3">Call pass plan</h3>
+            <span className="t-small dim">Offer discounted prepaid call bundles with automatic unused-escrow refund on close.</span>
+          </div>
+          <div className={s.policyGrid}>
+            <div className={s.policyCol}>
+              <div className="field">
+                <span className="t-label" id={passActiveId}>Plan status</span>
+                <div className="seg" role="group" aria-labelledby={passActiveId}>
+                  <button type="button" aria-pressed={passActive} onClick={() => { play('toggle'); setPassActive(true); passTx.clear() }}>Active</button>
+                  <button type="button" aria-pressed={!passActive} onClick={() => { play('toggle'); setPassActive(false); passTx.clear() }}>Inactive</button>
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="own-pass-price">Pass price a call</label>
+                <div className="input-row">
+                  <input id="own-pass-price" className="input mono" inputMode="decimal" autoComplete="off" value={passPriceText} onChange={(e) => { setPassPriceText(e.target.value); passTx.clear() }} />
+                  <span className="suffix">{model.price.symbol}</span>
+                </div>
+              </div>
+            </div>
+            <div className={s.policyCol}>
+              <div className={s.pair}>
+                <div className="field">
+                  <label htmlFor="own-pass-min">Min calls</label>
+                  <input id="own-pass-min" className="input mono" inputMode="numeric" autoComplete="off" value={passMinText} onChange={(e) => { setPassMinText(e.target.value); passTx.clear() }} />
+                </div>
+                <div className="field">
+                  <label htmlFor="own-pass-max">Max calls</label>
+                  <input id="own-pass-max" className="input mono" inputMode="numeric" autoComplete="off" value={passMaxText} onChange={(e) => { setPassMaxText(e.target.value); passTx.clear() }} />
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="own-pass-ttl">TTL (slots)</label>
+                <input id="own-pass-ttl" className="input mono" inputMode="numeric" autoComplete="off" value={passTtlText} onChange={(e) => { setPassTtlText(e.target.value); passTx.clear() }} />
+              </div>
+            </div>
+          </div>
+          {passErr ? <span className="err" role="alert">{passErr}</span> : null}
+          <div className={s.ownerAct}>
+            <button type="submit" className="btn" data-kind="primary" data-size="s" disabled={!!passErr || passTx.busy} data-pending={passTx.busy || undefined}>
+              Save pass plan
+            </button>
+            <TxLine tx={passTx.tx} done="Pass plan saved" />
+          </div>
+          <div className={s.upgradeRow}>
+            <code className={`mono ${s.upgradeCode}`}>{passCliCmd}</code>
+            <button
+              type="button"
+              className="btn"
+              data-size="s"
+              onClick={() => {
+                void navigator.clipboard?.writeText(passCliCmd)
+                setPassCopied(true)
+                setTimeout(() => setPassCopied(false), 1800)
+              }}
+            >
+              {passCopied ? 'Copied' : 'Copy command'}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       <div className={s.policySection}>
         <div className={s.policyHead}>

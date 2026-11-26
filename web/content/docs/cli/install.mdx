@@ -56,6 +56,7 @@ voynich models --api-url https://api.voynich.dev
 | [`voynich model revoke <model> <enclave>`](/docs/cli/grant#voynich-model-revoke) | Revoke an enclave's grant, as the model's owner. |
 | [`voynich call <model> <input.json>`](/docs/cli/call) | Call a model and print the output, the receipt and the checks. |
 | [`voynich session open\|list\|close`](/docs/cli/call#voynich-session) | Open, list, or close a funded one-signature caller Session PDA. |
+| [`voynich pass plan\|buy\|list\|close`](/docs/cli/call#voynich-pass) | Configure a model PassPlan or buy, list, and close discounted prepaid call Pass PDAs. |
 | [`voynich settle <call>`](/docs/cli/call#voynich-settle) | Self-settle an open per-token metered stream before its deadline using the last signed piece. |
 | [`voynich refund <call>`](/docs/cli/call#voynich-refund) | Return the escrow of a call that passed its deadline without a receipt. |
 | [`voynich verify <id>`](/docs/cli/verify) | Check a receipt by its address, its call's address or its settling transaction's signature. |
@@ -113,7 +114,7 @@ The `enclave` commands read their own variables, listed in [enclave](/docs/cli/e
 
 The CLI signs with a keypair file. Which file depends on the command.
 
-**`seal`, `grant`, `call`, `settle`, `refund`, `benchmark run`, `model price`, `model retire`, `model revoke`, `measurement publish` and `measurement deprecate`** take the first of these that is set:
+**`seal`, `grant`, `call`, `settle`, `refund`, `benchmark run`, `pass plan set`, `pass buy`, `pass close`, `model price`, `model retire`, `model revoke`, `measurement publish` and `measurement deprecate`** take the first of these that is set:
 
 1. `--keypair`
 2. `VOYNICH_KEYPAIR`
@@ -126,7 +127,7 @@ The CLI signs with a keypair file. Which file depends on the command.
 2. `OPERATOR_KEYPAIR`
 3. the Solana CLI's keypair, found the same way as above.
 
-**`models`, `enclaves`, `verify`, `account`, `enclave status`, `benchmark list`, `measurement list`, `measurement show` and `measurement verify`** sign nothing and need no wallet. They do not read `--keypair` or `VOYNICH_KEYPAIR`.
+**`models`, `enclaves`, `verify`, `account`, `enclave status`, `benchmark list`, `pass plan show`, `measurement list`, `measurement show` and `measurement verify`** sign nothing and need no wallet. They do not read `--keypair` or `VOYNICH_KEYPAIR`.
 
 A command that signs fails with one of these when its keypair file cannot be used:
 

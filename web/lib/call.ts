@@ -841,6 +841,7 @@ export type RunCallOptions = {
   answerMode?: AnswerMode
   strategy?: RoutingStrategy
   enclave?: string
+  pass?: string | null
   session?: { address: string; delegate: Keypair } | null
   onStopReady?: (stop: (() => Promise<void>) | null) => void
   update: Update
@@ -880,6 +881,14 @@ export async function runCall(o: RunCallOptions) {
             answerMode,
             ...(o.ceiling !== undefined ? { ceiling: o.ceiling } : {}),
           })
+        : o.pass
+          ? client.openPassCall({
+              wallet: o.wallet,
+              pass: o.pass,
+              enclave: pick.enclave.address,
+              inputHash,
+              answerMode,
+            })
         : client
             .openCall({
               wallet: o.wallet,

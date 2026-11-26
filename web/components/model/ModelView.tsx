@@ -5,7 +5,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelSplit, ModelVersions, ReceiptsPage } from '@voynich/contract'
+import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelSplit, ModelVersions, Pass, PassPlan, ReceiptsPage } from '@voynich/contract'
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
@@ -13,6 +13,7 @@ import { benchmarkRunCliCommand, formatScorePct, loadModelBenchmarks, type Bench
 import { computeUptimePct, formatBondSol } from '@/lib/bonds'
 import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
+import { buyModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan } from '@/lib/passes'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
 import { play } from '@/lib/sound'
 import { claimModelSplit, formatSplitPct, loadModelSplit, totalUnclaimedLamports } from '@/lib/splits'
@@ -38,6 +39,7 @@ type Props = {
     measurements?: MeasurementMap
     policy?: ModelPolicy | null
     split?: ModelSplit | null
+    passPlan?: PassPlan | null
     versions?: ModelVersions | null
     benchmarks?: BenchmarkRecord[]
   }
@@ -46,6 +48,7 @@ type Props = {
 const SPLIT_STEPS = [14, 11, 8, 6, 13, 9, 7, 5] as const
 
 type ClaimTx = { wallet: string; stage: 'signing' | 'confirming' | 'done' | 'failed'; message?: string }
+type BuyPassTx = { stage: 'signing' | 'confirming' | 'done' | 'failed'; message?: string }
 
 export function ModelView({ fixture, asOwner, initial }: Props) {
   const w = useWallet(wallet)
@@ -55,6 +58,14 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
   const [measurements, setMeasurements] = useState<MeasurementMap>(initial.measurements ?? {})
   const [policy, setPolicy] = useState<ModelPolicy | null>(initial.policy ?? null)
   const [modelSplit, setModelSplit] = useState<ModelSplit | null>(initial.split ?? null)
+  const [passPlan, setPassPlan] = useState<PassPlan | null>(initial.passPlan ?? null)
+  const [walletPasses, setWalletPasses] = useState<Pass[]>([])
+  const [passCallsText, setPassCallsText] = useState(() => {
+    const plan = initial.passPlan
+    if (!plan) return '5'
+    return String(Math.min(plan.maxCalls, Math.max(plan.minCalls, 5)))
+  })
+  const [buyPassTx, setBuyPassTx] = useState<BuyPassTx | null>(null)
   const [versions, setVersions] = useState<ModelVersions | null>(initial.versions ?? null)
   const [benchmarks, setBenchmarks] = useState<BenchmarkRecord[]>(initial.benchmarks ?? [])
   const [config, setConfig] = useState<Config | null>(null)
@@ -64,13 +75,14 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
 
   const refresh = useCallback(async () => {
     const client = api(fixture)
-    const [m, e, r, ms, vs, bs] = await Promise.all([
+    const [m, e, r, ms, vs, bs, pp] = await Promise.all([
       read(client.model(id)),
       read(client.modelEnclaves(id)),
       read(client.modelReceipts(id, { limit: 8 })),
       loadMeasurements(client),
       loadModelVersions(client, id),
       loadModelBenchmarks(client, id),
+      loadModelPassPlan(client, id),
     ])
     const nextModel = m.ok ? m.data : model
     if (m.ok) setModel(m.data)
@@ -79,13 +91,17 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
     setMeasurements(ms)
     if (vs) setVersions(vs)
     setBenchmarks(bs)
+    setPassPlan(pp)
     const [nextPolicy, nextSplit] = await Promise.all([
       loadModelPolicy(client, nextModel),
       loadModelSplit(client, nextModel),
     ])
     setPolicy(nextPolicy)
     setModelSplit(nextSplit)
-  }, [fixture, id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (w.status === 'connected' && w.address) {
+      setWalletPasses(await loadAccountPasses(client, w.address))
+    }
+  }, [fixture, id, w.status, w.address]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // After a confirmation the API's read follows the chain by a moment: read now and once more shortly after.
   const refreshSoon = useCallback(() => { void refresh(); setTimeout(() => void refresh(), 2500) }, [refresh])
@@ -94,6 +110,20 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
     void refresh()
     void read(api(fixture).config()).then((c) => { if (c.ok) setConfig(c.data) })
   }, [fixture, refresh])
+
+  useEffect(() => {
+    if (w.status !== 'connected' || !w.address) {
+      setWalletPasses([])
+      return
+    }
+    let liveSub = true
+    void loadAccountPasses(api(fixture), w.address).then((items) => {
+      if (liveSub) setWalletPasses(items)
+    })
+    return () => { liveSub = false }
+  }, [fixture, w.status, w.address])
+
+  const activePass = findActiveModelPass(walletPasses, model.address)
 
   // The owner's wallet sees the owner's tools. On a sample API the view can be opened as the owner.
   const isOwner = (w.status === 'connected' && w.address === model.owner) || (asOwner && !!config?.fixture)
@@ -229,16 +259,101 @@ export function ModelView({ fixture, asOwner, initial }: Props) {
 
       <div className={`grid ${s.regions}`}>
         <div className={live ? s.call : s.full}>
-          <CallPanel model={model} fixture={fixture} owner={isOwner} enclaves={enclaves.ok ? enclaves.data.items : null} policy={policy} onSettled={refreshSoon} />
+          <CallPanel model={model} fixture={fixture} owner={isOwner} enclaves={enclaves.ok ? enclaves.data.items : null} policy={policy} activePass={activePass} onSettled={refreshSoon} />
         </div>
 
         {live ? facts : null}
 
         {isOwner ? (
           <div className={s.full}>
-            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} split={modelSplit} currentVersion={activeVersion} onChanged={refreshSoon} />
+            <OwnerPanel model={model} fixture={fixture} signer={w.address === model.owner ? w.address : model.owner} grants={enclaves.ok ? enclaves.data.items : []} policy={policy} split={modelSplit} passPlan={passPlan} currentVersion={activeVersion} onChanged={refreshSoon} />
           </div>
         ) : null}
+
+        {passPlan?.active && !perToken ? (() => {
+          const savingsPct = computePassSavingsPct(model.price.amount, passPlan.pricePerCall)
+          const parsedCalls = /^\d+$/.test(passCallsText.trim()) ? Number(passCallsText.trim()) : NaN
+          const callsValid = Number.isInteger(parsedCalls) && parsedCalls >= passPlan.minCalls && parsedCalls <= passPlan.maxCalls
+          const totalCost = callsValid ? (BigInt(passPlan.pricePerCall) * BigInt(parsedCalls)).toString() : null
+          const busy = buyPassTx?.stage === 'signing' || buyPassTx?.stage === 'confirming'
+          const buyer = w.status === 'connected' ? w.address : config?.fixture ? model.owner : null
+          return (
+            <section id="call-passes" className={`panel ${s.full}`} aria-labelledby="call-passes-heading">
+              <div className="panel-head">
+                <div className={s.splitHeadMeta}>
+                  <h2 id="call-passes-heading">Call passes</h2>
+                  {savingsPct > 0 ? <span className={s.programBadge}>{savingsPct}% off spot</span> : null}
+                </div>
+                <span className="t-small dim">
+                  <Amount value={{ ...model.price, amount: passPlan.pricePerCall }} /> / call ({group(passPlan.minCalls)} to {group(passPlan.maxCalls)} calls, {group(passPlan.ttlSlots)} slots TTL)
+                </span>
+              </div>
+              <div className="panel-body">
+                <div className={s.upgradeRow}>
+                  <div className="input-row" style={{ maxWidth: 160 }}>
+                    <input
+                      aria-label="Pass call count"
+                      className="input mono"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={passCallsText}
+                      onChange={(e) => { setPassCallsText(e.target.value); setBuyPassTx(null) }}
+                    />
+                    <span className="suffix">calls</span>
+                  </div>
+                  {totalCost ? (
+                    <span className="t-small dim">
+                      Total: <Amount value={{ ...model.price, amount: totalCost }} />
+                    </span>
+                  ) : (
+                    <span className="t-small bad">Enter {group(passPlan.minCalls)} to {group(passPlan.maxCalls)} calls.</span>
+                  )}
+                  <button
+                    type="button"
+                    className="btn"
+                    data-kind="primary"
+                    data-size="s"
+                    disabled={!callsValid || !buyer || busy}
+                    data-pending={busy || undefined}
+                    onClick={() => {
+                      if (!callsValid || !buyer || busy) return
+                      setBuyPassTx({ stage: 'signing' })
+                      void buyModelPass(api(fixture), { wallet: buyer, model: model.address, callsTotal: parsedCalls }, (stage) => {
+                        setBuyPassTx({ stage })
+                      })
+                        .then(() => {
+                          play('grant')
+                          setBuyPassTx({ stage: 'done', message: `Purchased ${parsedCalls}-call pass.` })
+                          refreshSoon()
+                        })
+                        .catch((err) => {
+                          play('failed')
+                          setBuyPassTx({ stage: 'failed', message: errorMessage(err) })
+                        })
+                    }}
+                  >
+                    {busy ? (buyPassTx?.stage === 'signing' ? 'Signing' : 'Confirming') : 'Buy pass'}
+                  </button>
+                  {activePass ? (
+                    <Link href={`/account${q}`} className="link t-small" data-arrow>
+                      Active pass: {activePass.callsRemaining} of {activePass.callsTotal} left
+                    </Link>
+                  ) : !buyer ? (
+                    <span className="t-small dim">Connect a wallet to buy a pass.</span>
+                  ) : null}
+                </div>
+                {buyPassTx ? (
+                  <p className={s.txLine} role="status" aria-live="polite" style={{ marginTop: 10 }}>
+                    <StateTile state={buyPassTx.stage === 'done' ? 'passed' : buyPassTx.stage === 'failed' ? 'failed' : 'pending'} />
+                    <span className={buyPassTx.stage === 'failed' ? 'bad' : buyPassTx.stage === 'done' ? 'ochre' : 'sub'}>
+                      {buyPassTx.stage === 'signing' ? 'Awaiting signature' : buyPassTx.stage === 'confirming' ? 'Confirming pass' : buyPassTx.message}
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+            </section>
+          )
+        })() : null}
 
         {modelSplit && modelSplit.recipients.length > 0 ? (
           <section id="revenue-split" className={`panel ${s.full}`} aria-labelledby="revenue-split-heading">

@@ -17,6 +17,7 @@ import { explorerUrl, siteUrl } from '@/lib/env'
 import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
 import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
+import { buyModelPass, closeModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan, passPlanCliCommand, setModelPassPlan } from '@/lib/passes'
 import { SESSION_DELEGATES_KEY, findActiveBrowserSession, loadAccountSessions, loadSessionDelegate, removeSessionDelegate, saveSessionDelegate, submitDelegateBuild } from '@/lib/sessions'
 import { SPLIT_LIMITS, claimModelSplit, formatSplitPct, loadModelSplit, pctToBps, setModelSplit, splitEquals, splitSetCliCommand, splitToDraft, totalUnclaimedLamports, validateSplitDraft } from '@/lib/splits'
 import { effectiveModelVersion, fallbackModelVersions, loadModelVersions, matchReceiptVersion, upgradeCliCommand } from '@/lib/versions'
@@ -3136,5 +3137,105 @@ test('Build 14 Step 2: benchmark helpers, CLI hint, error mapping, /benchmarks l
   const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
   for (const sym of ['Benchmarks', 'formatScorePct', 'benchmarkRunCliCommand', 'loadModelBenchmarks', '/receipts/']) {
     assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+})
+
+test('Build 15 Step 2: prepaid pass helpers, savings %, CLI hint, error mapping, openPassCall, and UI wiring', async () => {
+  assert.equal(computePassSavingsPct('10000000', '8000000'), 20)
+  assert.equal(computePassSavingsPct('10000000', '10000000'), 0)
+  assert.equal(computePassSavingsPct('0', '8000000'), 0)
+
+  assert.equal(
+    passPlanCliCommand('sketch-32', { pricePerCall: '8000000', minCalls: 5, maxCalls: 100, ttlSlots: '216000', active: true }),
+    'voynich pass plan set sketch-32 --price 8000000 --min-calls 5 --max-calls 100 --ttl-slots 216000',
+  )
+  assert.equal(
+    passPlanCliCommand('sketch-32', { pricePerCall: '8000000', minCalls: 5, maxCalls: 100, ttlSlots: '216000', active: false }),
+    'voynich pass plan set sketch-32 --price 8000000 --min-calls 5 --max-calls 100 --ttl-slots 216000 --inactive',
+  )
+
+  const modelAddr = Keypair.generate().publicKey.toBase58()
+  const holder = Keypair.generate().publicKey.toBase58()
+  const passAddr = Keypair.generate().publicKey.toBase58()
+  const samplePlan = {
+    address: Keypair.generate().publicKey.toBase58(),
+    model: modelAddr,
+    modelName: 'sketch-32',
+    authority: holder,
+    mint: null,
+    pricePerCall: '8000000',
+    minCalls: 5,
+    maxCalls: 100,
+    ttlSlots: '216000',
+    active: true,
+    updatedSlot: '474500000',
+  }
+  const samplePass = {
+    address: passAddr,
+    model: modelAddr,
+    modelName: 'sketch-32',
+    holder,
+    nonce: '1',
+    mint: null,
+    pricePerCall: '8000000',
+    callsTotal: 5,
+    callsUsed: 2,
+    callsRemaining: 3,
+    escrowRemaining: '24000000',
+    returnedAmount: '0',
+    purchasedSlot: '474500010',
+    expiresAtSlot: '474716010',
+    closedSlot: null,
+    status: 'open' as const,
+  }
+
+  assert.equal(findActiveModelPass([samplePass], modelAddr)?.address, passAddr)
+  assert.equal(findActiveModelPass([{ ...samplePass, status: 'closed' as const }], modelAddr), null)
+  assert.equal(findActiveModelPass([{ ...samplePass, callsRemaining: 0 }], modelAddr), null)
+
+  const mockClient = {
+    modelPassPlan: async () => samplePlan,
+    accountPasses: async () => ({ items: [samplePass], page: { nextCursor: null, hasMore: false }, asOf: '2026-11-26T10:00:00Z' }),
+    setPassPlan: async () => ({ id: 'plan-1', action: 'set_pass_plan' as const, transactionBase64: 'AAAA', blockhash: 'BH', lastValidBlockHeight: 100, cosigned: false, requiredSigners: [holder], fixture: true, addresses: {} }),
+    buyPass: async () => ({ id: 'buy-1', action: 'buy_pass' as const, transactionBase64: 'AAAA', blockhash: 'BH', lastValidBlockHeight: 100, cosigned: false, requiredSigners: [holder], fixture: true, addresses: { pass: passAddr } }),
+    closePass: async () => ({ id: 'close-1', action: 'close_pass' as const, transactionBase64: 'AAAA', blockhash: 'BH', lastValidBlockHeight: 100, cosigned: false, requiredSigners: [holder], fixture: true, addresses: { pass: passAddr } }),
+    submitTransaction: async (input: { buildId: string }) => ({ id: input.buildId, status: 'confirmed' as const }),
+    transaction: async (id: string) => ({ id, status: 'confirmed' as const }),
+  } as unknown as Parameters<typeof loadModelPassPlan>[0]
+
+  assert.equal((await loadModelPassPlan(mockClient, modelAddr))?.address, samplePlan.address)
+  assert.equal((await loadAccountPasses(mockClient, holder)).length, 1)
+  assert.equal((await setModelPassPlan(mockClient, modelAddr, { wallet: holder, pricePerCall: '8000000', minCalls: 5, maxCalls: 100, ttlSlots: '216000', active: true })).status, 'confirmed')
+  assert.equal((await buyModelPass(mockClient, { wallet: holder, model: modelAddr, callsTotal: 5 })).status, 'confirmed')
+  assert.equal((await closeModelPass(mockClient, { wallet: holder, pass: passAddr })).status, 'confirmed')
+
+  assert.ok(errorMessage({ body: { error: { code: 'PASS_PLAN_NOT_FOUND' } } }).includes('pass plan'))
+  assert.ok(errorMessage({ body: { error: { code: 'PASS_NOT_FOUND' } } }).includes('prepaid pass'))
+  assert.ok(errorMessage({ body: { error: { code: 'INVALID_PASS' } } }).includes('pass plan'))
+
+  const callSrc = fs.readFileSync(path.join(ROOT, 'lib/call.ts'), 'utf8')
+  assert.ok(callSrc.includes('pass?: string | null') && callSrc.includes('client.openPassCall'))
+
+  const modelPageSrc = fs.readFileSync(path.join(ROOT, 'app/models/[id]/page.tsx'), 'utf8')
+  assert.ok(modelPageSrc.includes('loadModelPassPlan') && modelPageSrc.includes('passPlan'))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['Call passes', 'Buy pass', 'computePassSavingsPct', 'buyModelPass', 'activePass']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+
+  const callPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/CallPanel.tsx'), 'utf8')
+  for (const sym of ['Use pass', 'Call with pass', 'activePass', 'pass: activePass.address']) {
+    assert.ok(callPanelSrc.includes(sym), `CallPanel must include ${sym}`)
+  }
+
+  const ownerPanelSrc = fs.readFileSync(path.join(ROOT, 'components/model/OwnerPanel.tsx'), 'utf8')
+  for (const sym of ['Call pass plan', 'Save pass plan', 'passPlanCliCommand', 'client.setPassPlan']) {
+    assert.ok(ownerPanelSrc.includes(sym), `OwnerPanel must include ${sym}`)
+  }
+
+  const accountViewSrc = fs.readFileSync(path.join(ROOT, 'components/account/AccountView.tsx'), 'utf8')
+  for (const sym of ['id="passes"', 'loadAccountPasses', 'closeModelPass', 'Close & reclaim']) {
+    assert.ok(accountViewSrc.includes(sym), `AccountView must include ${sym}`)
   }
 })

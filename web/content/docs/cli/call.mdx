@@ -47,6 +47,9 @@ Opens the call through an active `Session` PDA (`open_session_call` or `open_ses
 <Field name="--delegate" type="file path">
 Path to the 64-byte Solana JSON keypair file of the session's `delegate` (saved via `voynich session open --delegate-out`). Required with `--session`.
 </Field>
+<Field name="--pass" type="pass address">
+Spends one prepaid call from an active `Pass` PDA (`open_pass_call`) at the pass's discounted `pricePerCall` instead of paying spot price. Signed by `pass.holder`.
+</Field>
 </Fields>
 
 The caller is the signing wallet, chosen as told in [Install](/docs/cli/install#the-signing-wallet). It signs one transaction (`open_call` or `open_metered_call`) and deposits the model's price (or `--ceiling` for a per-token model) into the call's escrow.
@@ -269,3 +272,35 @@ Signs `close_session` to return unspent `budget - spent` to `session.caller` (ca
 </Fields>
 
 After `expiresAtSlot`, the protocol's `crank` service also automatically sweeps expired open sessions back to `session.caller`.
+
+## voynich pass
+
+Configures a model's discounted prepaid `PassPlan` PDA (`["pass-plan", model]`) or buys, lists, and closes prepaid `Pass` PDAs (`["pass", model, holder, nonce_le]`). The same from code is [Prepaid passes](/docs/sdk/models-and-enclaves#prepaid-passes-getpassplan-setpassplan-buypass-pass-closepass).
+
+```bash
+voynich pass plan show <model>
+voynich pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <slots> [--inactive]
+voynich pass buy <model> --calls <n>
+voynich pass list [--wallet <address>]
+voynich pass close <pass-address>
+```
+
+<Fields>
+<Field name="plan show <model>" type="read">
+Reads `GET /v1/models/{id}/pass-plan` (no wallet required) and prints the `PassPlan` JSON, or `{ "passPlan": null }` when none is configured.
+</Field>
+<Field name="plan set <model>" type="owner write">
+Signs `set_pass_plan` as the model's owner (`--price`, `--min-calls`, `--max-calls`, `--ttl-slots`; pass `--inactive` to deactivate new sales) and prints the indexed `PassPlan` JSON.
+</Field>
+<Field name="buy <model> --calls <n>" type="holder write">
+Signs `buy_pass` prepaying `n * plan.pricePerCall` into a 154-byte `Pass` PDA and prints the indexed `Pass` JSON. Spend credits with `voynich call <model> ... --pass <pass-address>`.
+</Field>
+<Field name="list [--wallet <address>]" type="read">
+Reads `GET /v1/accounts/{wallet}/passes` for `--wallet` (or the signing keypair's public key when omitted) and prints `{ "items", "asOf" }`.
+</Field>
+<Field name="close <pass-address>" type="write">
+Signs `close_pass` to sweep `escrowRemaining` back to `pass.holder` (callable by `holder` anytime, or by anyone once expired or exhausted) and prints `{ "pass", "transaction" }`.
+</Field>
+</Fields>
+
+The protocol's `crank` service also sweeps expired (`expiresAtSlot < currentSlot`) or exhausted (`callsUsed >= callsTotal`) open passes every 5 seconds, returning any unspent SOL or SPL escrow directly to `pass.holder`.

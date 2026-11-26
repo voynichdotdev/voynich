@@ -108,6 +108,15 @@ export function errorMessage(e: unknown): string {
   if (code === 'INVALID_BENCHMARK') {
     return x?.body?.error?.message || 'Benchmark receipts, counts, and score must match settled on-chain receipts for this model.'
   }
+  if (code === 'PASS_PLAN_NOT_FOUND') {
+    return x?.body?.error?.message || 'This model does not have an active call pass plan.'
+  }
+  if (code === 'PASS_NOT_FOUND') {
+    return x?.body?.error?.message || 'No prepaid pass exists at this address.'
+  }
+  if (code === 'INVALID_PASS') {
+    return x?.body?.error?.message || 'Pass settings or credit count are outside the active pass plan limits.'
+  }
   if (x?.body?.error?.message) return x.body.error.message
   if (e instanceof TypeError) return 'The API did not answer. Check the connection and try again.'
   if (x?.name === 'ZodError') return 'The API answered in a form this site does not read. Reload the page and try again.'

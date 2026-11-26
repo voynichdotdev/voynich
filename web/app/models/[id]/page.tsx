@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
 import { loadModelBenchmarks } from '@/lib/benchmarks'
 import { loadMeasurements } from '@/lib/measurements'
+import { loadModelPassPlan } from '@/lib/passes'
 import { loadModelPolicy } from '@/lib/policy'
 import { loadModelSplit } from '@/lib/splits'
 import { loadModelVersions } from '@/lib/versions'
@@ -51,10 +52,11 @@ export default async function ModelPage({ params, searchParams }: Props) {
     )
   }
 
-  const [policy, split] = await Promise.all([
+  const [policy, split, passPlan] = await Promise.all([
     loadModelPolicy(client, model.data),
     loadModelSplit(client, model.data),
+    loadModelPassPlan(client, model.data.address),
   ])
 
-  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, versions, benchmarks }} />
+  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, passPlan, versions, benchmarks }} />
 }

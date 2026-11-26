@@ -5,7 +5,7 @@
 
 import Link from 'next/link'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { AnswerMode, GrantedEnclaves, Model, ModelPolicy } from '@voynich/contract'
+import type { AnswerMode, GrantedEnclaves, Model, ModelPolicy, Pass } from '@voynich/contract'
 import { api } from '@/lib/api'
 import { IDLE, effectiveShareBps, eligibleEnclaves, formatLatency, hasOpenCall, heldStage, parseCeiling, parseTensor, pickEnclave, refundCall, resumeCall, runCall, runSessionCall, settleMeteredStream, type CallState, type FlightStage, type RoutingStrategy, type Stage } from '@/lib/call'
 import { CALL_STAGES, RECEIPT_CHECKS } from '@/lib/facts'
@@ -32,7 +32,7 @@ const LABEL = Object.fromEntries(CALL_STAGES.map((x) => [x.id, x.label])) as Rec
 const IN_FLIGHT: Stage[] = ['encrypting', 'signing', 'escrowed', 'answering', 'streaming']
 const pct = (p: number) => `${(p * 100).toFixed(p >= 0.1 ? 0 : 1)}%`
 
-type Props = { model: Model; fixture: string | null; compact?: boolean; owner?: boolean; enclaves?: GrantedEnclaves['items'] | null; policy?: ModelPolicy | null; onSettled?: () => void }
+type Props = { model: Model; fixture: string | null; compact?: boolean; owner?: boolean; enclaves?: GrantedEnclaves['items'] | null; policy?: ModelPolicy | null; activePass?: Pass | null; onSettled?: () => void }
 
 // A model that takes no calls, composed per cause: retired, sealed with no enclave yet, or still uploading.
 function Closed({ model, fixture, compact, owner }: { model: Model; fixture: string | null; compact: boolean; owner: boolean }) {
@@ -91,7 +91,7 @@ function Closed({ model, fixture, compact, owner }: { model: Model; fixture: str
   )
 }
 
-export function CallPanel({ model, fixture, compact = false, owner = false, enclaves, policy = null, onSettled }: Props) {
+export function CallPanel({ model, fixture, compact = false, owner = false, enclaves, policy = null, activePass = null, onSettled }: Props) {
   const w = useWallet(wallet)
   const connected = w.status === 'connected' && !!w.address
   const held = heldStage(fixture)
@@ -122,6 +122,7 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
   const [strategy, setStrategy] = useState<RoutingStrategy>('balanced')
   const [pinnedEnclave, setPinnedEnclave] = useState<string | null>(null)
   const [useSession, setUseSession] = useState(false)
+  const [usePass, setUsePass] = useState(false)
   const [activeSession, setActiveSession] = useState<ActiveBrowserSession | null>(null)
   const [sessionBudget, setSessionBudget] = useState(() => {
     const unitRaw = BigInt(model.price.amount)
@@ -330,6 +331,11 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
       void runSessionCall({
         ...callParams,
         session: { address: activeSession.session.address, delegate: activeSession.delegate },
+      })
+    } else if (usePass && activePass && !metered) {
+      void runCall({
+        ...callParams,
+        pass: activePass.address,
       })
     } else {
       void runCall(callParams)
@@ -815,10 +821,34 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
                   </span>
                 </div>
                 <div className="seg" role="group" aria-labelledby={sessionId}>
-                  <button type="button" aria-pressed={!useSession} disabled={inFlight || !!sessionBusy} onClick={() => { play('toggle'); setUseSession(false) }}>Single call</button>
-                  <button type="button" aria-pressed={useSession} disabled={inFlight || !!sessionBusy} onClick={() => { play('toggle'); setUseSession(true) }}>Session</button>
+                  <button type="button" aria-pressed={!useSession && !usePass} disabled={inFlight || !!sessionBusy} onClick={() => { play('toggle'); setUseSession(false); setUsePass(false) }}>Single call</button>
+                  <button type="button" aria-pressed={useSession} disabled={inFlight || !!sessionBusy} onClick={() => { play('toggle'); setUseSession(true); setUsePass(false) }}>Session</button>
+                  {activePass && !metered ? (
+                    <button type="button" aria-pressed={usePass} disabled={inFlight || !!sessionBusy} onClick={() => { play('toggle'); setUsePass(true); setUseSession(false) }}>
+                      Use pass ({activePass.callsRemaining}/{activePass.callsTotal})
+                    </button>
+                  ) : null}
                 </div>
               </div>
+              {usePass && activePass && !metered ? (
+                <div className={s.sessionActive}>
+                  <dl className={s.sessionMeta}>
+                    <div>
+                      <dt>Credits left</dt>
+                      <dd className="mono">{activePass.callsRemaining} / {activePass.callsTotal}</dd>
+                    </div>
+                    <div>
+                      <dt>Pass price</dt>
+                      <dd><Amount value={{ ...model.price, amount: activePass.pricePerCall }} /></dd>
+                    </div>
+                    <div>
+                      <dt>Expires slot</dt>
+                      <dd className="mono">{group(activePass.expiresAtSlot)}</dd>
+                    </div>
+                  </dl>
+                  <Link href={`/account${fixture ? `?fixture=${fixture}` : ''}`} className="link t-small" data-arrow>Manage pass</Link>
+                </div>
+              ) : null}
               {useSession ? (
                 activeSession ? (
                   <div className={s.sessionActive}>
@@ -942,7 +972,9 @@ export function CallPanel({ model, fixture, compact = false, owner = false, encl
                   >
                     {useSession && activeSession
                       ? (metered ? `Stream from session (${ceilingLabel})` : `Call from session (${price})`)
-                      : (metered ? `Open metered call (${ceilingLabel})` : `Call for ${price}`)}
+                      : usePass && activePass && !metered
+                        ? `Call with pass (${activePass.callsRemaining} left)`
+                        : (metered ? `Open metered call (${ceilingLabel})` : `Call for ${price}`)}
                   </button>
                   {useSession && !activeSession
                     ? <span className="t-small dim">Open a session above, or switch to Single call.</span>
