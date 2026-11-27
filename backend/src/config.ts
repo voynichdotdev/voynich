@@ -30,4 +30,7 @@ export const env = parseEnv(z.object({
   TRADING_FEE_BUYBACK_BPS: z.coerce.number().int().min(0).max(10000).optional(),
   TRADING_FEE_CLAIM_MIN_LAMPORTS: z.string().regex(/^(0|[1-9]\d*)$/).optional(),
   TRADING_FEE_CLAIM_INTERVAL_SECONDS: z.coerce.number().int().positive().optional(),
+  REDEMPTION_OPEN: z.enum(['true', 'false']).optional(),
+  REDEMPTION_POOL_LAMPORTS: z.string().regex(/^(0|[1-9]\d*)$/).optional(),
+  REDEMPTION_VAULT_KEYPAIR: z.string().optional(),
 }))

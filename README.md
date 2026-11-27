@@ -18,7 +18,7 @@ X: [@voynichdotdev](https://x.com/voynichdotdev)
 | `bounty` program | `8Sm13coiVCjiHAp6NNvuJv36xcFqLN84ykZgqYBmX2ws` |
 | `sketch-32` model | `431poxuxU5h5BE4nxazgLfxVEdg1xjipQWknyVN8ZobW` |
 | `text-1m` model | `3PyKubqJiGi9aFUiQJMBX9VMFsegTSxZtZMmoJic6oza` |
-| `VOYNICH` token mint | `baQxEuzMJ69RExbkCGLSrdSueWXCfp4tbi4nKZQpvoy` |
+| `VOYNICH` token mint | `jVq6CTzXCWmjKhuUVMEppNdeQHJPAfnLqPagoxiBvoy` |
 
 ## Repository layout
 

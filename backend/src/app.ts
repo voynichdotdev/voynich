@@ -12,6 +12,7 @@ import { streamEvent, streamEvents } from './engines/server/sse.js'
 import { FixtureState, addRange, fail } from './fixture-runtime.js'
 import { addresses, chainPrograms } from 'voynich/program'
 import { createModelFootprint } from './chain/create-model.js'
+import { mountFixtureRedemptionRoutes } from './chain/redemption.js'
 
 export function buildApp() {
   const app = createApi<{ scenario: typeof SCENARIOS[number] | null; fixture: FixtureState }>({
@@ -1040,5 +1041,6 @@ export function buildApp() {
       state.emit('quorum.updated', row)
     }))
   })
+  mountFixtureRedemptionRoutes(app)
   return app
 }

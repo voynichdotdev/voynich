@@ -146,14 +146,14 @@ export const CLI = {
 export const TOKEN = {
   symbol: 'VOYNICH',
   supply: 1_000_000_000,
-  launch: 'fair launch',
+  launch: 'fair launch on LaunchLab',
   allocation: "the developer's own first buy at launch",
-  does: 'The protocol share of every settled call is paid to the launch wallet in the settling instruction; a crank buys VOYNICH on the market with it and burns what it bought. 25% of VOYNICH trading fees also route through the same buyback-and-burn crank.',
+  does: 'The protocol share of every settled call is paid to the launch wallet in the settling instruction; a crank buys VOYNICH on the market with it and burns what it bought.',
   home: '/docs/concepts/fees-and-the-token',
-  mint: process.env.NEXT_PUBLIC_VOYNICH_MINT || 'baQxEuzMJ69RExbkCGLSrdSueWXCfp4tbi4nKZQpvoy',
+  mint: process.env.NEXT_PUBLIC_VOYNICH_MINT || 'jVq6CTzXCWmjKhuUVMEppNdeQHJPAfnLqPagoxiBvoy',
   protocolShareBps: 500 as number | null,
-  developerAllocation: '10% of supply (99,999,999.999999 VOYNICH locked on Streamflow until 2028-12-30 15:00 UTC)' as string | null,
-  lockUrl: 'https://app.streamflow.finance/contract/solana/mainnet/6NdXwbDL82vtnFg8S66yukD7ECT57ecNHHM1VFFSowsk',
+  developerAllocation: '3.33% of supply (33,272,718.837645 VOYNICH locked on Streamflow until 2027-11-27 10:17 UTC)' as string | null,
+  lockUrl: 'https://app.streamflow.finance/contract/solana/mainnet/5xNpTbjbqtaV29k3EXqV3c1zsfdi2Lp2TduhmYg2eBE5',
 } as const
 
 export const PLACES = [

@@ -352,7 +352,11 @@ export async function runCrank(runtime: ChainRuntime) {
     // Finish every persisted purchase before spending another atom. Transaction metadata,
     // rather than a wallet's current balance, identifies exactly what that swap acquired.
     for (const item of await db.buyback.findMany({ where: { state: { in: ['purchasing', 'purchased'] } }, orderBy: { createdAt: 'asc' } })) {
-      if (item.mint !== env.TOKEN_MINT) throw new Error('Finish outstanding purchases before changing TOKEN_MINT.')
+      const itemMintPk = new PublicKey(item.mint)
+      const itemInfo = item.mint === env.TOKEN_MINT ? null : await rpc.connection.getAccountInfo(itemMintPk, 'confirmed')
+      const itemProgram = item.mint === env.TOKEN_MINT ? out.program : (itemInfo?.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID)
+      const itemDecimals = item.mint === env.TOKEN_MINT ? out.decimals : (itemInfo ? unpackMint(itemMintPk, itemInfo, itemProgram).decimals : 6)
+      const itemAta = item.mint === env.TOKEN_MINT ? out.ata : getAssociatedTokenAddressSync(itemMintPk, recipient.publicKey, false, itemProgram)
       lookupTables = item.lookupTables.map(value => new PublicKey(value))
       const swap = await store.get(item.swapKey)
       if (swap?.state === 'failed') {
@@ -372,7 +376,7 @@ export async function runCrank(runtime: ChainRuntime) {
         if (amount <= 0n) throw new Error('The confirmed swap acquired no protocol tokens.')
         await db.buyback.update({ where: { key: item.key }, data: { acquiredAmount: String(amount), state: 'purchased' } })
       }
-      const result = await bj.execute(item.burnKey, () => [createBurnCheckedInstruction(out.ata, out.mint, recipient.publicKey, amount!, out.decimals, [], out.program)])
+      const result = await bj.execute(item.burnKey, () => [createBurnCheckedInstruction(itemAta, itemMintPk, recipient.publicKey, amount!, itemDecimals, [], itemProgram)])
       if (result === 'confirmed') {
         await db.buyback.update({ where: { key: item.key }, data: { state: 'burned' } })
         console.log(JSON.stringify({ event: 'buyback.burned', key: item.key, mint: item.mint, inputMint: item.inputMint, inputAmount: item.inputAmount.toFixed(0), burnedAmount: String(amount), swapSignature: swap.signature }))

@@ -18,6 +18,7 @@ import type { ChainRuntime } from '../runtime.js'
 import { builders } from './builders.js'
 import { fail, transactionFailure } from './errors.js'
 import { quoteModelCost } from './cost-quote.js'
+import { mountRedemptionRoutes } from './redemption.js'
 
 const runtimeAnswer = z.strictObject({ status: z.enum(['waiting', 'answered', 'failed']), outputEnvelope: s.Envelope.nullable(), openAnswer: s.Base64.nullable().optional().transform(value => value ?? null), outputHash: s.Hash.nullable(), signature: s.ReceiptSignature.nullable(), settleTransaction: s.Signature.nullable(), receiptAddress: s.Address.nullable(), failure: s.CallFailure.nullable() })
 const accountSlice = z.object({ value: z.object({ owner: s.Address, data: z.tuple([s.Base64, z.literal('base64')]) }).nullable() })
@@ -378,5 +379,6 @@ export function buildChainApp(runtime: ChainRuntime) {
     runtime.hub.publish(streamEvent('transaction.updated', status))
     return c.json(status)
   })
+  mountRedemptionRoutes(app, runtime)
   return app
 }

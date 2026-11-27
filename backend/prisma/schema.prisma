@@ -680,3 +680,17 @@ model Quorum {
   @@index([status, createdSlot(sort: Desc)])
   @@map("quorums")
 }
+
+model RedemptionClaim {
+  wallet           String   @id @db.VarChar(44)
+  snapshotRaw      String   @map("snapshot_raw")
+  claimedTokensRaw String   @default("0") @map("claimed_tokens_raw")
+  claimedLamports  String   @default("0") @map("claimed_lamports")
+  pendingBuildId   String?  @map("pending_build_id")
+  pendingTokensRaw String?  @map("pending_tokens_raw")
+  pendingLamports  String?  @map("pending_lamports")
+  lastSignature    String?  @map("last_signature") @db.VarChar(88)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("redemption_claims")
+}
