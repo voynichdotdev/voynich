@@ -244,5 +244,23 @@
     "discriminator": "`a7ede724c54389c3`",
     "emittedBy": "`finalize_quorum`",
     "says": "Matching canonical Receipt PDAs were verified on chain and the Quorum was sealed `Agreed`."
+  },
+  {
+    "event": "BatchOpened",
+    "discriminator": "`e878389609c1bf60`",
+    "emittedBy": "`open_batch`",
+    "says": "A Batch PDA was opened declaring a manifest hash and total item count (`1..=256`)."
+  },
+  {
+    "event": "BatchReceiptsAppended",
+    "discriminator": "`1c12ee0fccddd499`",
+    "emittedBy": "`append_batch_receipts`",
+    "says": "A chunk of 1 to 16 canonical Receipt PDAs was verified and chained into `batch.receipts_root`."
+  },
+  {
+    "event": "BatchCompleted",
+    "discriminator": "`1ddf6f94c9f0aa33`",
+    "emittedBy": "`append_batch_receipts`",
+    "says": "A Batch PDA reached `completed_count == total_count` and flipped to `Completed`."
   }
 ]

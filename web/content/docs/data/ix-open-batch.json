@@ -1,0 +1,50 @@
+[
+  {
+    "account": "caller",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "The wallet opening the batch and paying the 166-byte Batch PDA's rent."
+  },
+  {
+    "account": "model",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"model\", model.name]`",
+    "is": "The Model."
+  },
+  {
+    "account": "batch",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"batch\", model, caller, nonce]`",
+    "is": "The Batch PDA at `[\"batch\", model, caller, nonce_le]`, created here in `Open`."
+  },
+  {
+    "account": "system_program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "`11111111111111111111111111111111`",
+    "is": "The System program."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

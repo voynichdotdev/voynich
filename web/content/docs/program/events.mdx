@@ -3,7 +3,7 @@ title: Events
 description: Every event the voynich program emits, its fields and how to decode it from a transaction.
 ---
 
-The program emits an event for every change of state. There are 41.
+The program emits an event for every change of state. There are 44.
 
 <Rows data="program-events" columns="event,emittedBy,says,discriminator" />
 
@@ -199,3 +199,15 @@ The fields are the Receipt's, with the Receipt's address as `receipt`, plus opti
 ## QuorumAgreed
 
 <Rows data="event-quorum-agreed" />
+
+## BatchOpened
+
+<Rows data="event-batch-opened" />
+
+## BatchReceiptsAppended
+
+<Rows data="event-batch-receipts-appended" />
+
+## BatchCompleted
+
+<Rows data="event-batch-completed" />

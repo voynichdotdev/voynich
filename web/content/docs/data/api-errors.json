@@ -220,6 +220,16 @@
     "meaning": "The quorum configuration, status, or receipt consensus proofs are invalid."
   },
   {
+    "code": "BATCH_NOT_FOUND",
+    "status": "404",
+    "meaning": "No batch account has this address."
+  },
+  {
+    "code": "INVALID_BATCH",
+    "status": "422",
+    "meaning": "The batch configuration, status, or receipt chunk is invalid."
+  },
+  {
     "code": "GRANT_REQUIRED",
     "status": "409",
     "meaning": "The enclave holds no live grant for the model."

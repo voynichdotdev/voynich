@@ -1,0 +1,34 @@
+[
+  {
+    "field": "batch",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "caller",
+    "type": "pubkey"
+  },
+  {
+    "field": "completed_count",
+    "type": "u16"
+  },
+  {
+    "field": "total_count",
+    "type": "u16"
+  },
+  {
+    "field": "receipts_root",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "completed_slot",
+    "type": "u64"
+  },
+  {
+    "field": "status",
+    "type": "BatchStatus"
+  }
+]

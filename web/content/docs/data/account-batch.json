@@ -1,0 +1,68 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model evaluated by this batch job."
+  },
+  {
+    "field": "caller",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The wallet that opened the batch and paid its rent."
+  },
+  {
+    "field": "nonce",
+    "type": "u64",
+    "offset": "72",
+    "meaning": "Caller-chosen u64 nonce deriving the Batch PDA `[\"batch\", model, caller, nonce_le]`."
+  },
+  {
+    "field": "manifest_hash",
+    "type": "[u8; 32]",
+    "offset": "80",
+    "meaning": "32-byte SHA-256 hash of the batch input manifest."
+  },
+  {
+    "field": "total_count",
+    "type": "u16",
+    "offset": "112",
+    "meaning": "Total number of receipts expected across the batch (`MIN_BATCH_ITEMS = 1` to `MAX_BATCH_ITEMS = 256`)."
+  },
+  {
+    "field": "completed_count",
+    "type": "u16",
+    "offset": "114",
+    "meaning": "Count of verified receipts chained into `receipts_root` so far."
+  },
+  {
+    "field": "status",
+    "type": "BatchStatus",
+    "offset": "116",
+    "meaning": "`Open` (`0`) or `Completed` (`1`)."
+  },
+  {
+    "field": "receipts_root",
+    "type": "[u8; 32]",
+    "offset": "117",
+    "meaning": "Rolling SHA-256 chain root updated per receipt as `sha256(receipts_root || receipt.key() || input_hash || output_hash)`."
+  },
+  {
+    "field": "created_slot",
+    "type": "u64",
+    "offset": "149",
+    "meaning": "The slot the batch was opened in."
+  },
+  {
+    "field": "completed_slot",
+    "type": "u64",
+    "offset": "157",
+    "meaning": "The slot `completed_count` reached `total_count` (`0` while `Open`)."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "165",
+    "meaning": "The PDA bump."
+  }
+]

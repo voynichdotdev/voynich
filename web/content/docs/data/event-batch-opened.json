@@ -1,0 +1,30 @@
+[
+  {
+    "field": "batch",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "caller",
+    "type": "pubkey"
+  },
+  {
+    "field": "nonce",
+    "type": "u64"
+  },
+  {
+    "field": "manifest_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "total_count",
+    "type": "u16"
+  },
+  {
+    "field": "created_slot",
+    "type": "u64"
+  }
+]

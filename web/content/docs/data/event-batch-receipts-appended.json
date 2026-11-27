@@ -1,0 +1,30 @@
+[
+  {
+    "field": "batch",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "receipts",
+    "type": "Vec<pubkey>"
+  },
+  {
+    "field": "completed_count",
+    "type": "u16"
+  },
+  {
+    "field": "total_count",
+    "type": "u16"
+  },
+  {
+    "field": "receipts_root",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "slot",
+    "type": "u64"
+  }
+]

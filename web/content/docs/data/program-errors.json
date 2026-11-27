@@ -278,5 +278,12 @@
     "hex": "`0x1797`",
     "message": "The quorum configuration, status, or receipt consensus proofs are invalid.",
     "raisedWhen": "In `open_quorum`: `required_votes` outside `2..=5` or all-zero `input_hash`. In `finalize_quorum`: quorum already `Agreed`, remaining accounts fewer than `required_votes` or above `5`, duplicate receipts, non-canonical or wrong-program Receipt PDA, mismatched `model` or `input_hash`, divergent `output_hash`, or `distinct_enclaves < required_votes` when `require_distinct_enclaves` is true."
+  },
+  {
+    "name": "InvalidBatch",
+    "code": "6040",
+    "hex": "`0x1798`",
+    "message": "The batch configuration, status, or receipt chunk is invalid.",
+    "raisedWhen": "In `open_batch`: `total_count` outside `1..=256` or all-zero `manifest_hash`. In `append_batch_receipts`: batch already `Completed`, chunk empty or above `16`, chunk would exceed `total_count`, duplicate receipt in chunk, or a remaining account that is not a canonical `Receipt` PDA owned by the Voynich program for `batch.model`."
   }
 ]

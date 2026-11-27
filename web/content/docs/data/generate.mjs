@@ -305,6 +305,19 @@ const FIELDS = {
     finalized_slot: 'The slot `finalize_quorum` sealed consensus in (`0` while `Open`).',
     bump: 'The PDA bump.',
   },
+  Batch: {
+    model: 'The Model evaluated by this batch job.',
+    caller: 'The wallet that opened the batch and paid its rent.',
+    nonce: 'Caller-chosen u64 nonce deriving the Batch PDA `["batch", model, caller, nonce_le]`.',
+    manifest_hash: '32-byte SHA-256 hash of the batch input manifest.',
+    total_count: 'Total number of receipts expected across the batch (`MIN_BATCH_ITEMS = 1` to `MAX_BATCH_ITEMS = 256`).',
+    completed_count: 'Count of verified receipts chained into `receipts_root` so far.',
+    status: '`Open` (`0`) or `Completed` (`1`).',
+    receipts_root: 'Rolling SHA-256 chain root updated per receipt as `sha256(receipts_root || receipt.key() || input_hash || output_hash)`.',
+    created_slot: 'The slot the batch was opened in.',
+    completed_slot: 'The slot `completed_count` reached `total_count` (`0` while `Open`).',
+    bump: 'The PDA bump.',
+  },
 }
 
 const accounts = idl.accounts.map((account) => {
@@ -381,6 +394,8 @@ const SAYS = {
   claim_referral: 'Permissionlessly transfers `total_earned - claimed` from a Referral PDA (SOL or SPL) directly to `referrer` and sets `claimed = total_earned`.',
   open_quorum: 'Creates a 326-byte Quorum PDA (`["quorum", model, caller, nonce_le]`) declaring an `input_hash`, `required_votes` (`2..=5`), and `require_distinct_enclaves`.',
   finalize_quorum: 'Permissionlessly verifies `required_votes..=5` canonical `Receipt` PDAs in remaining accounts (matching `model`, `input_hash`, and identical `output_hash`) and seals the Quorum `Agreed`.',
+  open_batch: 'Creates a 166-byte Batch PDA (`["batch", model, caller, nonce_le]`) declaring a `manifest_hash` and `total_count` (`1..=256`).',
+  append_batch_receipts: 'Permissionlessly verifies 1 to 16 canonical `Receipt` PDAs for `batch.model` in remaining accounts, chains `receipts_root`, and marks the Batch `Completed` once `completed_count == total_count`.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -668,6 +683,14 @@ const ACCOUNTS = {
     payer: 'Anyone paying the transaction fee to finalize consensus once matching receipts exist on chain.',
     quorum: 'The open Quorum PDA sealed to `Agreed` here.',
   },
+  open_batch: {
+    caller: 'The wallet opening the batch and paying the 166-byte Batch PDA\'s rent.',
+    batch: 'The Batch PDA at `["batch", model, caller, nonce_le]`, created here in `Open`.',
+  },
+  append_batch_receipts: {
+    payer: 'Anyone paying the transaction fee to verify and chain a chunk of settled receipts.',
+    batch: 'The open Batch PDA whose `receipts_root` and `completed_count` advance here.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -753,6 +776,9 @@ const EVENTS = {
   ReferralClaimed: ['claim_referral', 'Accrued referral balance (`total_earned - claimed`) was paid out to the referrer wallet.'],
   QuorumOpened: ['open_quorum', 'A Quorum PDA was opened declaring a receipt-backed consensus target for a model input hash.'],
   QuorumAgreed: ['finalize_quorum', 'Matching canonical Receipt PDAs were verified on chain and the Quorum was sealed `Agreed`.'],
+  BatchOpened: ['open_batch', 'A Batch PDA was opened declaring a manifest hash and total item count (`1..=256`).'],
+  BatchReceiptsAppended: ['append_batch_receipts', 'A chunk of 1 to 16 canonical Receipt PDAs was verified and chained into `batch.receipts_root`.'],
+  BatchCompleted: ['append_batch_receipts', 'A Batch PDA reached `completed_count == total_count` and flipped to `Completed`.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -806,6 +832,7 @@ const RAISED = {
   InvalidPass: 'In `set_pass_plan`: model is not `PriceUnit::Call`, or when active `price_per_call == 0`, `price_per_call > model.price`, `min_calls == 0`, `max_calls < min_calls`, or `ttl_slots == 0`. In `buy_pass`: plan is inactive, mint mismatch, or `calls_total` outside `min_calls..=max_calls`. In `open_pass_call`: pass is closed, expired, exhausted, mismatched on model/mint, or lacks escrow. In `close_pass`: pass is already closed, or a non-holder tried to close it while still open, unexpired, and unexhausted.',
   InvalidReferral: 'In `set_referral_config`: `share_bps > MAX_REFERRAL_SHARE_BPS` (`2500`), or `active == true` with `share_bps == 0`. In `register_call_referral`: config inactive, `referrer` is default or equals `caller` (self-referral), or call is not open. In `settle_call` / `settle_metered_call`: malformed referral remaining accounts. In `claim_referral`: zero claimable balance (`total_earned <= claimed`).',
   InvalidQuorum: 'In `open_quorum`: `required_votes` outside `2..=5` or all-zero `input_hash`. In `finalize_quorum`: quorum already `Agreed`, remaining accounts fewer than `required_votes` or above `5`, duplicate receipts, non-canonical or wrong-program Receipt PDA, mismatched `model` or `input_hash`, divergent `output_hash`, or `distinct_enclaves < required_votes` when `require_distinct_enclaves` is true.',
+  InvalidBatch: 'In `open_batch`: `total_count` outside `1..=256` or all-zero `manifest_hash`. In `append_batch_receipts`: batch already `Completed`, chunk empty or above `16`, chunk would exceed `total_count`, duplicate receipt in chunk, or a remaining account that is not a canonical `Receipt` PDA owned by the Voynich program for `batch.model`.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -881,6 +908,8 @@ const API_ERRORS = {
   INVALID_REFERRAL: 'The referral config, call referral, or referral claim is invalid.',
   QUORUM_NOT_FOUND: 'No quorum account has this address.',
   INVALID_QUORUM: 'The quorum configuration, status, or receipt consensus proofs are invalid.',
+  BATCH_NOT_FOUND: 'No batch account has this address.',
+  INVALID_BATCH: 'The batch configuration, status, or receipt chunk is invalid.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

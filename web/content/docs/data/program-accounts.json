@@ -1,5 +1,11 @@
 [
   {
+    "account": "Batch",
+    "discriminator": "`9cc2462c1658892c`",
+    "fields": 11,
+    "bytes": "166"
+  },
+  {
     "account": "Benchmark",
     "discriminator": "`39fc2136718de9f7`",
     "fields": 12,

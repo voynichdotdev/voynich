@@ -1,0 +1,34 @@
+[
+  {
+    "account": "payer",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Anyone paying the transaction fee to verify and chain a chunk of settled receipts."
+  },
+  {
+    "account": "batch",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"batch\", batch.model, batch.caller, batch.nonce]`",
+    "is": "The open Batch PDA whose `receipts_root` and `completed_count` advance here."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

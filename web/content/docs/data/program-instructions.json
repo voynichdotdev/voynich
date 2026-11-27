@@ -292,5 +292,17 @@
     "arguments": "",
     "signers": "`payer`",
     "does": "Permissionlessly verifies `required_votes..=5` canonical `Receipt` PDAs in remaining accounts (matching `model`, `input_hash`, and identical `output_hash`) and seals the Quorum `Agreed`."
+  },
+  {
+    "instruction": "open_batch",
+    "arguments": "`nonce: u64`, `manifest_hash: [u8; 32]`, `total_count: u16`",
+    "signers": "`caller`",
+    "does": "Creates a 166-byte Batch PDA (`[\"batch\", model, caller, nonce_le]`) declaring a `manifest_hash` and `total_count` (`1..=256`)."
+  },
+  {
+    "instruction": "append_batch_receipts",
+    "arguments": "",
+    "signers": "`payer`",
+    "does": "Permissionlessly verifies 1 to 16 canonical `Receipt` PDAs for `batch.model` in remaining accounts, chains `receipts_root`, and marks the Batch `Completed` once `completed_count == total_count`."
   }
 ]

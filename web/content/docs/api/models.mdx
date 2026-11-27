@@ -1248,6 +1248,75 @@ Builds [`open_quorum`](/docs/program/instructions#openquorum). Body (`OpenQuorum
 
 Builds permissionless [`finalize_quorum`](/docs/program/instructions#finalizequorum) attaching `receipts` in remaining accounts. Body (`FinalizeQuorumRequest`): `{ wallet, receipts }`. Returns a [Build](/docs/api/transactions#build) with `action: "finalize_quorum"` and `addresses: { model, quorum }`. Answers `QUORUM_NOT_FOUND` (`404`) or `INVALID_QUORUM` (`422`).
 
+## BatchRecord
+
+An on-chain 166-byte `Batch` PDA (`["batch", model, caller, nonce_le]`) chaining up to 256 verified `Receipt` PDAs into a single `receiptsRoot`.
+
+<Fields>
+<Field name="address" type="address" required>
+The `Batch` PDA address.
+</Field>
+<Field name="model" type="address" required>
+The Model address.
+</Field>
+<Field name="modelName" type="string or null">
+The model's slug name when indexed.
+</Field>
+<Field name="caller" type="address" required>
+The wallet that opened the batch.
+</Field>
+<Field name="nonce" type="decimal string" required>
+Caller-chosen u64 nonce.
+</Field>
+<Field name="manifestHash" type="hash (64 hex chars)" required>
+SHA-256 of the batch input manifest.
+</Field>
+<Field name="totalCount" type="integer (1 to 256)" required>
+Total items declared in the batch.
+</Field>
+<Field name="completedCount" type="integer (0 to totalCount)" required>
+Number of verified receipts chained into `receiptsRoot` so far.
+</Field>
+<Field name="status" type="'open' | 'completed'" required>
+Whether the batch is still accepting chunks (`open`) or complete (`completed`).
+</Field>
+<Field name="receiptsRoot" type="hash (64 hex chars)" required>
+Rolling SHA-256 chain root across all appended receipts.
+</Field>
+<Field name="receipts" type="array of addresses" required>
+Ordered `Receipt` PDA addresses chained into this batch.
+</Field>
+<Field name="createdSlot" type="slot" required>
+The slot the batch was opened in.
+</Field>
+<Field name="completedSlot" type="slot or null" required>
+The slot the batch completed in, or `null` while `open`.
+</Field>
+<Field name="updatedSlot" type="slot" required>
+The slot of the latest batch event.
+</Field>
+</Fields>
+
+## `GET /v1/batches`
+
+Lists receipt-backed batch jobs across all models (`BatchesPage`). Accepts `cursor`, `limit` ([Pagination](/docs/api/overview#pagination)), and optional filters `model`, `caller`, and `status` (`open` or `completed`).
+
+## `GET /v1/models/{id}/batches`
+
+Lists batch jobs for model `{id}` (`BatchesPage`). Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
+
+## `GET /v1/batches/{address}`
+
+Reads one [BatchRecord](#batchrecord) by its PDA address. Answers `BATCH_NOT_FOUND` (`404`) when none exists.
+
+## `POST /v1/models/{id}/batches/build`
+
+Builds [`open_batch`](/docs/program/instructions#openbatch). Body (`OpenBatchRequest`): `{ wallet, manifestHash, totalCount, nonce? }`. Returns a [Build](/docs/api/transactions#build) with `action: "open_batch"` and `addresses: { model, batch }`. Answers `MODEL_NOT_FOUND`, `INVALID_BATCH` (`422`), or `INSUFFICIENT_FUNDS`.
+
+## `POST /v1/batches/{address}/append/build`
+
+Builds permissionless [`append_batch_receipts`](/docs/program/instructions#appendbatchreceipts) attaching 1 to 16 `receipts` in remaining accounts. Body (`AppendBatchReceiptsRequest`): `{ wallet, receipts }`. Returns a [Build](/docs/api/transactions#build) with `action: "append_batch_receipts"` and `addresses: { model, batch }`. Answers `BATCH_NOT_FOUND` (`404`) or `INVALID_BATCH` (`422`).
+
 ## Read next
 
 <Cards>

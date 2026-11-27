@@ -220,6 +220,31 @@
     "does": "Build finalize_quorum to verify matching receipts on chain and seal quorum consensus"
   },
   {
+    "route": "GET /v1/batches",
+    "operation": "batches",
+    "does": "Browse chained receipt-backed batch jobs across all models"
+  },
+  {
+    "route": "GET /v1/models/{id}/batches",
+    "operation": "modelBatches",
+    "does": "List receipt-backed batch jobs for a model"
+  },
+  {
+    "route": "GET /v1/batches/{address}",
+    "operation": "batch",
+    "does": "Read one batch job account with chained receipts root and ordered receipt list"
+  },
+  {
+    "route": "POST /v1/models/{id}/batches/build",
+    "operation": "openBatch",
+    "does": "Build open_batch to open a chained receipt batch job on chain"
+  },
+  {
+    "route": "POST /v1/batches/{address}/append/build",
+    "operation": "appendBatchReceipts",
+    "does": "Build append_batch_receipts to verify up to 16 settled receipts and advance the batch receipts root"
+  },
+  {
     "route": "GET /v1/models/{id}/versions",
     "operation": "modelVersions",
     "does": "List published and uploading versions for a model, newest first"

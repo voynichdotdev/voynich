@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 49 instructions.
+The program has 51 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -547,3 +547,25 @@ Remaining accounts carry the `Receipt` accounts proving consensus.
 
 - **Checks.** `quorum.status == Open`, `required_votes <= remaining_accounts.len() <= 5`, all receipt pubkeys are unique, each remaining account is owned by the Voynich program with `data.len() >= 168`, starts with `Receipt::DISCRIMINATOR`, derives canonically from `["receipt", data[8..40]]`, matches `quorum.model` and `quorum.input_hash`, shares an identical `output_hash`, and satisfies `distinct_enclaves >= required_votes` when `require_distinct_enclaves` is true (`InvalidQuorum`).
 - **Effects.** Sets `quorum.status = Agreed`, records `agreed_output_hash`, `vote_count`, `distinct_enclaves`, `receipts`, and `finalized_slot = clock.slot`, and emits `QuorumAgreed`.
+
+## open_batch
+
+Creates a 166-byte `Batch` PDA at `["batch", model, caller, nonce_le]` declaring a `manifest_hash` and `total_count` (`1..=256`).
+
+<Rows data="ix-open-batch-args" />
+
+<Rows data="ix-open-batch" />
+
+- **Checks.** `total_count` is between `1` (`MIN_BATCH_ITEMS`) and `256` (`MAX_BATCH_ITEMS`), and `manifest_hash` is non-zero (`InvalidBatch`).
+- **Effects.** Initializes `Batch` in `Open` with `completed_count = 0`, zeroed `receipts_root`, and `created_slot = clock.slot`, and emits `BatchOpened`.
+
+## append_batch_receipts
+
+Permissionlessly verifies a chunk of 1 to 16 canonical `Receipt` PDAs passed in remaining accounts, chains them into `batch.receipts_root`, and marks the batch `Completed` once `completed_count == total_count`.
+
+<Rows data="ix-append-batch-receipts" />
+
+Remaining accounts carry the 1 to 16 `Receipt` accounts for this chunk.
+
+- **Checks.** `batch.status == Open`, `1 <= remaining_accounts.len() <= 16`, `completed_count + remaining_accounts.len() <= total_count`, no duplicate receipts in the chunk, and each remaining account is owned by the Voynich program with `data.len() >= 168`, starts with `Receipt::DISCRIMINATOR`, derives canonically from `["receipt", data[8..40]]`, and matches `batch.model` (`InvalidBatch`).
+- **Effects.** For each receipt in order, updates `receipts_root = sha256(receipts_root || receipt.key() || input_hash || output_hash)`, increments `completed_count`, and emits `BatchReceiptsAppended`. When `completed_count == total_count`, flips `status = Completed`, records `completed_slot = clock.slot`, and emits `BatchCompleted`.

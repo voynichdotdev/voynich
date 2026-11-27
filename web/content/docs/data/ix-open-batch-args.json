@@ -1,0 +1,14 @@
+[
+  {
+    "argument": "nonce",
+    "type": "u64"
+  },
+  {
+    "argument": "manifest_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "argument": "total_count",
+    "type": "u16"
+  }
+]
