@@ -210,6 +210,10 @@ console.log(done.status, done.receiptsRoot, done.completedCount)
 
 `listBatches(query?)` reads `GET /v1/batches` (filtering optionally by `model`, `caller`, `status`, `limit`, `cursor`). `listModelBatches(modelId, query?)` and `batch(address)` read model and single-batch snapshots. `openBatch(modelId, { manifestHash, totalCount, nonce? })` creates a 166-byte `Batch` PDA (`1..=256` items), and `appendBatchReceipts(address, receipts)` permissionlessly verifies chunks of 1 to 16 `Receipt` PDAs on chain, advancing `receiptsRoot` until `completedCount === totalCount`. For one-call orchestration, `runBatch(modelId, inputs, { answerMode?, enclave?, strategy?, chunkSize?, manifestHash? })` opens the batch, runs every item, commits settled receipts in chunks (`<= 16`), and returns `{ batch, manifestHash, receiptsRoot, completedCount, totalCount, receipts, outputs, transactions }`.
 
+## OpenAI-compatible gateway (`createOpenAICompatServer`)
+
+`voynich/node` exports `createOpenAICompatServer(options)` and `formatMessagesAsPrompt(messages)` to embed the OpenAI-compatible `/v1/models` and `/v1/chat/completions` proxy directly inside a Node service (default `127.0.0.1:8787`, `webUrl: 'https://voynich.dev'`). Non-streaming calls return `chat.completion` JSON with `X-Voynich-Receipt`, `X-Voynich-Model`, and `X-Voynich-Verify-Url` headers plus a `voynich` receipt field; `stream: true` streams verified `chat.completion.chunk` SSE events ending with `data: [DONE]`.
+
 ## enclaves and enclave
 
 ```ts

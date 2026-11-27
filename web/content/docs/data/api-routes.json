@@ -245,6 +245,11 @@
     "does": "Build append_batch_receipts to verify up to 16 settled receipts and advance the batch receipts root"
   },
   {
+    "route": "GET /v1/openai/models",
+    "operation": "openaiModels",
+    "does": "List live Voynich models in OpenAI /v1/models format"
+  },
+  {
     "route": "GET /v1/models/{id}/versions",
     "operation": "modelVersions",
     "does": "List published and uploading versions for a model, newest first"

@@ -307,3 +307,17 @@ Signs `close_pass` to sweep `escrowRemaining` back to `pass.holder` (callable by
 </Fields>
 
 The protocol's `crank` service also sweeps expired (`expiresAtSlot < currentSlot`) or exhausted (`callsUsed >= callsTotal`) open passes every 5 seconds, returning any unspent SOL or SPL escrow directly to `pass.holder`.
+
+## voynich serve
+
+Starts a local OpenAI-compatible HTTP gateway (`127.0.0.1:8787` by default) backed by your configured wallet, session delegate, or prepaid pass so any OpenAI SDK client (`openai`, Python `openai`, `curl`) can call live Voynich models with on-chain receipt verification. The same from Node is [`createOpenAICompatServer`](/docs/sdk/models-and-enclaves#openai-compatible-gateway-createopenaicompatserver).
+
+```bash
+voynich serve --keypair <file> [--port 8787] [--host 127.0.0.1] [--session <pda> --delegate <file>] [--pass <pda>] [--referrer <wallet>] [--strategy balanced|cheapest|fastest] [--enclave <key>] [--answer-mode open|sealed] [--web https://voynich.dev]
+```
+
+Routes served by the gateway:
+
+- `GET /health`: gateway readiness status.
+- `GET /v1/models`: proxies [`GET /v1/openai/models`](/docs/api/models#get-v1openaimodels) in OpenAI list format.
+- `POST /v1/chat/completions`: accepts standard `{ model, messages, max_tokens?, stream? }` payloads. Non-streaming responses return a `chat.completion` object with `voynich: { receipt, call, verifyUrl, paid }` and response headers `X-Voynich-Receipt`, `X-Voynich-Model`, and `X-Voynich-Verify-Url` (exposed via CORS). Streaming (`stream: true`) emits `chat.completion.chunk` SSE events ending with `finish_reason`, the `voynich` receipt payload, and `data: [DONE]`.

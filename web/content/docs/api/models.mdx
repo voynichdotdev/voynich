@@ -1317,6 +1317,10 @@ Builds [`open_batch`](/docs/program/instructions#openbatch). Body (`OpenBatchReq
 
 Builds permissionless [`append_batch_receipts`](/docs/program/instructions#appendbatchreceipts) attaching 1 to 16 `receipts` in remaining accounts. Body (`AppendBatchReceiptsRequest`): `{ wallet, receipts }`. Returns a [Build](/docs/api/transactions#build) with `action: "append_batch_receipts"` and `addresses: { model, batch }`. Answers `BATCH_NOT_FOUND` (`404`) or `INVALID_BATCH` (`422`).
 
+## `GET /v1/openai/models`
+
+Lists live Voynich models in OpenAI `/v1/models` format (`OpenAIModelsList`: `{ object: "list", data: OpenAIModel[] }`). Each `OpenAIModel` carries `id`, `object` (`"model"`), `created`, `owned_by`, and a `voynich` metadata block (`OpenAIModelMetadata`: `address`, `slug`, `inputKind`, `pricingMode`, `price`, `mint`, `status`, `currentVersion`). Used by OpenAI SDK clients pointed at [`voynich serve`](/docs/cli/call#voynich-serve).
+
 ## Read next
 
 <Cards>
