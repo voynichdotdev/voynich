@@ -66,7 +66,8 @@ export function createChainRuntime(role: 'api' | 'indexer' | 'crank') {
       : event.type === 'pass.updated' ? await readModel.pass(event.id)
       : event.type === 'pass_plan.updated' ? await readModel.modelPassPlan(event.id)
       : event.type === 'referral_config.updated' ? await readModel.modelReferral(event.id)
-      : event.type === 'referral.updated' ? await readModel.referral(event.id) : null
+      : event.type === 'referral.updated' ? await readModel.referral(event.id)
+      : event.type === 'quorum.updated' ? await readModel.quorum(event.id) : null
     if (data) hub.publish(streamEvent(event.type, data))
   }
   return {

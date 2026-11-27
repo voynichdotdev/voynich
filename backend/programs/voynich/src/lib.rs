@@ -63,4 +63,6 @@ pub mod voynich {
     pub fn set_referral_config(ctx: Context<SetReferralConfig>, share_bps: u16, active: bool) -> Result<()> { handlers::set_referral_config(ctx, share_bps, active) }
     pub fn register_call_referral(ctx: Context<RegisterCallReferral>, referrer: Pubkey) -> Result<()> { handlers::register_call_referral(ctx, referrer) }
     pub fn claim_referral(ctx: Context<ClaimReferral>) -> Result<()> { handlers::claim_referral(ctx) }
+    pub fn open_quorum(ctx: Context<OpenQuorum>, nonce: u64, input_hash: [u8; 32], required_votes: u8, require_distinct_enclaves: bool) -> Result<()> { handlers::open_quorum(ctx, nonce, input_hash, required_votes, require_distinct_enclaves) }
+    pub fn finalize_quorum<'info>(ctx: Context<'_, '_, 'info, 'info, FinalizeQuorum<'info>>) -> Result<()> { handlers::finalize_quorum(ctx) }
 }

@@ -572,6 +572,33 @@ impl CallReferral {
     pub const SPACE: usize = 8 + 32 * 3 + 2 + 1 + 1;
 }
 
+pub const MIN_QUORUM_VOTES: u8 = 2;
+pub const MAX_QUORUM_VOTES: u8 = 5;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum QuorumStatus { Open, Agreed }
+
+#[account]
+pub struct Quorum {
+    pub model: Pubkey,
+    pub caller: Pubkey,
+    pub nonce: u64,
+    pub input_hash: [u8; 32],
+    pub required_votes: u8,
+    pub require_distinct_enclaves: bool,
+    pub status: QuorumStatus,
+    pub agreed_output_hash: [u8; 32],
+    pub vote_count: u8,
+    pub distinct_enclaves: u8,
+    pub receipts: [Pubkey; 5],
+    pub created_slot: u64,
+    pub finalized_slot: u64,
+    pub bump: u8,
+}
+impl Quorum {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 32 + 1 + 1 + 1 + 32 + 1 + 1 + 32 * 5 + 8 + 8 + 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1007,5 +1034,29 @@ mod tests {
         cr.try_serialize(&mut cr_buf).unwrap();
         assert_eq!(CallReferral::SPACE, 108);
         assert_eq!(cr_buf.len(), CallReferral::SPACE);
+    }
+
+    #[test]
+    fn worst_case_quorum_fits_within_space() {
+        let q = Quorum {
+            model: Pubkey::new_unique(),
+            caller: Pubkey::new_unique(),
+            nonce: u64::MAX,
+            input_hash: [0x11; 32],
+            required_votes: MAX_QUORUM_VOTES,
+            require_distinct_enclaves: true,
+            status: QuorumStatus::Agreed,
+            agreed_output_hash: [0x22; 32],
+            vote_count: MAX_QUORUM_VOTES,
+            distinct_enclaves: MAX_QUORUM_VOTES,
+            receipts: [Pubkey::new_unique(); 5],
+            created_slot: u64::MAX,
+            finalized_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut buf = Vec::new();
+        q.try_serialize(&mut buf).unwrap();
+        assert_eq!(Quorum::SPACE, 326);
+        assert_eq!(buf.len(), Quorum::SPACE);
     }
 }

@@ -878,6 +878,51 @@ export function createApply(attestationProgramId: string) {
           }
           break
         }
+        case 'quorumopened': {
+          const address = text(data, 'quorum')
+          const value = {
+            address,
+            modelAddress: text(data, 'model'),
+            caller: text(data, 'caller'),
+            nonce: text(data, 'nonce'),
+            inputHash: hex(data, 'inputHash'),
+            requiredVotes: number(data, 'requiredVotes'),
+            requireDistinctEnclaves: Boolean(data.requireDistinctEnclaves),
+            status: 'open' as const,
+            agreedOutputHash: null,
+            voteCount: 0,
+            distinctEnclaves: 0,
+            receipts: [] as unknown as Prisma.InputJsonValue,
+            createdSlot: slot(data, 'createdSlot'),
+            finalizedSlot: null,
+            updatedSlot: currentSlot,
+          }
+          await tx.quorum.upsert({ where: { address }, create: value, update: value })
+          await notify(tx, 'quorum.updated', address)
+          break
+        }
+        case 'quorumagreed': {
+          const address = text(data, 'quorum')
+          const voteCount = number(data, 'voteCount')
+          const allReceipts = ((data.receipts as string[]) ?? []).map(String).slice(0, voteCount)
+          const existing = await tx.quorum.findUnique({ where: { address } })
+          if (existing) {
+            await tx.quorum.update({
+              where: { address },
+              data: {
+                status: 'agreed',
+                agreedOutputHash: hex(data, 'agreedOutputHash'),
+                voteCount,
+                distinctEnclaves: number(data, 'distinctEnclaves'),
+                receipts: allReceipts as unknown as Prisma.InputJsonValue,
+                finalizedSlot: slot(data, 'finalizedSlot'),
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'quorum.updated', address)
+          }
+          break
+        }
       }
     }
   }

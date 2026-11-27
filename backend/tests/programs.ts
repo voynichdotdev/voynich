@@ -2898,4 +2898,121 @@ test('Voynich program flows on the supplied local validator', { timeout: 240_000
       /InvalidReferral/,
     )
   })
+
+  await t.test('Build 17 Step 1: Quorum PDA 2-of-2 multi-enclave consensus (distinct enclaves + repeatability mode + mismatch/duplicate rejections)', async () => {
+    const { QUORUM_SPACE, decodeQuorumAccount, quorumPda } = await import('../sdk/src/program.js')
+    await execute([
+      SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: owner.publicKey, lamports: 200_000_000 }),
+      SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: caller.publicKey, lamports: 200_000_000 }),
+    ], [])
+    await refresh(first)
+    await refresh(second)
+    const quorumModel = await createModel('quorum-model')
+    await uploadAndSeal(quorumModel)
+    await execute([await ownerGrant(quorumModel, first)], [owner])
+    await execute([await ownerGrant(quorumModel, second)], [owner])
+
+    const sharedInputHash = sha256(utf8('quorum-shared-input'))
+    const agreedOutputHash = sha256(utf8('quorum-agreed-output'))
+    const divergentOutputHash = sha256(utf8('quorum-divergent-output'))
+
+    const settleOnEnclave = async (enc: typeof first, inputHash: Uint8Array, outputHash: Uint8Array) => {
+      const cNonce = ++nonce
+      const cAddr = pda(voynich.programId, utf8('call'), caller.publicKey.toBytes(), u64le(cNonce))
+      await execute([await voynich.methods.openCall(bn(cNonce), [...inputHash], { sealed: {} }, null).accountsStrict({
+        payer: caller.publicKey, caller: caller.publicKey, config, model: quorumModel.address, enclave: enc.address,
+        attestationRecord: enc.record, grant: grantAddress(quorumModel, enc), call: cAddr,
+        mint: null, callerTokens: null, escrowTokens: null, tokenProgram: null, associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [caller])
+
+      const sig = signReceipt(enc.signing.secretKey.subarray(0, 32), cAddr.toBytes(), inputHash, outputHash)
+      const verifyIx = Ed25519Program.createInstructionWithPublicKey({
+        publicKey: enc.signing.publicKey.toBytes(),
+        message: receiptMessage(cAddr.toBytes(), inputHash, outputHash),
+        signature: sig,
+      })
+      const receiptAddr = pda(voynich.programId, utf8('receipt'), cAddr.toBytes())
+      const settleIx = await voynich.methods.settleCall([...outputHash], [...sig], 0, Buffer.alloc(0)).accountsStrict({
+        payer: admin.publicKey, config, model: quorumModel.address, enclave: enc.address, attestationRecord: enc.record,
+        call: cAddr, receipt: receiptAddr, caller: caller.publicKey, owner: owner.publicKey, operator: enc.operator.publicKey,
+        feeRecipient: feeRecipient.publicKey, instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        escrowTokens: null, ownerTokens: null, operatorTokens: null, protocolTokens: null, callerTokens: null, tokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()
+      await execute([verifyIx, settleIx], [])
+      return receiptAddr
+    }
+
+    const r1First = await settleOnEnclave(first, sharedInputHash, agreedOutputHash)
+    const r2Second = await settleOnEnclave(second, sharedInputHash, agreedOutputHash)
+    const r3FirstRepeat = await settleOnEnclave(first, sharedInputHash, agreedOutputHash)
+    const r4Divergent = await settleOnEnclave(second, sharedInputHash, divergentOutputHash)
+
+    // 1. Open strict 2-of-2 distinct-enclave Quorum
+    const qNonce1 = ++nonce
+    const qKey1 = quorumPda(quorumModel.address, caller.publicKey, qNonce1, voynich.programId)
+    await execute([await voynich.methods.openQuorum(bn(qNonce1), [...sharedInputHash], 2, true).accountsStrict({
+      caller: caller.publicKey,
+      model: quorumModel.address,
+      quorum: qKey1,
+      systemProgram: SystemProgram.programId,
+      ...events(voynich.programId),
+    }).instruction()], [caller])
+
+    const qInfo0 = await connection.getAccountInfo(qKey1, 'confirmed')
+    assert.equal(qInfo0?.data.length, QUORUM_SPACE)
+    const decQ0 = decodeQuorumAccount(qInfo0!.data)
+    assert.equal(decQ0.status, 'open')
+    assert.equal(decQ0.requiredVotes, 2)
+    assert.equal(decQ0.requireDistinctEnclaves, true)
+
+    const finalizeIx = (qAddr: PublicKey, receipts: PublicKey[]) =>
+      voynich.methods.finalizeQuorum().accountsStrict({
+        payer: admin.publicKey,
+        quorum: qAddr,
+        ...events(voynich.programId),
+      }).remainingAccounts(receipts.map(pubkey => ({ pubkey, isWritable: false, isSigner: false }))).instruction()
+
+    // 2. Reject duplicate enclave when require_distinct_enclaves = true -> InvalidQuorum
+    await assert.rejects(execute([await finalizeIx(qKey1, [r1First, r3FirstRepeat])], []), /InvalidQuorum/)
+
+    // 3. Reject mismatched output_hash -> InvalidQuorum
+    await assert.rejects(execute([await finalizeIx(qKey1, [r1First, r4Divergent])], []), /InvalidQuorum/)
+
+    // 4. Reject duplicate receipt key -> InvalidQuorum
+    await assert.rejects(execute([await finalizeIx(qKey1, [r1First, r1First])], []), /InvalidQuorum/)
+
+    // 5. Permissionless finalize with 2 distinct enclaves agreeing on output_hash succeeds!
+    await execute([await finalizeIx(qKey1, [r1First, r2Second])], [])
+    const decQ1 = decodeQuorumAccount((await connection.getAccountInfo(qKey1, 'confirmed'))!.data)
+    assert.equal(decQ1.status, 'agreed')
+    assert.equal(decQ1.voteCount, 2)
+    assert.equal(decQ1.distinctEnclaves, 2)
+    assert.equal(decQ1.agreedOutputHash, Buffer.from(agreedOutputHash).toString('hex'))
+    assert.equal(decQ1.receipts.length, 2)
+    assert(decQ1.receipts[0]!.equals(r1First))
+    assert(decQ1.receipts[1]!.equals(r2Second))
+
+    // 6. Double finalize rejected with InvalidQuorum
+    await assert.rejects(execute([await finalizeIx(qKey1, [r1First, r2Second])], []), /InvalidQuorum/)
+
+    // 7. Repeatability mode (require_distinct_enclaves = false) succeeds with 2 receipts from the same enclave
+    const qNonce2 = ++nonce
+    const qKey2 = quorumPda(quorumModel.address, caller.publicKey, qNonce2, voynich.programId)
+    await execute([await voynich.methods.openQuorum(bn(qNonce2), [...sharedInputHash], 2, false).accountsStrict({
+      caller: caller.publicKey,
+      model: quorumModel.address,
+      quorum: qKey2,
+      systemProgram: SystemProgram.programId,
+      ...events(voynich.programId),
+    }).instruction()], [caller])
+
+    await execute([await finalizeIx(qKey2, [r1First, r3FirstRepeat])], [])
+    const decQ2 = decodeQuorumAccount((await connection.getAccountInfo(qKey2, 'confirmed'))!.data)
+    assert.equal(decQ2.status, 'agreed')
+    assert.equal(decQ2.voteCount, 2)
+    assert.equal(decQ2.distinctEnclaves, 1)
+    assert.equal(decQ2.agreedOutputHash, Buffer.from(agreedOutputHash).toString('hex'))
+  })
 })

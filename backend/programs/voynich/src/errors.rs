@@ -41,4 +41,5 @@ pub enum VoynichError {
     #[msg("The benchmark name, dataset, score, or receipt proofs are invalid.")] InvalidBenchmark,
     #[msg("The pass plan or prepaid pass is invalid, inactive, expired, or exhausted.")] InvalidPass,
     #[msg("The referral config, call referral, or referral claim is invalid.")] InvalidReferral,
+    #[msg("The quorum configuration, status, or receipt consensus proofs are invalid.")] InvalidQuorum,
 }

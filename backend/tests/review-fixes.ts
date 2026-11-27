@@ -6961,3 +6961,183 @@ test('Build 16 Step 2: enclave buildReferralSettlementAccounts (SOL & SPL coexis
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 17 Step 1: Quorum PDA decoder, tx builders, schema validation, and fixture API + SDK openQuorum / finalizeQuorum / listQuorums flow', async () => {
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const {
+    FinalizeQuorumRequest, MAX_QUORUM_VOTES, MIN_QUORUM_VOTES, OpenQuorumRequest,
+  } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const {
+    QUORUM_SPACE, buildFinalizeQuorumTx, buildOpenQuorumTx, decodeQuorumAccount, quorumPda,
+  } = await import('../sdk/src/program.js')
+  const { createVoynich } = await import('voynich')
+  const { encryptCallInput, fromBase64, generateEncryptionKeyPair, sha256, toBase64, toHex, utf8 } = await import('voynich/crypto')
+  const { buildApp } = await import('../src/app.js')
+
+  assert.equal(MIN_QUORUM_VOTES, 2)
+  assert.equal(MAX_QUORUM_VOTES, 5)
+  assert.equal(QUORUM_SPACE, 326)
+
+  // 1. decodeQuorumAccount round-trip on a full 326-byte Quorum buffer
+  const modelKey = Keypair.generate().publicKey
+  const callerKey = Keypair.generate().publicKey
+  const r1 = Keypair.generate().publicKey
+  const r2 = Keypair.generate().publicKey
+  const inputHashBytes = sha256(utf8('quorum-decode-input'))
+  const outputHashBytes = sha256(utf8('quorum-decode-output'))
+  const qBuf = Buffer.alloc(QUORUM_SPACE)
+  Buffer.from(sha256(utf8('account:Quorum')).subarray(0, 8)).copy(qBuf, 0)
+  let off = 8
+  modelKey.toBuffer().copy(qBuf, off); off += 32
+  callerKey.toBuffer().copy(qBuf, off); off += 32
+  qBuf.writeBigUInt64LE(42n, off); off += 8
+  Buffer.from(inputHashBytes).copy(qBuf, off); off += 32
+  qBuf[off++] = 2 // required_votes
+  qBuf[off++] = 1 // require_distinct_enclaves = true
+  qBuf[off++] = 1 // status = Agreed
+  Buffer.from(outputHashBytes).copy(qBuf, off); off += 32
+  qBuf[off++] = 2 // vote_count
+  qBuf[off++] = 2 // distinct_enclaves
+  r1.toBuffer().copy(qBuf, off); off += 32
+  r2.toBuffer().copy(qBuf, off); off += 32
+  off += 32 * 3 // remaining 3 zero-filled slots of [Pubkey; 5]
+  qBuf.writeBigUInt64LE(474700001n, off); off += 8
+  qBuf.writeBigUInt64LE(474700010n, off); off += 8
+  qBuf[off++] = 251
+  assert.equal(off, QUORUM_SPACE)
+
+  const decQ = decodeQuorumAccount(qBuf)
+  assert(decQ.model.equals(modelKey))
+  assert(decQ.caller.equals(callerKey))
+  assert.equal(decQ.nonce.toString(), '42')
+  assert.equal(decQ.inputHash, toHex(inputHashBytes))
+  assert.equal(decQ.requiredVotes, 2)
+  assert.equal(decQ.requireDistinctEnclaves, true)
+  assert.equal(decQ.status, 'agreed')
+  assert.equal(decQ.agreedOutputHash, toHex(outputHashBytes))
+  assert.equal(decQ.voteCount, 2)
+  assert.equal(decQ.distinctEnclaves, 2)
+  assert.equal(decQ.receipts.length, 2)
+  assert(decQ.receipts[0]!.equals(r1))
+  assert(decQ.receipts[1]!.equals(r2))
+  assert.equal(decQ.createdSlot.toString(), '474700001')
+  assert.equal(decQ.finalizedSlot.toString(), '474700010')
+  assert.equal(decQ.bump, 251)
+
+  // 2. Offline tx builders & schema validation
+  const dummyConn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const bh = Keypair.generate().publicKey.toBase58()
+  const qKey = quorumPda(modelKey, callerKey, 42n)
+  assert.equal((await buildOpenQuorumTx({
+    connection: dummyConn,
+    caller: callerKey,
+    model: modelKey,
+    nonce: 42n,
+    inputHash: inputHashBytes,
+    requiredVotes: 2,
+    requireDistinctEnclaves: true,
+    recentBlockhash: bh,
+  })).message.compiledInstructions.length, 1)
+  assert.equal((await buildFinalizeQuorumTx({
+    connection: dummyConn,
+    payer: callerKey,
+    quorum: qKey,
+    receipts: [r1, r2],
+    recentBlockhash: bh,
+  })).message.compiledInstructions.length, 1)
+
+  assert.equal(OpenQuorumRequest.safeParse({ wallet: callerKey.toBase58(), inputHash: toHex(inputHashBytes), requiredVotes: 1 }).success, false)
+  assert.equal(OpenQuorumRequest.safeParse({ wallet: callerKey.toBase58(), inputHash: toHex(inputHashBytes), requiredVotes: 6 }).success, false)
+  assert.equal(OpenQuorumRequest.safeParse({ wallet: callerKey.toBase58(), inputHash: '00'.repeat(32), requiredVotes: 2 }).success, false)
+  assert.equal(FinalizeQuorumRequest.safeParse({ wallet: callerKey.toBase58(), receipts: [r1.toBase58()] }).success, false)
+
+  // 3. Fixture API + SDK openQuorum -> settle 2 open calls with identical inputHash & outputHash -> finalizeQuorum -> listQuorums / listModelQuorums / quorum
+  const app = buildApp()
+  const sessionHeaders = { 'X-Fixture-Session': 'quorum-test-session' }
+  const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', 'quorum-test-session')
+    return app.request(new Request(req, { headers }))
+  }) as typeof fetch
+  const callerSigner = {
+    publicKey: new PublicKey(FIXTURE.caller),
+    async signTransaction(vtx: import('@solana/web3.js').VersionedTransaction) { return vtx },
+  }
+  const sdk = createVoynich({ apiUrl: 'http://localhost', signer: callerSigner, fetch: fetchFixture, pollMs: 5 })
+
+  const enclaveDetail = await sdk.enclave(FIXTURE.enclave)
+  const sharedReply = generateEncryptionKeyPair()
+  const sharedEnv = encryptCallInput(
+    utf8(JSON.stringify({ input: new Array<number>(784).fill(0), outputPublicKey: toBase64(sharedReply.publicKey) })),
+    fromBase64(enclaveDetail.enclave.encryptionKey),
+  )
+  const sharedInputHash = toHex(sha256(sharedEnv))
+
+  // Settle 2 fixture open calls sharing the exact same encrypted envelope (so inputHash and open outputHash match)
+  const settleSharedCall = async () => {
+    const openRes = await app.request('http://localhost/v1/calls/build', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...sessionHeaders },
+      body: JSON.stringify({
+        wallet: FIXTURE.caller,
+        model: FIXTURE.model,
+        enclave: FIXTURE.enclave,
+        inputHash: sharedInputHash,
+        answerMode: 'open',
+      }),
+    })
+    assert.equal(openRes.status, 200)
+    const build = await openRes.json() as { id: string; transactionBase64: string; addresses: { call: string } }
+    const subRes = await app.request('http://localhost/v1/transactions/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...sessionHeaders },
+      body: JSON.stringify({ mode: 'relay', buildId: build.id, signedTransactionBase64: build.transactionBase64, idempotencyKey: build.id }),
+    })
+    assert.equal(subRes.status, 200)
+    const relayRes = await app.request(`http://localhost/v1/calls/${build.addresses.call}/input`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...sessionHeaders },
+      body: JSON.stringify({ envelope: toBase64(sharedEnv) }),
+    })
+    assert.equal(relayRes.status, 200)
+    const answer = await (await app.request(`http://localhost/v1/calls/${build.addresses.call}/answer`, { headers: sessionHeaders })).json() as { receiptAddress: string; outputHash: string }
+    return answer
+  }
+
+  const a1 = await settleSharedCall()
+  const a2 = await settleSharedCall()
+  assert.equal(a1.outputHash, a2.outputHash)
+
+  // Open quorum with requireDistinctEnclaves: true -> finalizing with 2 receipts from the same fixture enclave must fail 422
+  const strictQ = await sdk.openQuorum('sketch-32', {
+    inputHash: sharedInputHash,
+    requiredVotes: 2,
+    requireDistinctEnclaves: true,
+  })
+  assert.equal(strictQ.status, 'open')
+  await assert.rejects(() => sdk.finalizeQuorum(strictQ.address, [a1.receiptAddress, a2.receiptAddress]), /distinct enclaves/)
+
+  // Open quorum with requireDistinctEnclaves: false (repeatability mode) -> finalizes cleanly
+  const repeatQ = await sdk.openQuorum('sketch-32', {
+    inputHash: sharedInputHash,
+    requiredVotes: 2,
+    requireDistinctEnclaves: false,
+  })
+  assert.equal(repeatQ.status, 'open')
+  const finalized = await sdk.finalizeQuorum(repeatQ.address, [a1.receiptAddress, a2.receiptAddress])
+  assert.equal(finalized.quorum.status, 'agreed')
+  assert.equal(finalized.quorum.voteCount, 2)
+  assert.equal(finalized.quorum.distinctEnclaves, 1)
+  assert.equal(finalized.quorum.agreedOutputHash, a1.outputHash)
+  assert.deepEqual(finalized.quorum.receipts, [a1.receiptAddress, a2.receiptAddress])
+
+  const fetched = await sdk.quorum(repeatQ.address)
+  assert.equal(fetched.status, 'agreed')
+  const byModel = await sdk.listModelQuorums('sketch-32')
+  assert.equal(byModel.items.filter(q => q.status === 'agreed').length, 1)
+  assert.equal(byModel.items.find(q => q.status === 'agreed')!.address, repeatQ.address)
+  const allQuorums = await sdk.listQuorums({ caller: FIXTURE.caller })
+  assert.equal(allQuorums.items.length, 2)
+})

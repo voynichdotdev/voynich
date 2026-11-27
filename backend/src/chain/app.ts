@@ -108,6 +108,7 @@ export function buildChainApp(runtime: ChainRuntime) {
     '/v1/models/:id/benchmarks/build',
     '/v1/models/:id/pass-plan/build',
     '/v1/models/:id/referral/build', '/v1/models/:id/referral/claim/build',
+    '/v1/models/:id/quorums/build', '/v1/quorums/:address/finalize/build',
     '/v1/passes/buy/build', '/v1/passes/call/build', '/v1/passes/close/build',
     '/v1/models/:id/versions/build', '/v1/models/:id/versions/publish/build',
     '/v1/enclaves/:key/quote/build',
@@ -130,6 +131,9 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/models/:id/pass-plan', async c => c.json(await read.modelPassPlan(readParam(c, 'id', s.ModelId))))
   app.get('/v1/models/:id/referral', async c => c.json(await read.modelReferral(readParam(c, 'id', s.ModelId))))
   app.get('/v1/accounts/:wallet/referrals', async c => c.json(await read.accountReferrals(readParam(c, 'wallet', s.Address))))
+  app.get('/v1/quorums', async c => c.json(await read.quorums(readQuery(c, s.QuorumQuery))))
+  app.get('/v1/models/:id/quorums', async c => c.json(await read.modelQuorums(readParam(c, 'id', s.ModelId), readQuery(c, s.PageQuery))))
+  app.get('/v1/quorums/:address', async c => c.json(await read.quorum(readParam(c, 'address', s.Address))))
   app.get('/v1/accounts/:wallet/passes', async c => c.json(await read.accountPasses(readParam(c, 'wallet', s.Address))))
   app.get('/v1/passes/:address', async c => c.json(await read.pass(readParam(c, 'address', s.Address))))
   app.get('/v1/models/:id/versions', async c => c.json(await read.modelVersions(readParam(c, 'id', s.ModelId))))
@@ -345,6 +349,8 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/models/:id/pass-plan/build', async c => c.json(await build.setPassPlan(readParam(c, 'id', s.ModelId), await readJson(c, s.SetPassPlanRequest))))
   app.post('/v1/models/:id/referral/build', async c => c.json(await build.setReferralConfig(readParam(c, 'id', s.ModelId), await readJson(c, s.SetReferralConfigRequest))))
   app.post('/v1/models/:id/referral/claim/build', async c => c.json(await build.claimReferral(readParam(c, 'id', s.ModelId), await readJson(c, s.ClaimReferralRequest))))
+  app.post('/v1/models/:id/quorums/build', async c => c.json(await build.openQuorum(readParam(c, 'id', s.ModelId), await readJson(c, s.OpenQuorumRequest))))
+  app.post('/v1/quorums/:address/finalize/build', async c => c.json(await build.finalizeQuorum(readParam(c, 'address', s.Address), await readJson(c, s.FinalizeQuorumRequest))))
   app.post('/v1/passes/buy/build', async c => c.json(await build.buyPass(await readJson(c, s.BuyPassRequest))))
   app.post('/v1/passes/call/build', async c => c.json(await build.openPassCall(await readJson(c, s.OpenPassCallRequest))))
   app.post('/v1/passes/close/build', async c => c.json(await build.closePass(await readJson(c, s.ClosePassRequest))))

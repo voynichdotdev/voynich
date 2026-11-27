@@ -180,6 +180,25 @@ export function buildApp() {
     const items = [...state.referrals.values()].filter(r => r.referrer === wallet)
     return c.json({ items, asOf: new Date().toISOString() })
   })
+  app.get('/v1/quorums', c => {
+    const state = c.get('fixture'); const q = readQuery(c, s.QuorumQuery, queryKeys)
+    let items = [...state.quorums.values()]
+    if (q.model) items = items.filter(item => item.model === q.model || item.modelName === q.model)
+    if (q.caller) items = items.filter(item => item.caller === q.caller)
+    if (q.status) items = items.filter(item => item.status === q.status)
+    return c.json(s.paginate(items, q))
+  })
+  app.get('/v1/models/:id/quorums', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const q = readQuery(c, s.PageQuery, queryKeys)
+    const items = [...state.quorums.values()].filter(item => item.model === model.address)
+    return c.json(s.paginate(items, q))
+  })
+  app.get('/v1/quorums/:address', c => {
+    const state = c.get('fixture'); const address = readParam(c, 'address', s.Address)
+    const item = state.quorums.get(address)
+    if (!item) fail('QUORUM_NOT_FOUND', 'This quorum was not found.')
+    return c.json(item)
+  })
   app.get('/v1/calls/:id', c => c.json(c.get('fixture').call(readParam(c, 'id', s.Address))))
   app.get('/v1/bounties', c => {
     const state = c.get('fixture'); const q = readQuery(c, s.BountyQuery, queryKeys)
@@ -960,6 +979,65 @@ export function buildApp() {
       row.claimable = '0'
       row.updatedSlot = String(state.slot)
       state.emit('referral.updated', row)
+    }))
+  })
+  app.post('/v1/models/:id/quorums/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.OpenQuorumRequest)
+    const nonce = body.nonce ?? String(Date.now())
+    const address = fixtureAddress(`quorum:${model.address}:${body.wallet}:${nonce}`)
+    const next: s.QuorumRecord = {
+      address,
+      model: model.address,
+      modelName: model.name,
+      caller: body.wallet,
+      nonce,
+      inputHash: body.inputHash,
+      requiredVotes: body.requiredVotes,
+      requireDistinctEnclaves: body.requireDistinctEnclaves ?? true,
+      status: 'open',
+      agreedOutputHash: null,
+      voteCount: 0,
+      distinctEnclaves: 0,
+      receipts: [],
+      createdSlot: String(state.slot),
+      finalizedSlot: null,
+      updatedSlot: String(state.slot),
+    }
+    return c.json(state.build('open_quorum', [body.wallet], { model: model.address, quorum: address }, () => {
+      state.quorums.set(address, next)
+      state.emit('quorum.updated', next)
+    }))
+  })
+  app.post('/v1/quorums/:address/finalize/build', async c => {
+    const state = c.get('fixture'); const address = readParam(c, 'address', s.Address); const body = await readJson(c, s.FinalizeQuorumRequest)
+    const row = state.quorums.get(address)
+    if (!row) fail('QUORUM_NOT_FOUND', 'This quorum was not found.')
+    if (row.status !== 'open') fail('INVALID_QUORUM', 'This quorum has already reached agreement.', { stage: 'build' })
+    if (body.receipts.length < row.requiredVotes) fail('INVALID_QUORUM', 'Not enough receipts supplied for quorum.', { stage: 'build' })
+    const matched = body.receipts.map(rAddr => {
+      const r = state.receipts.find(item => item.address === rAddr)
+      if (!r || r.model !== row.model || r.inputHash !== row.inputHash) {
+        fail('INVALID_QUORUM', 'A cited receipt does not match this quorum model or input hash.', { stage: 'build' })
+      }
+      return r
+    })
+    const agreedOutputHash = matched[0]!.outputHash
+    if (matched.some(r => r.outputHash !== agreedOutputHash)) {
+      fail('INVALID_QUORUM', 'Cited receipts do not agree on the same output hash.', { stage: 'build' })
+    }
+    const distinctEnclaves = new Set(matched.map(r => r.enclave)).size
+    if (row.requireDistinctEnclaves && distinctEnclaves < row.requiredVotes) {
+      fail('INVALID_QUORUM', 'Quorum requires distinct enclaves for each vote.', { stage: 'build' })
+    }
+    return c.json(state.build('finalize_quorum', [body.wallet], { model: row.model, quorum: row.address }, () => {
+      row.status = 'agreed'
+      row.agreedOutputHash = agreedOutputHash
+      row.voteCount = matched.length
+      row.distinctEnclaves = distinctEnclaves
+      row.receipts = [...body.receipts]
+      row.finalizedSlot = String(state.slot)
+      row.updatedSlot = String(state.slot)
+      state.emit('quorum.updated', row)
     }))
   })
   return app

@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BENCHMARK_SPACE, BN, BOND_SPACE, CALL_REFERRAL_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, PASS_PLAN_SPACE, PASS_SPACE, POLICY_SPACE, RECEIPT_METERED_SPACE, REFERRAL_CONFIG_SPACE, REFERRAL_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeCallReferralAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePassAccount, decodePassPlanAccount, decodePolicyAccount, decodeReferralAccount, decodeReferralConfigAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BENCHMARK_SPACE, BN, BOND_SPACE, CALL_REFERRAL_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, PASS_PLAN_SPACE, PASS_SPACE, POLICY_SPACE, QUORUM_SPACE, RECEIPT_METERED_SPACE, REFERRAL_CONFIG_SPACE, REFERRAL_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeCallReferralAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePassAccount, decodePassPlanAccount, decodePolicyAccount, decodeQuorumAccount, decodeReferralAccount, decodeReferralConfigAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -1278,6 +1278,46 @@ export function builders(runtime: ChainRuntime) {
           .instruction(),
       )
       return ledger.build('claim_referral', payer, instructions, { model: row.key.toBase58(), referral: referral.toBase58() }, requiredLamports)
+    },
+    async openQuorum(id: string, body: c.OpenQuorumRequest) {
+      const row = await model(id)
+      const caller = publicKey(body.wallet)
+      const nonce = body.nonce !== undefined ? BigInt(body.nonce) : randomBytes(8).readBigUInt64LE(0)
+      const quorum = a.quorum(row.key, caller, nonce)
+      const rent = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(QUORUM_SPACE))
+      const instruction = await voynich.methods
+        .openQuorum(bn(nonce), [...fromHex(body.inputHash)], body.requiredVotes, body.requireDistinctEnclaves ?? true)
+        .accountsStrict({
+          caller,
+          model: row.key,
+          quorum,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .instruction()
+      return ledger.build('open_quorum', caller, [instruction], { model: row.key.toBase58(), quorum: quorum.toBase58() }, rent)
+    },
+    async finalizeQuorum(address: string, body: c.FinalizeQuorumRequest) {
+      const payer = publicKey(body.wallet)
+      const quorumKey = publicKey(address)
+      const info = await runtime.rpc.connection.getAccountInfo(quorumKey, 'confirmed')
+      const chainQuorum = info && info.owner.equals(runtime.programId) ? decodeQuorumAccount(info.data) : null
+      if (!chainQuorum) fail('QUORUM_NOT_FOUND', 'This quorum was not found.')
+      if (chainQuorum.status !== 'open') fail('INVALID_QUORUM', 'This quorum has already reached agreement.', { stage: 'build' })
+      if (body.receipts.length < chainQuorum.requiredVotes) {
+        fail('INVALID_QUORUM', `Supply at least ${chainQuorum.requiredVotes} receipts to finalize this quorum.`, { stage: 'build' })
+      }
+      const receiptKeys = body.receipts.map(publicKey)
+      const instruction = await voynich.methods
+        .finalizeQuorum()
+        .accountsStrict({
+          payer,
+          quorum: quorumKey,
+          ...events,
+        })
+        .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
+        .instruction()
+      return ledger.build('finalize_quorum', payer, [instruction], { model: chainQuorum.model.toBase58(), quorum: quorumKey.toBase58() }, 0n)
     },
   }
 }

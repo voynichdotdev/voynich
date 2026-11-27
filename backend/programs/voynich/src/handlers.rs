@@ -2197,6 +2197,115 @@ pub fn claim_referral(ctx: Context<ClaimReferral>) -> Result<()> {
     Ok(())
 }
 
+pub fn open_quorum(
+    ctx: Context<OpenQuorum>,
+    nonce: u64,
+    input_hash: [u8; 32],
+    required_votes: u8,
+    require_distinct_enclaves: bool,
+) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    require!(required_votes >= MIN_QUORUM_VOTES && required_votes <= MAX_QUORUM_VOTES, VoynichError::InvalidQuorum);
+    require!(input_hash != [0u8; 32], VoynichError::InvalidQuorum);
+    let quorum = &mut ctx.accounts.quorum;
+    quorum.model = ctx.accounts.model.key();
+    quorum.caller = ctx.accounts.caller.key();
+    quorum.nonce = nonce;
+    quorum.input_hash = input_hash;
+    quorum.required_votes = required_votes;
+    quorum.require_distinct_enclaves = require_distinct_enclaves;
+    quorum.status = QuorumStatus::Open;
+    quorum.agreed_output_hash = [0u8; 32];
+    quorum.vote_count = 0;
+    quorum.distinct_enclaves = 0;
+    quorum.receipts = [Pubkey::default(); 5];
+    quorum.created_slot = slot;
+    quorum.finalized_slot = 0;
+    quorum.bump = ctx.bumps.quorum;
+    emit_cpi!(QuorumOpened {
+        quorum: quorum.key(),
+        model: quorum.model,
+        caller: quorum.caller,
+        nonce: quorum.nonce,
+        input_hash: quorum.input_hash,
+        required_votes: quorum.required_votes,
+        require_distinct_enclaves: quorum.require_distinct_enclaves,
+        created_slot: quorum.created_slot,
+    });
+    Ok(())
+}
+
+pub fn finalize_quorum<'info>(ctx: Context<'_, '_, 'info, 'info, FinalizeQuorum<'info>>) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let quorum = &mut ctx.accounts.quorum;
+    require!(quorum.status == QuorumStatus::Open, VoynichError::InvalidQuorum);
+    let remaining = ctx.remaining_accounts;
+    let count = remaining.len();
+    require!(
+        count >= usize::from(quorum.required_votes) && count <= usize::from(MAX_QUORUM_VOTES),
+        VoynichError::InvalidQuorum
+    );
+
+    let mut receipts = [Pubkey::default(); 5];
+    let mut seen_enclaves = [Pubkey::default(); 5];
+    let mut distinct_enclaves: usize = 0;
+    let mut agreed_output_hash = [0u8; 32];
+
+    for (i, acc) in remaining.iter().enumerate() {
+        let key = acc.key();
+        require!(*acc.owner == crate::ID, VoynichError::InvalidQuorum);
+        for prev in &receipts[..i] {
+            require!(*prev != key, VoynichError::InvalidQuorum);
+        }
+        let data = acc.try_borrow_data()?;
+        require!(data.len() >= 168, VoynichError::InvalidQuorum);
+        require!(&data[..8] == Receipt::DISCRIMINATOR, VoynichError::InvalidQuorum);
+        let (expected_pda, _) = Pubkey::find_program_address(&[b"receipt", &data[8..40]], &crate::ID);
+        require_keys_eq!(key, expected_pda, VoynichError::InvalidQuorum);
+        let receipt_model = Pubkey::try_from(&data[40..72]).map_err(|_| error!(VoynichError::InvalidQuorum))?;
+        require_keys_eq!(receipt_model, quorum.model, VoynichError::InvalidQuorum);
+        let receipt_enclave = Pubkey::try_from(&data[72..104]).map_err(|_| error!(VoynichError::InvalidQuorum))?;
+        require!(&data[104..136] == &quorum.input_hash, VoynichError::InvalidQuorum);
+        let mut out_hash = [0u8; 32];
+        out_hash.copy_from_slice(&data[136..168]);
+        if i == 0 {
+            agreed_output_hash = out_hash;
+        } else {
+            require!(out_hash == agreed_output_hash, VoynichError::InvalidQuorum);
+        }
+        receipts[i] = key;
+        if !seen_enclaves[..distinct_enclaves].contains(&receipt_enclave) {
+            seen_enclaves[distinct_enclaves] = receipt_enclave;
+            distinct_enclaves += 1;
+        }
+    }
+
+    if quorum.require_distinct_enclaves {
+        require!(distinct_enclaves >= usize::from(quorum.required_votes), VoynichError::InvalidQuorum);
+    }
+
+    quorum.agreed_output_hash = agreed_output_hash;
+    quorum.vote_count = count as u8;
+    quorum.distinct_enclaves = distinct_enclaves as u8;
+    quorum.receipts = receipts;
+    quorum.status = QuorumStatus::Agreed;
+    quorum.finalized_slot = slot;
+
+    emit_cpi!(QuorumAgreed {
+        quorum: quorum.key(),
+        model: quorum.model,
+        caller: quorum.caller,
+        input_hash: quorum.input_hash,
+        agreed_output_hash: quorum.agreed_output_hash,
+        vote_count: quorum.vote_count,
+        distinct_enclaves: quorum.distinct_enclaves,
+        receipts: quorum.receipts,
+        finalized_slot: quorum.finalized_slot,
+        status: QuorumStatus::Agreed,
+    });
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

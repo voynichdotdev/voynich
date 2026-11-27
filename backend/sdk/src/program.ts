@@ -81,6 +81,11 @@ export function referralPda(model: Key, referrer: Key, programId: Key = PROGRAM_
 export function callReferralPda(call: Key, programId: Key = PROGRAM_ID): PublicKey {
   return pda(key(programId), utf8('call-referral'), key(call).toBytes())
 }
+export function quorumPda(model: Key, caller: Key, nonce: bigint | number | string, programId: Key = PROGRAM_ID): PublicKey {
+  const bytes = new Uint8Array(8)
+  new DataView(bytes.buffer).setBigUint64(0, BigInt(nonce), true)
+  return pda(key(programId), utf8('quorum'), key(model).toBytes(), key(caller).toBytes(), bytes)
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -102,6 +107,7 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     referralConfig: (model: Key) => referralConfigPda(model, programId),
     referral: (model: Key, referrer: Key) => referralPda(model, referrer, programId),
     callReferral: (call: Key) => callReferralPda(call, programId),
+    quorum: (model: Key, caller: Key, nonce: bigint | number | string) => quorumPda(model, caller, nonce, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -1799,6 +1805,125 @@ export async function buildClaimReferralTx(params: {
       systemProgram: SystemProgram.programId,
       ...eventAccounts(programId),
     })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: payer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export const MIN_QUORUM_VOTES = 2 as const
+export const MAX_QUORUM_VOTES = 5 as const
+export const QUORUM_SPACE = 326 as const
+
+export type DecodedQuorumAccount = {
+  model: PublicKey
+  caller: PublicKey
+  nonce: BN
+  inputHash: string
+  requiredVotes: number
+  requireDistinctEnclaves: boolean
+  status: 'open' | 'agreed'
+  agreedOutputHash: string | null
+  voteCount: number
+  distinctEnclaves: number
+  receipts: PublicKey[]
+  createdSlot: BN
+  finalizedSlot: BN
+  bump: number
+}
+
+export function decodeQuorumAccount(data: Uint8Array): DecodedQuorumAccount {
+  if (!matchesDisc(data, 'account:Quorum') || data.length < QUORUM_SPACE) {
+    throw new Error('Invalid Quorum account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const caller = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const nonce = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const inputHash = toHex(data.subarray(offset, offset + 32)); offset += 32
+  const requiredVotes = data[offset++]!
+  const distinctByte = data[offset++]!
+  if (distinctByte > 1) throw new Error(`Invalid Quorum requireDistinctEnclaves flag: ${distinctByte}`)
+  const requireDistinctEnclaves = distinctByte === 1
+  const statusByte = data[offset++]!
+  if (statusByte > 1) throw new Error(`Invalid Quorum status: ${statusByte}`)
+  const status = statusByte === 0 ? 'open' : 'agreed'
+  const outBytes = data.subarray(offset, offset + 32); offset += 32
+  const agreedOutputHash = status === 'agreed' ? toHex(outBytes) : null
+  const voteCount = data[offset++]!
+  const distinctEnclaves = data[offset++]!
+  const allReceipts: PublicKey[] = []
+  for (let i = 0; i < 5; i++) {
+    allReceipts.push(new PublicKey(data.subarray(offset, offset + 32)))
+    offset += 32
+  }
+  const receipts = allReceipts.slice(0, Math.min(voteCount, 5))
+  const createdSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const finalizedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const bump = data[offset++]!
+  return {
+    model, caller, nonce, inputHash, requiredVotes, requireDistinctEnclaves,
+    status, agreedOutputHash, voteCount, distinctEnclaves, receipts,
+    createdSlot, finalizedSlot, bump,
+  }
+}
+
+export async function buildOpenQuorumTx(params: {
+  connection: Connection
+  caller: Key
+  model: Key
+  nonce: bigint | number | string
+  inputHash: string | Uint8Array
+  requiredVotes: number
+  requireDistinctEnclaves?: boolean
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const caller = key(params.caller)
+  const model = key(params.model)
+  const quorum = quorumPda(model, caller, params.nonce, programId)
+  const hashBytes = typeof params.inputHash === 'string' ? fromHex(params.inputHash) : params.inputHash
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .openQuorum(new BN(String(params.nonce)), [...hashBytes], params.requiredVotes, params.requireDistinctEnclaves ?? true)
+    .accountsStrict({
+      caller,
+      model,
+      quorum,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: caller, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildFinalizeQuorumTx(params: {
+  connection: Connection
+  payer: Key
+  quorum: Key
+  receipts: Key[]
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const payer = key(params.payer)
+  const quorum = key(params.quorum)
+  const receiptKeys = params.receipts.map(key)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .finalizeQuorum()
+    .accountsStrict({
+      payer,
+      quorum,
+      ...eventAccounts(programId),
+    })
+    .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
     .instruction()
   const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
   return new VersionedTransaction(

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PassStatus, PriceUnit, SessionStatus, SplitRecipient};
+use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PassStatus, PriceUnit, QuorumStatus, SessionStatus, SplitRecipient};
 
 #[event]
 pub struct ConfigChanged { pub admin: Pubkey, pub config: ConfigArgs }
@@ -148,4 +148,16 @@ pub struct ReferralCredited {
 pub struct ReferralClaimed {
     pub referral: Pubkey, pub model: Pubkey, pub referrer: Pubkey, pub mint: Pubkey,
     pub amount: u64, pub total_claimed: u64, pub slot: u64,
+}
+#[event]
+pub struct QuorumOpened {
+    pub quorum: Pubkey, pub model: Pubkey, pub caller: Pubkey, pub nonce: u64,
+    pub input_hash: [u8; 32], pub required_votes: u8, pub require_distinct_enclaves: bool,
+    pub created_slot: u64,
+}
+#[event]
+pub struct QuorumAgreed {
+    pub quorum: Pubkey, pub model: Pubkey, pub caller: Pubkey, pub input_hash: [u8; 32],
+    pub agreed_output_hash: [u8; 32], pub vote_count: u8, pub distinct_enclaves: u8,
+    pub receipts: [Pubkey; 5], pub finalized_slot: u64, pub status: QuorumStatus,
 }

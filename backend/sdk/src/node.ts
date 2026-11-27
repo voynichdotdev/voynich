@@ -75,6 +75,11 @@ const voynich = {
   setReferralConfig: async (...args: Parameters<Voynich['setReferralConfig']>) => (await load(true)).setReferralConfig(...args),
   listReferrals: async (...args: Parameters<Voynich['listReferrals']>) => (await load(args[0] === undefined)).listReferrals(...args),
   claimReferral: async (...args: Parameters<Voynich['claimReferral']>) => (await load(true)).claimReferral(...args),
+  listQuorums: async (...args: Parameters<Voynich['listQuorums']>) => (await load()).listQuorums(...args),
+  listModelQuorums: async (...args: Parameters<Voynich['listModelQuorums']>) => (await load()).listModelQuorums(...args),
+  quorum: async (...args: Parameters<Voynich['quorum']>) => (await load()).quorum(...args),
+  openQuorum: async (...args: Parameters<Voynich['openQuorum']>) => (await load(true)).openQuorum(...args),
+  finalizeQuorum: async (...args: Parameters<Voynich['finalizeQuorum']>) => (await load(true)).finalizeQuorum(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

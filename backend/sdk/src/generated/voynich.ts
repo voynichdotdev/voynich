@@ -1202,6 +1202,93 @@ export type Voynich = {
       "args": []
     },
     {
+      "name": "finalizeQuorum",
+      "discriminator": [
+        150,
+        75,
+        200,
+        115,
+        28,
+        182,
+        119,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "quorum",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  111,
+                  114,
+                  117,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "quorum.model",
+                "account": "quorum"
+              },
+              {
+                "kind": "account",
+                "path": "quorum.caller",
+                "account": "quorum"
+              },
+              {
+                "kind": "account",
+                "path": "quorum.nonce",
+                "account": "quorum"
+              }
+            ]
+          }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "grantByEnclave",
       "discriminator": [
         224,
@@ -2514,6 +2601,138 @@ export type Voynich = {
               }
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "openQuorum",
+      "discriminator": [
+        68,
+        152,
+        20,
+        158,
+        59,
+        106,
+        208,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "quorum",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  111,
+                  114,
+                  117,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "caller"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "inputHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "requiredVotes",
+          "type": "u8"
+        },
+        {
+          "name": "requireDistinctEnclaves",
+          "type": "bool"
         }
       ]
     },
@@ -6432,6 +6651,19 @@ export type Voynich = {
       ]
     },
     {
+      "name": "quorum",
+      "discriminator": [
+        151,
+        29,
+        197,
+        108,
+        233,
+        147,
+        92,
+        231
+      ]
+    },
+    {
       "name": "receipt",
       "discriminator": [
         39,
@@ -6850,6 +7082,32 @@ export type Voynich = {
       ]
     },
     {
+      "name": "quorumAgreed",
+      "discriminator": [
+        167,
+        237,
+        231,
+        36,
+        197,
+        67,
+        137,
+        195
+      ]
+    },
+    {
+      "name": "quorumOpened",
+      "discriminator": [
+        215,
+        57,
+        124,
+        14,
+        212,
+        167,
+        58,
+        175
+      ]
+    },
+    {
       "name": "rangeSealed",
       "discriminator": [
         134,
@@ -7201,6 +7459,11 @@ export type Voynich = {
       "code": 6038,
       "name": "invalidReferral",
       "msg": "The referral config, call referral, or referral claim is invalid."
+    },
+    {
+      "code": 6039,
+      "name": "invalidQuorum",
+      "msg": "The quorum configuration, status, or receipt consensus proofs are invalid."
     }
   ],
   "types": [
@@ -9852,6 +10115,215 @@ export type Voynich = {
       }
     },
     {
+      "name": "quorum",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "inputHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "requiredVotes",
+            "type": "u8"
+          },
+          {
+            "name": "requireDistinctEnclaves",
+            "type": "bool"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "quorumStatus"
+              }
+            }
+          },
+          {
+            "name": "agreedOutputHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "voteCount",
+            "type": "u8"
+          },
+          {
+            "name": "distinctEnclaves",
+            "type": "u8"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "array": [
+                "pubkey",
+                5
+              ]
+            }
+          },
+          {
+            "name": "createdSlot",
+            "type": "u64"
+          },
+          {
+            "name": "finalizedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "quorumAgreed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quorum",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "inputHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "agreedOutputHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "voteCount",
+            "type": "u8"
+          },
+          {
+            "name": "distinctEnclaves",
+            "type": "u8"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "array": [
+                "pubkey",
+                5
+              ]
+            }
+          },
+          {
+            "name": "finalizedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "quorumStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "quorumOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quorum",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "inputHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "requiredVotes",
+            "type": "u8"
+          },
+          {
+            "name": "requireDistinctEnclaves",
+            "type": "bool"
+          },
+          {
+            "name": "createdSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "quorumStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "open"
+          },
+          {
+            "name": "agreed"
+          }
+        ]
+      }
+    },
+    {
       "name": "rangeSealed",
       "type": {
         "kind": "struct",
@@ -11879,6 +12351,93 @@ export const IDL: Voynich = {
       "args": []
     },
     {
+      "name": "finalize_quorum",
+      "discriminator": [
+        150,
+        75,
+        200,
+        115,
+        28,
+        182,
+        119,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "quorum",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  111,
+                  114,
+                  117,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "quorum.model",
+                "account": "Quorum"
+              },
+              {
+                "kind": "account",
+                "path": "quorum.caller",
+                "account": "Quorum"
+              },
+              {
+                "kind": "account",
+                "path": "quorum.nonce",
+                "account": "Quorum"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "grant_by_enclave",
       "discriminator": [
         224,
@@ -13191,6 +13750,138 @@ export const IDL: Voynich = {
               }
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "open_quorum",
+      "discriminator": [
+        68,
+        152,
+        20,
+        158,
+        59,
+        106,
+        208,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "quorum",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  111,
+                  114,
+                  117,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "caller"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "input_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "required_votes",
+          "type": "u8"
+        },
+        {
+          "name": "require_distinct_enclaves",
+          "type": "bool"
         }
       ]
     },
@@ -17109,6 +17800,19 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "Quorum",
+      "discriminator": [
+        151,
+        29,
+        197,
+        108,
+        233,
+        147,
+        92,
+        231
+      ]
+    },
+    {
       "name": "Receipt",
       "discriminator": [
         39,
@@ -17527,6 +18231,32 @@ export const IDL: Voynich = {
       ]
     },
     {
+      "name": "QuorumAgreed",
+      "discriminator": [
+        167,
+        237,
+        231,
+        36,
+        197,
+        67,
+        137,
+        195
+      ]
+    },
+    {
+      "name": "QuorumOpened",
+      "discriminator": [
+        215,
+        57,
+        124,
+        14,
+        212,
+        167,
+        58,
+        175
+      ]
+    },
+    {
       "name": "RangeSealed",
       "discriminator": [
         134,
@@ -17878,6 +18608,11 @@ export const IDL: Voynich = {
       "code": 6038,
       "name": "InvalidReferral",
       "msg": "The referral config, call referral, or referral claim is invalid."
+    },
+    {
+      "code": 6039,
+      "name": "InvalidQuorum",
+      "msg": "The quorum configuration, status, or receipt consensus proofs are invalid."
     }
   ],
   "types": [
@@ -20524,6 +21259,215 @@ export const IDL: Voynich = {
             "type": {
               "vec": "pubkey"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Quorum",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "input_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "required_votes",
+            "type": "u8"
+          },
+          {
+            "name": "require_distinct_enclaves",
+            "type": "bool"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "QuorumStatus"
+              }
+            }
+          },
+          {
+            "name": "agreed_output_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "vote_count",
+            "type": "u8"
+          },
+          {
+            "name": "distinct_enclaves",
+            "type": "u8"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "array": [
+                "pubkey",
+                5
+              ]
+            }
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          },
+          {
+            "name": "finalized_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuorumAgreed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quorum",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "input_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "agreed_output_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "vote_count",
+            "type": "u8"
+          },
+          {
+            "name": "distinct_enclaves",
+            "type": "u8"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "array": [
+                "pubkey",
+                5
+              ]
+            }
+          },
+          {
+            "name": "finalized_slot",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "QuorumStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuorumOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quorum",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "input_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "required_votes",
+            "type": "u8"
+          },
+          {
+            "name": "require_distinct_enclaves",
+            "type": "bool"
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuorumStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Open"
+          },
+          {
+            "name": "Agreed"
           }
         ]
       }

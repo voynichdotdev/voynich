@@ -96,6 +96,7 @@ model Model {
   referralConfig      ReferralConfig?
   referrals           Referral[]
   callReferrals       CallReferral[]
+  quorums             Quorum[]
   benchmarks          Benchmark[]
   versions            ModelVersion[]
   weights             Weights[]
@@ -649,4 +650,33 @@ model CallReferral {
 
   @@index([modelAddress, referrer])
   @@map("call_referrals")
+}
+
+enum QuorumStatus {
+  open
+  agreed
+}
+
+model Quorum {
+  address                 String       @id @db.VarChar(44)
+  modelAddress            String       @db.VarChar(44)
+  model                   Model        @relation(fields: [modelAddress], references: [address])
+  caller                  String       @db.VarChar(44)
+  nonce                   String
+  inputHash               String       @db.Char(64)
+  requiredVotes           Int
+  requireDistinctEnclaves Boolean      @default(true)
+  status                  QuorumStatus @default(open)
+  agreedOutputHash        String?      @db.Char(64)
+  voteCount               Int          @default(0)
+  distinctEnclaves        Int          @default(0)
+  receipts                Json
+  createdSlot             BigInt
+  finalizedSlot           BigInt?
+  updatedSlot             BigInt
+
+  @@index([modelAddress, createdSlot(sort: Desc)])
+  @@index([caller, createdSlot(sort: Desc)])
+  @@index([status, createdSlot(sort: Desc)])
+  @@map("quorums")
 }

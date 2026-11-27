@@ -528,3 +528,20 @@ pub struct ClaimReferral<'info> {
     pub token_program: Option<Program<'info, Token>>,
     pub system_program: Program<'info, System>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(nonce: u64, input_hash: [u8; 32], required_votes: u8, require_distinct_enclaves: bool)]
+pub struct OpenQuorum<'info> {
+    #[account(mut)] pub caller: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
+    #[account(init, payer = caller, space = Quorum::SPACE, seeds = [b"quorum", model.key().as_ref(), caller.key().as_ref(), &nonce.to_le_bytes()], bump)] pub quorum: Box<Account<'info, Quorum>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct FinalizeQuorum<'info> {
+    #[account(mut)] pub payer: Signer<'info>,
+    #[account(mut, seeds = [b"quorum", quorum.model.as_ref(), quorum.caller.as_ref(), &quorum.nonce.to_le_bytes()], bump = quorum.bump)] pub quorum: Box<Account<'info, Quorum>>,
+}
