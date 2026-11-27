@@ -138,6 +138,7 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/batches', async c => c.json(await read.batches(readQuery(c, s.BatchQuery))))
   app.get('/v1/models/:id/batches', async c => c.json(await read.modelBatches(readParam(c, 'id', s.ModelId), readQuery(c, s.PageQuery))))
   app.get('/v1/batches/:address', async c => c.json(await read.batch(readParam(c, 'address', s.Address))))
+  app.get('/v1/openai/models', async c => c.json(await read.openaiModels()))
   app.get('/v1/accounts/:wallet/passes', async c => c.json(await read.accountPasses(readParam(c, 'wallet', s.Address))))
   app.get('/v1/passes/:address', async c => c.json(await read.pass(readParam(c, 'address', s.Address))))
   app.get('/v1/models/:id/versions', async c => c.json(await read.modelVersions(readParam(c, 'id', s.ModelId))))

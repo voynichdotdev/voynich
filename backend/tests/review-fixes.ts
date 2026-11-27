@@ -7503,3 +7503,132 @@ test('Build 18 Step 2: compiled CLI batch run / list / show and SDK runBatch mul
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('Build 19 Step 1: GET /v1/openai/models + createOpenAICompatServer non-streaming & streaming /v1/chat/completions with X-Voynich-Receipt headers', async () => {
+  const { PublicKey } = await import('@solana/web3.js')
+  const { OpenAIModelsList } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { createOpenAICompatServer, formatMessagesAsPrompt } = await import('../sdk/src/openai-proxy.js')
+  const { buildApp } = await import('../src/app.js')
+
+  assert.equal(formatMessagesAsPrompt([{ role: 'user', content: 'Hello world' }]), 'Hello world')
+  assert.equal(
+    formatMessagesAsPrompt([
+      { role: 'system', content: 'Be brief.' },
+      { role: 'user', content: [{ type: 'text', text: 'Hi' }] },
+    ]),
+    'System: Be brief.\n\nUser: Hi\n\nAssistant:',
+  )
+
+  const app = buildApp()
+  const sessionHeaders = { 'X-Fixture-Session': 'openai-gateway-test' }
+  const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', 'openai-gateway-test')
+    return app.request(new Request(req, { headers }))
+  }) as typeof fetch
+
+  // 1. Direct GET /v1/openai/models on fixture API
+  const directModelsRes = await app.request('http://localhost/v1/openai/models', { headers: sessionHeaders })
+  assert.equal(directModelsRes.status, 200)
+  const directModels = OpenAIModelsList.parse(await directModelsRes.json())
+  assert.equal(directModels.object, 'list')
+  assert.equal(directModels.data.length, 1)
+  assert.equal(directModels.data[0]!.id, 'sketch-32')
+  assert.equal(directModels.data[0]!.voynich.address, FIXTURE.model)
+
+  // 2. Start createOpenAICompatServer on ephemeral 127.0.0.1:0
+  const signer = {
+    publicKey: new PublicKey(FIXTURE.caller),
+    async signTransaction(vtx: import('@solana/web3.js').VersionedTransaction) { return vtx },
+  }
+  const proxy = createOpenAICompatServer({
+    apiUrl: 'http://localhost',
+    signer,
+    fetch: fetchFixture,
+    pollMs: 5,
+    host: '127.0.0.1',
+    port: 0,
+    answerMode: 'open',
+    webUrl: 'https://voynich.dev',
+  })
+  const started = await proxy.listen()
+  try {
+    // Health & CORS preflight
+    const health = await (await fetch(`${started.url}/health`)).json() as { status: string; port: number }
+    assert.equal(health.status, 'ok')
+    assert.equal(health.port, started.port)
+
+    const preflight = await fetch(`${started.url}/v1/chat/completions`, { method: 'OPTIONS' })
+    assert.equal(preflight.status, 204)
+    assert((preflight.headers.get('access-control-expose-headers') ?? '').includes('X-Voynich-Receipt'))
+
+    // GET /v1/models
+    const proxyModels = OpenAIModelsList.parse(await (await fetch(`${started.url}/v1/models`)).json())
+    assert.equal(proxyModels.data[0]!.id, 'sketch-32')
+
+    // Validation error returns OpenAI-style error JSON
+    const badRes = await fetch(`${started.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'sketch-32', messages: [] }),
+    })
+    assert.equal(badRes.status, 400)
+    const badJson = await badRes.json() as { error: { type: string; code: string } }
+    assert.equal(badJson.error.type, 'invalid_request_error')
+    assert.equal(badJson.error.code, 'missing_messages')
+
+    // Non-streaming POST /v1/chat/completions (flat per-call model)
+    const sketchVector = JSON.stringify(new Array<number>(784).fill(0))
+    const chatRes = await fetch(`${started.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'sketch-32', messages: [{ role: 'user', content: sketchVector }] }),
+    })
+    assert.equal(chatRes.status, 200)
+    const receiptHdr = chatRes.headers.get('x-voynich-receipt')
+    const modelHdr = chatRes.headers.get('x-voynich-model')
+    const verifyHdr = chatRes.headers.get('x-voynich-verify-url')
+    assert(receiptHdr && receiptHdr.length >= 32)
+    assert.equal(modelHdr, 'sketch-32')
+    assert.equal(verifyHdr, `https://voynich.dev/receipts/${receiptHdr}`)
+    const chatJson = await chatRes.json() as {
+      id: string
+      object: string
+      model: string
+      choices: Array<{ message: { role: string; content: string }; finish_reason: string }>
+      voynich: { receipt: string; verifyUrl: string; paid: string }
+    }
+    assert.equal(chatJson.object, 'chat.completion')
+    assert.equal(chatJson.id, `voynich-${receiptHdr}`)
+    assert.equal(chatJson.choices[0]!.message.role, 'assistant')
+    assert.equal(chatJson.choices[0]!.finish_reason, 'stop')
+    assert.equal(chatJson.voynich.receipt, receiptHdr)
+    assert.equal(chatJson.voynich.verifyUrl, verifyHdr)
+
+    // Streaming POST /v1/chat/completions (stream: true) on flat model
+    const streamRes = await fetch(`${started.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'sketch-32', stream: true, messages: [{ role: 'user', content: sketchVector }] }),
+    })
+    assert.equal(streamRes.status, 200)
+    assert((streamRes.headers.get('content-type') ?? '').includes('text/event-stream'))
+    assert.equal(streamRes.headers.get('x-voynich-model'), 'sketch-32')
+    const sseText = await streamRes.text()
+    const frames = sseText.split('\n\n').map(b => b.trim()).filter(Boolean)
+    assert.equal(frames[frames.length - 1], 'data: [DONE]')
+    const chunks = frames
+      .filter(f => f.startsWith('data: ') && f !== 'data: [DONE]')
+      .map(f => JSON.parse(f.slice(6)) as { object: string; choices: Array<{ delta: { content?: string }; finish_reason: string | null }>; voynich?: { receipt: string; verifyUrl: string } })
+    assert(chunks.length >= 2)
+    assert.equal(chunks[0]!.object, 'chat.completion.chunk')
+    assert(typeof chunks[0]!.choices[0]!.delta.content === 'string')
+    const lastChunk = chunks[chunks.length - 1]!
+    assert.equal(lastChunk.choices[0]!.finish_reason, 'stop')
+    assert(lastChunk.voynich?.receipt && lastChunk.voynich.verifyUrl.endsWith(`/receipts/${lastChunk.voynich.receipt}`))
+  } finally {
+    await proxy.close()
+  }
+})

@@ -56,6 +56,7 @@ export function createClient(baseUrl: string, options: Omit<HttpOptions, 'apiErr
     batch: (address: string, options?: CallOptions) => http.get(`/v1/batches/${id(address)}`, s.BatchRecord, options),
     openBatch: (model: string, body: z.input<typeof s.OpenBatchRequest>, options?: CallOptions) => http.post(`/v1/models/${id(model)}/batches/build`, s.Build, body, options),
     appendBatchReceipts: (address: string, body: z.input<typeof s.AppendBatchReceiptsRequest>, options?: CallOptions) => http.post(`/v1/batches/${id(address)}/append/build`, s.Build, body, options),
+    openaiModels: (options?: CallOptions) => http.get('/v1/openai/models', s.OpenAIModelsList, options),
     modelVersions: (model: string, options?: CallOptions) => http.get(`/v1/models/${id(model)}/versions`, s.ModelVersions, options),
     beginVersion: (model: string, body: z.input<typeof s.BeginVersionRequest>, options?: CallOptions) => http.post(`/v1/models/${id(model)}/versions/build`, s.Build, body, options),
     writeVersionWeights: (model: string, body: z.input<typeof s.WriteVersionWeightsRequest>, options?: CallOptions) => http.post(`/v1/models/${id(model)}/versions/write/build`, s.Build, body, options),

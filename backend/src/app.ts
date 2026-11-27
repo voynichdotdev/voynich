@@ -219,6 +219,28 @@ export function buildApp() {
     if (!item) fail('BATCH_NOT_FOUND', 'This batch was not found.')
     return c.json(item)
   })
+  app.get('/v1/openai/models', c => {
+    const state = c.get('fixture')
+    const data = state.models
+      .filter(m => m.status === 'live')
+      .map(m => ({
+        id: m.name || m.address,
+        object: 'model' as const,
+        created: Number(m.sealedSlot ?? m.createdSlot),
+        owned_by: m.owner,
+        voynich: {
+          address: m.address,
+          slug: m.name,
+          inputKind: m.manifest.inputKind,
+          pricingMode: m.priceUnit,
+          price: m.price.amount,
+          mint: m.price.mint,
+          status: m.status,
+          currentVersion: m.currentVersion ?? 1,
+        },
+      }))
+    return c.json({ object: 'list' as const, data })
+  })
   app.get('/v1/calls/:id', c => c.json(c.get('fixture').call(readParam(c, 'id', s.Address))))
   app.get('/v1/bounties', c => {
     const state = c.get('fixture'); const q = readQuery(c, s.BountyQuery, queryKeys)

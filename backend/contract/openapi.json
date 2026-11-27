@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Voynich API",
-    "version": "0.1.37",
+    "version": "0.1.38",
     "description": "Public reads and unsigned transaction builds. No sessions or login. MODE=fixture serves isolated in-memory fixture sessions selected by X-Fixture-Session. Amounts and slots are decimal strings. Null mint means native SOL. Example fixture monetary values are not launch configuration."
   },
   "servers": [
@@ -12618,6 +12618,248 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Build"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/openai/models": {
+      "get": {
+        "operationId": "openaiModels",
+        "summary": "List live Voynich models in OpenAI /v1/models format",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "PASS_PLAN_NOT_FOUND",
+                "PASS_NOT_FOUND",
+                "INVALID_PASS",
+                "REFERRAL_CONFIG_NOT_FOUND",
+                "REFERRAL_NOT_FOUND",
+                "INVALID_REFERRAL",
+                "QUORUM_NOT_FOUND",
+                "INVALID_QUORUM",
+                "BATCH_NOT_FOUND",
+                "INVALID_BATCH",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIModelsList"
                 }
               }
             }
@@ -34149,6 +34391,307 @@
           "mint",
           "decimals",
           "symbol"
+        ],
+        "additionalProperties": false
+      },
+      "OpenAIModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "object": {
+            "type": "string",
+            "const": "model"
+          },
+          "created": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "owned_by": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "voynich": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              "inputKind": {
+                "type": "string",
+                "enum": [
+                  "sketch",
+                  "tensor",
+                  "text"
+                ]
+              },
+              "pricingMode": {
+                "type": "string",
+                "enum": [
+                  "call",
+                  "token"
+                ]
+              },
+              "price": {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                "minLength": 1
+              },
+              "mint": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 44
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "uploading",
+                  "sealed",
+                  "live",
+                  "retired"
+                ]
+              },
+              "currentVersion": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "address",
+              "slug",
+              "inputKind",
+              "pricingMode",
+              "price",
+              "mint",
+              "status",
+              "currentVersion"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "created",
+          "owned_by",
+          "voynich"
+        ],
+        "additionalProperties": false
+      },
+      "OpenAIModelMetadata": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "inputKind": {
+            "type": "string",
+            "enum": [
+              "sketch",
+              "tensor",
+              "text"
+            ]
+          },
+          "pricingMode": {
+            "type": "string",
+            "enum": [
+              "call",
+              "token"
+            ]
+          },
+          "price": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+            "minLength": 1
+          },
+          "mint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 44
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "sealed",
+              "live",
+              "retired"
+            ]
+          },
+          "currentVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "address",
+          "slug",
+          "inputKind",
+          "pricingMode",
+          "price",
+          "mint",
+          "status",
+          "currentVersion"
+        ],
+        "additionalProperties": false
+      },
+      "OpenAIModelsList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "list"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "object": {
+                  "type": "string",
+                  "const": "model"
+                },
+                "created": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "owned_by": {
+                  "type": "string",
+                  "minLength": 32,
+                  "maxLength": 44
+                },
+                "voynich": {
+                  "type": "object",
+                  "properties": {
+                    "address": {
+                      "type": "string",
+                      "minLength": 32,
+                      "maxLength": 44
+                    },
+                    "slug": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 32,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                    },
+                    "inputKind": {
+                      "type": "string",
+                      "enum": [
+                        "sketch",
+                        "tensor",
+                        "text"
+                      ]
+                    },
+                    "pricingMode": {
+                      "type": "string",
+                      "enum": [
+                        "call",
+                        "token"
+                      ]
+                    },
+                    "price": {
+                      "type": "string",
+                      "maxLength": 20,
+                      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|1844674407370955[0-0][0-9]{3}|18446744073709551[0-5][0-9]{2}|184467440737095516[0-0][0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+                      "minLength": 1
+                    },
+                    "mint": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 32,
+                          "maxLength": 44
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "uploading",
+                        "sealed",
+                        "live",
+                        "retired"
+                      ]
+                    },
+                    "currentVersion": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "address",
+                    "slug",
+                    "inputKind",
+                    "pricingMode",
+                    "price",
+                    "mint",
+                    "status",
+                    "currentVersion"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "object",
+                "created",
+                "owned_by",
+                "voynich"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "object",
+          "data"
         ],
         "additionalProperties": false
       },

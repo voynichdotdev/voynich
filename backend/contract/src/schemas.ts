@@ -3,7 +3,7 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.37'
+export const CONTRACT_VERSION = '0.1.38'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
@@ -459,6 +459,27 @@ export const BatchQuery = PageQuery.extend({
   caller: Address.optional(),
   status: BatchStatus.optional(),
 })
+export const OpenAIModelMetadata = z.strictObject({
+  address: Address,
+  slug: Slug,
+  inputKind: z.enum(['sketch', 'tensor', 'text']),
+  pricingMode: PriceUnit,
+  price: U64,
+  mint: Address.nullable(),
+  status: ModelStatus,
+  currentVersion: z.int().min(1),
+})
+export const OpenAIModel = z.strictObject({
+  id: z.string().min(1),
+  object: z.literal('model'),
+  created: z.int().nonnegative(),
+  owned_by: Address,
+  voynich: OpenAIModelMetadata,
+})
+export const OpenAIModelsList = z.strictObject({
+  object: z.literal('list'),
+  data: z.array(OpenAIModel),
+})
 
 export const WalletRequest = z.strictObject({ wallet: Address })
 const CreateModelBase = z.strictObject({ wallet: Address, uploadKey: Address, uploadKeys: z.array(Address).min(1).max(MAX_UPLOAD_KEYS).optional(), weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS).optional(), name: Slug, manifest: Manifest, sizeBytes: z.int().positive(), plaintextSizeBytes: z.int().positive(), cipher: CipherHeader, price: Money, priceUnit: PriceUnit.optional(), operatorShareBps: z.int().min(0).max(10000), allowedMeasurements: z.array(Measurement).min(1).max(8), uploadFundingLamports: U64, base: ModelBase.optional() })
@@ -845,6 +866,9 @@ export type BatchesPage = z.output<typeof BatchesPage>
 export type BatchQuery = z.output<typeof BatchQuery>
 export type OpenBatchRequest = z.output<typeof OpenBatchRequest>
 export type AppendBatchReceiptsRequest = z.output<typeof AppendBatchReceiptsRequest>
+export type OpenAIModelMetadata = z.output<typeof OpenAIModelMetadata>
+export type OpenAIModel = z.output<typeof OpenAIModel>
+export type OpenAIModelsList = z.output<typeof OpenAIModelsList>
 export type VersionStatus = z.output<typeof VersionStatus>
 export type ModelVersion = z.output<typeof ModelVersion>
 export type ModelVersions = z.output<typeof ModelVersions>

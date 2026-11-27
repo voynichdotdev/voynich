@@ -89,4 +89,5 @@ const voynich = {
   runBatch: async (...args: Parameters<Voynich['runBatch']>) => (await load(true)).runBatch(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
+export { createOpenAICompatServer, formatMessagesAsPrompt, type OpenAIChatMessage, type OpenAICompatServer, type OpenAICompatServerOptions } from './openai-proxy.js'
 export default voynich

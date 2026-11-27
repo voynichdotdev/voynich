@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { PublicKey, type Connection } from '@solana/web3.js'
-import { decodeManifest, type AccountPasses, type AccountReferrals, type AttestationRecord, type BatchQuery, type BatchRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Pass, type PassPlan, type QuorumQuery, type QuorumRecord, type Receipt, type Referral, type ReferralConfig, type ModelQuery } from '@voynich/contract'
+import { decodeManifest, type AccountPasses, type AccountReferrals, type AttestationRecord, type BatchQuery, type BatchRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OpenAIModelsList, type OperatorBond, type Pass, type PassPlan, type QuorumQuery, type QuorumRecord, type Receipt, type Referral, type ReferralConfig, type ModelQuery } from '@voynich/contract'
 import { toBase64 } from 'voynich/crypto'
 import { fail } from './errors.js'
 
@@ -644,5 +644,27 @@ export class ReadModel {
       take: query.limit + 1,
     })
     return page(rows.map(row => this.batchRow(row)), query)
+  }
+  async openaiModels(): Promise<OpenAIModelsList> {
+    const listed = await this.models({ limit: 100, sort: 'calls' })
+    return {
+      object: 'list',
+      data: listed.items.filter(m => m.status === 'live').map(m => ({
+        id: m.name || m.address,
+        object: 'model' as const,
+        created: Number(m.sealedSlot ?? m.createdSlot),
+        owned_by: m.owner,
+        voynich: {
+          address: m.address,
+          slug: m.name,
+          inputKind: m.manifest.inputKind,
+          pricingMode: m.priceUnit,
+          price: m.price.amount,
+          mint: m.price.mint,
+          status: m.status,
+          currentVersion: m.currentVersion ?? 1,
+        },
+      })),
+    }
   }
 }
