@@ -41,6 +41,7 @@ Eight read functions read what the API indexes from the chain (none needs a wall
 | `batch(address, options?)` | One `BatchRecord` by its PDA address. | [`GET /v1/batches/{address}`](/docs/api/models#get-v1batchesaddress) |
 | `openBatch(modelId, input, options?)` | Signs `open_batch` and returns the indexed `BatchRecord`. | [`POST /v1/models/{id}/batches/build`](/docs/api/models#post-v1modelsidbatchesbuild) |
 | `appendBatchReceipts(address, receipts, options?)` | Signs permissionless `append_batch_receipts` (`1..16` receipts) and returns `{ batch, transaction }`. | [`POST /v1/batches/{address}/append/build`](/docs/api/models#post-v1batchesaddressappendbuild) |
+| `runBatch(modelId, inputs, options?)` | End-to-end helper: hashes `1..256` inputs, opens a `Batch` PDA, settles every call, and commits receipts in chunks of `<= 16` into `receiptsRoot`. | [`POST /v1/batches/{address}/append/build`](/docs/api/models#post-v1batchesaddressappendbuild) |
 | `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
 | `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
 | `getBond(enclaveKey, options?)` | The enclave's `OperatorBond`, or `null` when none exists. | [`GET /v1/enclaves/{key}/bond`](/docs/api/enclaves#get-v1enclaveskeybond) |
@@ -207,7 +208,7 @@ const { batch: done } = await voynich.appendBatchReceipts(opened.address, [recei
 console.log(done.status, done.receiptsRoot, done.completedCount)
 ```
 
-`listBatches(query?)` reads `GET /v1/batches` (filtering optionally by `model`, `caller`, `status`, `limit`, `cursor`). `listModelBatches(modelId, query?)` and `batch(address)` read model and single-batch snapshots. `openBatch(modelId, { manifestHash, totalCount, nonce? })` creates a 166-byte `Batch` PDA (`1..=256` items), and `appendBatchReceipts(address, receipts)` permissionlessly verifies chunks of 1 to 16 `Receipt` PDAs on chain, advancing `receiptsRoot` until `completedCount === totalCount`.
+`listBatches(query?)` reads `GET /v1/batches` (filtering optionally by `model`, `caller`, `status`, `limit`, `cursor`). `listModelBatches(modelId, query?)` and `batch(address)` read model and single-batch snapshots. `openBatch(modelId, { manifestHash, totalCount, nonce? })` creates a 166-byte `Batch` PDA (`1..=256` items), and `appendBatchReceipts(address, receipts)` permissionlessly verifies chunks of 1 to 16 `Receipt` PDAs on chain, advancing `receiptsRoot` until `completedCount === totalCount`. For one-call orchestration, `runBatch(modelId, inputs, { answerMode?, enclave?, strategy?, chunkSize?, manifestHash? })` opens the batch, runs every item, commits settled receipts in chunks (`<= 16`), and returns `{ batch, manifestHash, receiptsRoot, completedCount, totalCount, receipts, outputs, transactions }`.
 
 ## enclaves and enclave
 

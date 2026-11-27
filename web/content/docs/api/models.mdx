@@ -1303,11 +1303,11 @@ Lists receipt-backed batch jobs across all models (`BatchesPage`). Accepts `curs
 
 ## `GET /v1/models/{id}/batches`
 
-Lists batch jobs for model `{id}` (`BatchesPage`). Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
+Lists batch jobs for model `{id}` (`BatchesPage`), backing the **Batches** panel on `/models/{id}`. Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
 
 ## `GET /v1/batches/{address}`
 
-Reads one [BatchRecord](#batchrecord) by its PDA address. Answers `BATCH_NOT_FOUND` (`404`) when none exists.
+Reads one [BatchRecord](#batchrecord) by its PDA address, backing the `/batches/{address}` proof page with ordered clickable links to every committed `/receipts/{receipt}`. Answers `BATCH_NOT_FOUND` (`404`) when none exists.
 
 ## `POST /v1/models/{id}/batches/build`
 

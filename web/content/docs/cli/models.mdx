@@ -521,6 +521,28 @@ Opens a `Quorum` PDA, executes `2..5` independent calls sharing the exact encryp
 </Field>
 </Fields>
 
+## voynich batch
+
+Lists, inspects, or runs receipt-chained batch jobs backed by an on-chain 166-byte `Batch` PDA (`["batch", model, caller, nonce_le]`). The same from code is [Batch jobs](/docs/sdk/models-and-enclaves#batch-jobs-listbatches-listmodelbatches-batch-openbatch-appendbatchreceipts).
+
+```bash
+voynich batch list [--model <id>]
+voynich batch show <batch-address>
+voynich batch run <model> --inputs <json-array-file> [--answer-mode open|sealed] [--enclave <key>] [--strategy balanced|cheapest|fastest] [--chunk-size <1..16>]
+```
+
+<Fields>
+<Field name="list [--model <id>]" type="read">
+Reads `GET /v1/batches` (or `GET /v1/models/{id}/batches` when `--model` or a positional model id is given; no wallet required) and prints the `BatchesPage` JSON.
+</Field>
+<Field name="show <batch-address>" type="read">
+Reads `GET /v1/batches/{address}` (no wallet required) and prints the `BatchRecord` JSON with `manifestHash`, `receiptsRoot`, `completedCount`, `totalCount`, and `receipts`.
+</Field>
+<Field name="run <model> --inputs <json-array-file>" type="caller write">
+Hashes the raw JSON array file (1 to 256 items) into `manifestHash`, opens a `Batch` PDA, settles every input call, commits settled `Receipt` addresses in chunks of `--chunk-size` (`1..16`, default `16`) via `append_batch_receipts`, and prints `{ batch, manifestHash, receiptsRoot, completedCount, totalCount, batchLink, receiptLinks, outputs, transactions }` as JSON on stdout. `--answer-mode` defaults to `open`.
+</Field>
+</Fields>
+
 ## Failures
 
 The two list commands exit with code `1` and print the API's code and message when the API refuses the request. The API's codes are in the [HTTP API overview](/docs/api/overview).

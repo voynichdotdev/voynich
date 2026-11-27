@@ -9,6 +9,7 @@ import type { Config, GrantedEnclaves, Model, ModelPolicy, ModelSplit, ModelVers
 import { api, read, type Read } from '@/lib/api'
 import { LINKS } from '@/lib/facts'
 import { bps, group, hardware, short } from '@/lib/format'
+import { batchRunCliCommand, formatBatchProgress, formatBatchStatus, loadModelBatches, type BatchRecord } from '@/lib/batches'
 import { benchmarkRunCliCommand, formatScorePct, loadModelBenchmarks, type BenchmarkRecord } from '@/lib/benchmarks'
 import { computeUptimePct, formatBondSol } from '@/lib/bonds'
 import { effectiveShareBps, formatLatency } from '@/lib/call'
@@ -47,6 +48,7 @@ type Props = {
     versions?: ModelVersions | null
     benchmarks?: BenchmarkRecord[]
     quorums?: QuorumRecord[]
+    batches?: BatchRecord[]
   }
 }
 
@@ -77,6 +79,8 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
   const [benchmarks, setBenchmarks] = useState<BenchmarkRecord[]>(initial.benchmarks ?? [])
   const [quorums, setQuorums] = useState<QuorumRecord[]>(initial.quorums ?? [])
   const [quorumCopied, setQuorumCopied] = useState(false)
+  const [batches, setBatches] = useState<BatchRecord[]>(initial.batches ?? [])
+  const [batchCopied, setBatchCopied] = useState(false)
   const [config, setConfig] = useState<Config | null>(null)
   const [claimTx, setClaimTx] = useState<ClaimTx | null>(null)
   const id = initial.model.address
@@ -84,7 +88,7 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
 
   const refresh = useCallback(async () => {
     const client = api(fixture)
-    const [m, e, r, ms, vs, bs, pp, rc, qs] = await Promise.all([
+    const [m, e, r, ms, vs, bs, pp, rc, qs, bts] = await Promise.all([
       read(client.model(id)),
       read(client.modelEnclaves(id)),
       read(client.modelReceipts(id, { limit: 8 })),
@@ -94,6 +98,7 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
       loadModelPassPlan(client, id),
       loadModelReferralConfig(client, id),
       loadModelQuorums(client, id),
+      loadModelBatches(client, id),
     ])
     const nextModel = m.ok ? m.data : model
     if (m.ok) setModel(m.data)
@@ -105,6 +110,7 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
     setPassPlan(pp)
     setReferralConfig(rc)
     setQuorums(qs)
+    setBatches(bts)
     const [nextPolicy, nextSplit] = await Promise.all([
       loadModelPolicy(client, nextModel),
       loadModelSplit(client, nextModel),
@@ -681,6 +687,78 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
                 }}
               >
                 {quorumCopied ? 'Copied' : 'Copy command'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section id="batches" className={`panel ${s.full}`} aria-labelledby="batches-heading">
+          <div className="panel-head">
+            <div className={s.splitHeadMeta}>
+              <h2 id="batches-heading">Batches</h2>
+              <span className={s.kindBadge}>{group(batches.length)}</span>
+            </div>
+            <span className="t-small dim">Chained multi-item receipt roots on chain</span>
+          </div>
+          {batches.length === 0 ? (
+            <div className="panel-body">
+              <p className="t-small dim">No batch jobs recorded for this model yet. Run a batch from the CLI to commit up to 256 receipts into one on-chain root.</p>
+            </div>
+          ) : (
+            <ul
+              className={s.list}
+              style={{ '--cols': 'minmax(0, 1.05fr) minmax(0, 0.75fr) minmax(0, 0.75fr) minmax(0, 1.25fr) minmax(0, 1.55fr)' } as React.CSSProperties}
+            >
+              <li className={s.listHead} aria-hidden="true">
+                <span>Batch</span>
+                <span>Status</span>
+                <span className={s.num}>Progress</span>
+                <span>Receipts root</span>
+                <span>Receipts</span>
+              </li>
+              {batches.map((bt) => (
+                <li key={bt.address} className={s.row}>
+                  <span data-label="Batch">
+                    <Link href={`/batches/${bt.address}${q}`} className="link mono" title={bt.address}>
+                      {short(bt.address, 6)}
+                    </Link>
+                  </span>
+                  <span data-label="Status">
+                    <State state={bt.status === 'completed' ? 'live' : 'uploading'} label={formatBatchStatus(bt.status)} />
+                  </span>
+                  <span data-label="Progress" className={`mono ${s.num} ${bt.status === 'completed' ? 'ochre' : ''}`}>
+                    {formatBatchProgress(bt.completedCount, bt.totalCount)}
+                  </span>
+                  <span data-label="Receipts root">
+                    <Hash value={bt.receiptsRoot} chars={6} label="receipts root" />
+                  </span>
+                  <span data-label="Receipts" className={s.receiptPills}>
+                    {bt.receipts.slice(0, 4).map((r) => (
+                      <Link key={r} href={`/receipts/${r}${q}`} className={s.receiptPill} title={r}>
+                        {short(r, 4)}
+                      </Link>
+                    ))}
+                    {bt.receipts.length > 4 ? <span className={s.kindBadge}>+{bt.receipts.length - 4}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className={s.splitFoot}>
+            <div className={s.upgradeRow} style={{ width: '100%' }}>
+              <code className={`mono ${s.upgradeCode}`}>{batchRunCliCommand(model.name)}</code>
+              <button
+                type="button"
+                className="btn"
+                data-size="s"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(batchRunCliCommand(model.name))
+                  play('copy')
+                  setBatchCopied(true)
+                  setTimeout(() => setBatchCopied(false), 1800)
+                }}
+              >
+                {batchCopied ? 'Copied' : 'Copy command'}
               </button>
             </div>
           </div>

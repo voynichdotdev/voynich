@@ -132,6 +132,12 @@ export function errorMessage(e: unknown): string {
   if (code === 'INVALID_QUORUM') {
     return x?.body?.error?.message || 'Quorum receipts must match the same model, input hash, and output hash.'
   }
+  if (code === 'BATCH_NOT_FOUND') {
+    return x?.body?.error?.message || 'No batch record exists at this address.'
+  }
+  if (code === 'INVALID_BATCH') {
+    return x?.body?.error?.message || 'Batch receipts must match this model, stay within totalCount, and contain no duplicates.'
+  }
   if (x?.body?.error?.message) return x.body.error.message
   if (e instanceof TypeError) return 'The API did not answer. Check the connection and try again.'
   if (x?.name === 'ZodError') return 'The API answered in a form this site does not read. Reload the page and try again.'

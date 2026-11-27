@@ -10,6 +10,7 @@ import { ADAPTER_MAGIC, ADAPTER_VERSION, applyOnnxAdapter, decodeAdapter, encode
 import { ciphertextMerkleRoot, decryptCallOutput, encryptCallOutput, fromHex, generateEncryptionKeyPair, merkleRootFromLeaves, openWeightsChunk, pieceMessage, sealWeights, sha256, signPiece, signReceipt, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece } from 'voynich/crypto'
 import { decodeModelBaseBytes as sdkDecodeModelBaseBytes, decodeReceiptAccount as sdkDecodeReceiptAccount } from 'voynich/program'
 import { fetchBountyAfterSettle, parseSolToLamports, refreshBounties } from '@/lib/bounties'
+import { batchRunCliCommand, formatBatchProgress, formatBatchStatus, loadBatch, loadBatches, loadModelBatches } from '@/lib/batches'
 import { benchmarkRunCliCommand, formatScorePct, loadBenchmarks, loadModelBenchmarks } from '@/lib/benchmarks'
 import { DEFAULT_BOND_SLASH_BPS, bondCliCommand, computeUptimePct, formatBondSol, loadEnclaveBond } from '@/lib/bonds'
 import { STREAM_PIECES_MAX_ENTRIES, STREAM_PIECES_STORAGE_KEY, STREAM_PIECES_TTL_MS, decodeOpenAnswer, decodeOutput, effectiveShareBps, eligibleEnclaves, follow, followStream, formatLatency, getSavedStreamPiece, loadLastPieceFromApi, loadSavedStreamPieces, parseCeiling, parseTensor, pickEnclave, removeSavedStreamPiece, saveStreamPiece, selectEnclave, settleMeteredStream, verifyBrowserStreamPiece, type CallState } from '@/lib/call'
@@ -3391,6 +3392,73 @@ test('Build 17 Step 2: quorum helpers, CLI hint, error mapping, /quorums/[id] pr
 
   const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
   for (const sym of ['id="quorums"', 'quorumRunCliCommand', 'formatQuorumVotes', '/quorums/', '/receipts/']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+})
+
+test('Build 18 Step 2: batch helpers, CLI hint, error mapping, /batches/[id] proof page, and /models/[id] Batches wiring', async () => {
+  assert.equal(formatBatchStatus('completed'), 'Completed')
+  assert.equal(formatBatchStatus('open'), 'Open')
+  assert.equal(formatBatchProgress(8, 8), '8 / 8')
+  assert.equal(batchRunCliCommand('sketch-32'), 'voynich batch run sketch-32 --inputs inputs.json')
+  assert.equal(batchRunCliCommand('sketch-32', 'items.json', 8), 'voynich batch run sketch-32 --inputs items.json --chunk-size 8')
+
+  const modelAddr = Keypair.generate().publicKey.toBase58()
+  const caller = Keypair.generate().publicKey.toBase58()
+  const batchAddr = Keypair.generate().publicKey.toBase58()
+  const r1 = Keypair.generate().publicKey.toBase58()
+  const r2 = Keypair.generate().publicKey.toBase58()
+  const sampleBatch = {
+    address: batchAddr,
+    model: modelAddr,
+    modelName: 'sketch-32',
+    caller,
+    nonce: '1',
+    manifestHash: 'aa'.repeat(32),
+    totalCount: 2,
+    completedCount: 2,
+    status: 'completed' as const,
+    receiptsRoot: 'bb'.repeat(32),
+    receipts: [r1, r2],
+    createdSlot: '475200000',
+    completedSlot: '475200010',
+    updatedSlot: '475200010',
+  }
+  const page = { items: [sampleBatch], page: { nextCursor: null, hasMore: false }, asOf: '2026-11-27T19:00:00Z' }
+  const okClient = {
+    batch: async () => sampleBatch,
+    modelBatches: async () => page,
+    batches: async () => page,
+  } as unknown as Parameters<typeof loadBatch>[0]
+  const failClient = {
+    batch: async () => { throw new Error('offline') },
+    modelBatches: async () => { throw new Error('offline') },
+    batches: async () => { throw new Error('offline') },
+  } as unknown as Parameters<typeof loadBatch>[0]
+
+  assert.equal((await loadBatch(okClient, batchAddr))?.status, 'completed')
+  assert.equal(await loadBatch(failClient, batchAddr), null)
+  assert.equal((await loadModelBatches(okClient, modelAddr)).length, 1)
+  assert.deepEqual(await loadModelBatches(failClient, modelAddr), [])
+  assert.equal((await loadBatches(okClient))?.items.length, 1)
+  assert.equal(await loadBatches(failClient), null)
+
+  assert.ok(errorMessage({ body: { error: { code: 'BATCH_NOT_FOUND' } } }).includes('batch'))
+  assert.ok(errorMessage({ body: { error: { code: 'INVALID_BATCH' } } }).includes('Batch receipts'))
+
+  const batchPageSrc = fs.readFileSync(path.join(ROOT, 'app/batches/[id]/page.tsx'), 'utf8')
+  assert.ok(batchPageSrc.includes('BatchView') && batchPageSrc.includes('client.batch'))
+
+  const batchViewSrc = fs.readFileSync(path.join(ROOT, 'components/batch/BatchView.tsx'), 'utf8')
+  for (const sym of ['Batch proof', 'Committed receipts', 'Manifest SHA-256', 'Chained receipts root', 'formatBatchProgress', '/receipts/']) {
+    assert.ok(batchViewSrc.includes(sym), `BatchView must include ${sym}`)
+  }
+
+  const modelPageSrc = fs.readFileSync(path.join(ROOT, 'app/models/[id]/page.tsx'), 'utf8')
+  assert.ok(modelPageSrc.includes('loadModelBatches') && modelPageSrc.includes('batches'))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['id="batches"', 'batchRunCliCommand', 'formatBatchProgress', '/batches/', '/receipts/']) {
     assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
   }
 })

@@ -211,6 +211,10 @@ Any wallet (owner or third-party evaluator) can anchor an immutable, receipt-bac
 
 Any caller can anchor multi-enclave (or repeatability) receipt consensus in a 326-byte `Quorum` PDA (`["quorum", model, caller, nonce_le]`) via [`open_quorum`](/docs/program/instructions#openquorum) and permissionless [`finalize_quorum`](/docs/program/instructions#finalizequorum) (or one-command [`voynich quorum run`](/docs/cli/models#voynich-quorum) / `voynich.runQuorum`). Finalization verifies 2 to 5 distinct canonical `Receipt` PDAs on chain against `model`, `input_hash`, identical `output_hash`, and (when `require_distinct_enclaves` is true) distinct enclaves. On the site, the **Quorums** panel on `/models/<name>` and the `/quorums/<address>` proof page display quorum status, `votes / required`, `distinctEnclaves`, `agreedOutputHash`, and clickable links to every verifying `/receipts/<id>`.
 
+## Batch jobs
+
+Any caller can anchor an ordered batch of 1 to 256 inference calls into a single 166-byte `Batch` PDA (`["batch", model, caller, nonce_le]`) via [`open_batch`](/docs/program/instructions#openbatch) and permissionless [`append_batch_receipts`](/docs/program/instructions#appendbatchreceipts) (or one-command [`voynich batch run`](/docs/cli/models#voynich-batch) / `voynich.runBatch`). Each chunk verifies up to 16 canonical `Receipt` PDAs on chain against `model` and folds them into `receipts_root = sha256(receipts_root || receipt || input_hash || output_hash)` until `completed_count == total_count`. On the site, the **Batches** panel on `/models/<name>` and the `/batches/<address>` proof page display batch status, `completed / total`, `manifestHash`, `receiptsRoot`, and ordered clickable links to every committed `/receipts/<id>`.
+
 ## Statuses
 
 | Status | The model is | What can happen |

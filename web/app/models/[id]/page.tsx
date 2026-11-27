@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { api, fixtureFrom, read } from '@/lib/api'
+import { loadModelBatches } from '@/lib/batches'
 import { loadModelBenchmarks } from '@/lib/benchmarks'
 import { loadMeasurements } from '@/lib/measurements'
 import { loadModelPassPlan } from '@/lib/passes'
@@ -28,7 +29,7 @@ export default async function ModelPage({ params, searchParams }: Props) {
   const name = decodeURIComponent(id)
   const fixture = fixtureFrom(sp)
   const client = api(fixture)
-  const [model, enclaves, receipts, measurements, versions, benchmarks, quorums] = await Promise.all([
+  const [model, enclaves, receipts, measurements, versions, benchmarks, quorums, batches] = await Promise.all([
     read(client.model(name)),
     read(client.modelEnclaves(name)),
     read(client.modelReceipts(name, { limit: 8 })),
@@ -36,6 +37,7 @@ export default async function ModelPage({ params, searchParams }: Props) {
     loadModelVersions(client, name),
     loadModelBenchmarks(client, name),
     loadModelQuorums(client, name),
+    loadModelBatches(client, name),
   ])
   const q = fixture ? `?fixture=${fixture}` : ''
 
@@ -63,5 +65,5 @@ export default async function ModelPage({ params, searchParams }: Props) {
   ])
   const referrer = parseReferralFromParams(sp)
 
-  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} referrer={referrer} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, passPlan, referralConfig, versions, benchmarks, quorums }} />
+  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} referrer={referrer} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, passPlan, referralConfig, versions, benchmarks, quorums, batches }} />
 }
