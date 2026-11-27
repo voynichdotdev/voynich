@@ -3,7 +3,7 @@ import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, t
 import { ACCOUNT_SIZE, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type * as c from '@voynich/contract'
 import { Address, MODEL_ACCOUNT_BYTES, SEAL_RANGE_CHUNKS } from '@voynich/contract'
-import { BENCHMARK_SPACE, BN, BOND_SPACE, CALL_REFERRAL_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, PASS_PLAN_SPACE, PASS_SPACE, POLICY_SPACE, QUORUM_SPACE, RECEIPT_METERED_SPACE, REFERRAL_CONFIG_SPACE, REFERRAL_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBondAccount, decodeCallAccount, decodeCallReferralAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePassAccount, decodePassPlanAccount, decodePolicyAccount, decodeQuorumAccount, decodeReferralAccount, decodeReferralConfigAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
+import { BATCH_SPACE, BENCHMARK_SPACE, BN, BOND_SPACE, CALL_REFERRAL_SPACE, CALL_SPACE, GRANT_SPACE, MEASUREMENT_SPACE, MODEL_VERSION_SPACE, PASS_PLAN_SPACE, PASS_SPACE, POLICY_SPACE, QUORUM_SPACE, RECEIPT_METERED_SPACE, REFERRAL_CONFIG_SPACE, REFERRAL_SPACE, SESSION_SPACE, SPLIT_SPACE, decodeBatchAccount, decodeBondAccount, decodeCallAccount, decodeCallReferralAccount, decodeConfigAccount, decodeGrantAccount, decodeMeasurementAccount, decodeModelVersionAccount, decodePassAccount, decodePassPlanAccount, decodePolicyAccount, decodeQuorumAccount, decodeReferralAccount, decodeReferralConfigAccount, decodeSessionAccount, decodeSplitAccount, decodeWeightsHeader, eventAccounts } from 'voynich/program'
 import { CIPHER_CHUNK_BYTES, fromBase64, fromHex, pieceMessage, toHex, verifyPiece } from 'voynich/crypto'
 import { ApiFailure } from '../engines/server/errors.js'
 import type { ChainRuntime } from '../runtime.js'
@@ -1318,6 +1318,46 @@ export function builders(runtime: ChainRuntime) {
         .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
         .instruction()
       return ledger.build('finalize_quorum', payer, [instruction], { model: chainQuorum.model.toBase58(), quorum: quorumKey.toBase58() }, 0n)
+    },
+    async openBatch(id: string, body: c.OpenBatchRequest) {
+      const row = await model(id)
+      const caller = publicKey(body.wallet)
+      const nonce = body.nonce !== undefined ? BigInt(body.nonce) : randomBytes(8).readBigUInt64LE(0)
+      const batch = a.batch(row.key, caller, nonce)
+      const rent = BigInt(await runtime.rpc.connection.getMinimumBalanceForRentExemption(BATCH_SPACE))
+      const instruction = await voynich.methods
+        .openBatch(bn(nonce), [...fromHex(body.manifestHash)], body.totalCount)
+        .accountsStrict({
+          caller,
+          model: row.key,
+          batch,
+          systemProgram: SystemProgram.programId,
+          ...events,
+        })
+        .instruction()
+      return ledger.build('open_batch', caller, [instruction], { model: row.key.toBase58(), batch: batch.toBase58() }, rent)
+    },
+    async appendBatchReceipts(address: string, body: c.AppendBatchReceiptsRequest) {
+      const payer = publicKey(body.wallet)
+      const batchKey = publicKey(address)
+      const info = await runtime.rpc.connection.getAccountInfo(batchKey, 'confirmed')
+      const chainBatch = info && info.owner.equals(runtime.programId) ? decodeBatchAccount(info.data) : null
+      if (!chainBatch) fail('BATCH_NOT_FOUND', 'This batch was not found.')
+      if (chainBatch.status !== 'open') fail('INVALID_BATCH', 'This batch is already completed.', { stage: 'build' })
+      if (chainBatch.completedCount + body.receipts.length > chainBatch.totalCount) {
+        fail('INVALID_BATCH', `Appending ${body.receipts.length} receipt(s) would exceed totalCount ${chainBatch.totalCount}.`, { stage: 'build' })
+      }
+      const receiptKeys = body.receipts.map(publicKey)
+      const instruction = await voynich.methods
+        .appendBatchReceipts()
+        .accountsStrict({
+          payer,
+          batch: batchKey,
+          ...events,
+        })
+        .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
+        .instruction()
+      return ledger.build('append_batch_receipts', payer, [instruction], { model: chainBatch.model.toBase58(), batch: batchKey.toBase58() }, 0n)
     },
   }
 }

@@ -2306,6 +2306,112 @@ pub fn finalize_quorum<'info>(ctx: Context<'_, '_, 'info, 'info, FinalizeQuorum<
     Ok(())
 }
 
+pub fn open_batch(
+    ctx: Context<OpenBatch>,
+    nonce: u64,
+    manifest_hash: [u8; 32],
+    total_count: u16,
+) -> Result<()> {
+    let model = &ctx.accounts.model;
+    require!(model.status == ModelStatus::Live, VoynichError::ModelNotLive);
+    require!(manifest_hash != [0u8; 32], VoynichError::InvalidBatch);
+    require!(
+        (MIN_BATCH_ITEMS..=MAX_BATCH_ITEMS).contains(&total_count),
+        VoynichError::InvalidBatch
+    );
+    let slot = Clock::get()?.slot;
+    let batch = &mut ctx.accounts.batch;
+    batch.model = model.key();
+    batch.caller = ctx.accounts.caller.key();
+    batch.nonce = nonce;
+    batch.manifest_hash = manifest_hash;
+    batch.total_count = total_count;
+    batch.completed_count = 0;
+    batch.status = BatchStatus::Open;
+    batch.receipts_root = [0u8; 32];
+    batch.created_slot = slot;
+    batch.completed_slot = 0;
+    batch.bump = ctx.bumps.batch;
+
+    emit_cpi!(BatchOpened {
+        batch: batch.key(),
+        model: batch.model,
+        caller: batch.caller,
+        nonce: batch.nonce,
+        manifest_hash: batch.manifest_hash,
+        total_count: batch.total_count,
+        created_slot: batch.created_slot,
+    });
+    Ok(())
+}
+
+pub fn append_batch_receipts<'info>(ctx: Context<'_, '_, 'info, 'info, AppendBatchReceipts<'info>>) -> Result<()> {
+    let batch = &mut ctx.accounts.batch;
+    require!(batch.status == BatchStatus::Open, VoynichError::InvalidBatch);
+    let count = ctx.remaining_accounts.len();
+    require!(count >= 1 && count <= MAX_BATCH_APPEND_CHUNK, VoynichError::InvalidBatch);
+    let next_completed = usize::from(batch.completed_count)
+        .checked_add(count)
+        .ok_or(VoynichError::ArithmeticOverflow)?;
+    require!(next_completed <= usize::from(batch.total_count), VoynichError::InvalidBatch);
+
+    let mut root = batch.receipts_root;
+    let mut appended: Vec<Pubkey> = Vec::with_capacity(count);
+    for acc in ctx.remaining_accounts.iter() {
+        let key = acc.key();
+        require!(*acc.owner == crate::ID, VoynichError::InvalidBatch);
+        require!(!appended.contains(&key), VoynichError::InvalidBatch);
+        let data = acc.try_borrow_data()?;
+        require!(data.len() >= 168, VoynichError::InvalidBatch);
+        require!(&data[..8] == Receipt::DISCRIMINATOR, VoynichError::InvalidBatch);
+        let (expected_pda, _) = Pubkey::find_program_address(&[b"receipt", &data[8..40]], &crate::ID);
+        require_keys_eq!(key, expected_pda, VoynichError::InvalidBatch);
+        let receipt_model = Pubkey::try_from(&data[40..72]).map_err(|_| error!(VoynichError::InvalidBatch))?;
+        require_keys_eq!(receipt_model, batch.model, VoynichError::InvalidBatch);
+        let input_hash = &data[104..136];
+        let output_hash = &data[136..168];
+        root = anchor_lang::solana_program::hash::hashv(&[
+            &root,
+            key.as_ref(),
+            input_hash,
+            output_hash,
+        ]).to_bytes();
+        appended.push(key);
+    }
+
+    let slot = Clock::get()?.slot;
+    batch.receipts_root = root;
+    batch.completed_count = next_completed as u16;
+    let is_complete = batch.completed_count == batch.total_count;
+    if is_complete {
+        batch.status = BatchStatus::Completed;
+        batch.completed_slot = slot;
+    }
+
+    emit_cpi!(BatchReceiptsAppended {
+        batch: batch.key(),
+        model: batch.model,
+        receipts: appended,
+        completed_count: batch.completed_count,
+        total_count: batch.total_count,
+        receipts_root: batch.receipts_root,
+        slot,
+    });
+    if is_complete {
+        emit_cpi!(BatchCompleted {
+            batch: batch.key(),
+            model: batch.model,
+            caller: batch.caller,
+            completed_count: batch.completed_count,
+            total_count: batch.total_count,
+            receipts_root: batch.receipts_root,
+            completed_slot: batch.completed_slot,
+            status: BatchStatus::Completed,
+        });
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

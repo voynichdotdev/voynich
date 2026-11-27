@@ -3015,4 +3015,114 @@ test('Voynich program flows on the supplied local validator', { timeout: 240_000
     assert.equal(decQ2.distinctEnclaves, 1)
     assert.equal(decQ2.agreedOutputHash, Buffer.from(agreedOutputHash).toString('hex'))
   })
+
+  await t.test('Build 18 Step 1: Batch PDA 3-receipt batch committed across 2 append chunks (2 + 1) with exact chained receipts_root, plus overflow and completed-batch rejections', async () => {
+    const { BATCH_SPACE, batchPda, computeBatchReceiptsRoot, decodeBatchAccount } = await import('../sdk/src/program.js')
+    await execute([
+      SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: owner.publicKey, lamports: 200_000_000 }),
+      SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: caller.publicKey, lamports: 200_000_000 }),
+    ], [])
+    await refresh(first)
+    const batchModel = await createModel('batch-model')
+    await uploadAndSeal(batchModel)
+    await execute([await ownerGrant(batchModel, first)], [owner])
+
+    const settleBatchCall = async (label: string) => {
+      const cNonce = ++nonce
+      const inputHash = sha256(utf8(`batch-in-${label}`))
+      const outputHash = sha256(utf8(`batch-out-${label}`))
+      const cAddr = pda(voynich.programId, utf8('call'), caller.publicKey.toBytes(), u64le(cNonce))
+      await execute([await voynich.methods.openCall(bn(cNonce), [...inputHash], { sealed: {} }, null).accountsStrict({
+        payer: caller.publicKey, caller: caller.publicKey, config, model: batchModel.address, enclave: first.address,
+        attestationRecord: first.record, grant: grantAddress(batchModel, first), call: cAddr,
+        mint: null, callerTokens: null, escrowTokens: null, tokenProgram: null, associatedTokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [caller])
+      const sig = signReceipt(first.signing.secretKey.subarray(0, 32), cAddr.toBytes(), inputHash, outputHash)
+      const verifyIx = Ed25519Program.createInstructionWithPublicKey({
+        publicKey: first.signing.publicKey.toBytes(),
+        message: receiptMessage(cAddr.toBytes(), inputHash, outputHash),
+        signature: sig,
+      })
+      const receiptAddr = pda(voynich.programId, utf8('receipt'), cAddr.toBytes())
+      const settleIx = await voynich.methods.settleCall([...outputHash], [...sig], 0, Buffer.alloc(0)).accountsStrict({
+        payer: admin.publicKey, config, model: batchModel.address, enclave: first.address, attestationRecord: first.record,
+        call: cAddr, receipt: receiptAddr, caller: caller.publicKey, owner: owner.publicKey, operator: first.operator.publicKey,
+        feeRecipient: feeRecipient.publicKey, instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        escrowTokens: null, ownerTokens: null, operatorTokens: null, protocolTokens: null, callerTokens: null, tokenProgram: null,
+        systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()
+      await execute([verifyIx, settleIx], [])
+      return { receipt: receiptAddr, inputHash, outputHash }
+    }
+
+    const r1 = await settleBatchCall('1')
+    const r2 = await settleBatchCall('2')
+    const r3 = await settleBatchCall('3')
+
+    const bNonce = ++nonce
+    const manifestHash = sha256(utf8('batch-manifest-localnet'))
+    const bKey = batchPda(batchModel.address, caller.publicKey, bNonce, voynich.programId)
+
+    // 1. Reject invalid total_count (0 and 257) -> InvalidBatch
+    await assert.rejects(
+      execute([await voynich.methods.openBatch(bn(bNonce), [...manifestHash], 0).accountsStrict({
+        caller: caller.publicKey, model: batchModel.address, batch: bKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [caller]),
+      /InvalidBatch/,
+    )
+    await assert.rejects(
+      execute([await voynich.methods.openBatch(bn(bNonce), [...manifestHash], 257).accountsStrict({
+        caller: caller.publicKey, model: batchModel.address, batch: bKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+      }).instruction()], [caller]),
+      /InvalidBatch/,
+    )
+
+    // 2. Open 3-item Batch PDA
+    await execute([await voynich.methods.openBatch(bn(bNonce), [...manifestHash], 3).accountsStrict({
+      caller: caller.publicKey, model: batchModel.address, batch: bKey, systemProgram: SystemProgram.programId, ...events(voynich.programId),
+    }).instruction()], [caller])
+
+    const bInfo0 = await connection.getAccountInfo(bKey, 'confirmed')
+    assert.equal(bInfo0?.data.length, BATCH_SPACE)
+    const decB0 = decodeBatchAccount(bInfo0!.data)
+    assert.equal(decB0.status, 'open')
+    assert.equal(decB0.totalCount, 3)
+    assert.equal(decB0.completedCount, 0)
+    assert.equal(decB0.receiptsRoot, '00'.repeat(32))
+
+    const appendIx = (receipts: PublicKey[]) =>
+      voynich.methods.appendBatchReceipts().accountsStrict({
+        payer: admin.publicKey,
+        batch: bKey,
+        ...events(voynich.programId),
+      }).remainingAccounts(receipts.map(pubkey => ({ pubkey, isWritable: false, isSigner: false }))).instruction()
+
+    // 3. Reject empty chunk and duplicate receipt in same chunk -> InvalidBatch
+    await assert.rejects(execute([await appendIx([])], []), /InvalidBatch/)
+    await assert.rejects(execute([await appendIx([r1.receipt, r1.receipt])], []), /InvalidBatch/)
+
+    // 4. Chunk 1 (2 receipts): status stays open, completedCount = 2, exact chained root
+    await execute([await appendIx([r1.receipt, r2.receipt])], [])
+    const expectedRoot1 = computeBatchReceiptsRoot([r1, r2])
+    const decB1 = decodeBatchAccount((await connection.getAccountInfo(bKey, 'confirmed'))!.data)
+    assert.equal(decB1.status, 'open')
+    assert.equal(decB1.completedCount, 2)
+    assert.equal(decB1.receiptsRoot, expectedRoot1)
+
+    // 5. Overflow chunk (2 receipts when only 1 slot remains) -> InvalidBatch
+    await assert.rejects(execute([await appendIx([r2.receipt, r3.receipt])], []), /InvalidBatch/)
+
+    // 6. Chunk 2 (final 1 receipt): status flips to completed, exact chained root across all 3 receipts
+    await execute([await appendIx([r3.receipt])], [])
+    const expectedRootFinal = computeBatchReceiptsRoot([r1, r2, r3])
+    const decB2 = decodeBatchAccount((await connection.getAccountInfo(bKey, 'confirmed'))!.data)
+    assert.equal(decB2.status, 'completed')
+    assert.equal(decB2.completedCount, 3)
+    assert.equal(decB2.receiptsRoot, expectedRootFinal)
+    assert(decB2.completedSlot.gtn(0))
+
+    // 7. Completed batch rejects further appends -> InvalidBatch
+    await assert.rejects(execute([await appendIx([r1.receipt])], []), /InvalidBatch/)
+  })
 })

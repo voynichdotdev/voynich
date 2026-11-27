@@ -10,7 +10,7 @@ import { FixtureSessions, fixtureScenario } from './engines/server/fixture.js'
 import { readJson, readParam, readQuery } from './engines/server/input.js'
 import { streamEvent, streamEvents } from './engines/server/sse.js'
 import { FixtureState, addRange, fail } from './fixture-runtime.js'
-import { addresses, chainPrograms } from 'voynich/program'
+import { addresses, chainPrograms, computeBatchReceiptsRoot } from 'voynich/program'
 import { createModelFootprint } from './chain/create-model.js'
 import { mountFixtureRedemptionRoutes } from './chain/redemption.js'
 
@@ -198,6 +198,25 @@ export function buildApp() {
     const state = c.get('fixture'); const address = readParam(c, 'address', s.Address)
     const item = state.quorums.get(address)
     if (!item) fail('QUORUM_NOT_FOUND', 'This quorum was not found.')
+    return c.json(item)
+  })
+  app.get('/v1/batches', c => {
+    const state = c.get('fixture'); const q = readQuery(c, s.BatchQuery, queryKeys)
+    let items = [...state.batches.values()]
+    if (q.model) items = items.filter(item => item.model === q.model || item.modelName === q.model)
+    if (q.caller) items = items.filter(item => item.caller === q.caller)
+    if (q.status) items = items.filter(item => item.status === q.status)
+    return c.json(s.paginate(items, q))
+  })
+  app.get('/v1/models/:id/batches', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const q = readQuery(c, s.PageQuery, queryKeys)
+    const items = [...state.batches.values()].filter(item => item.model === model.address)
+    return c.json(s.paginate(items, q))
+  })
+  app.get('/v1/batches/:address', c => {
+    const state = c.get('fixture'); const address = readParam(c, 'address', s.Address)
+    const item = state.batches.get(address)
+    if (!item) fail('BATCH_NOT_FOUND', 'This batch was not found.')
     return c.json(item)
   })
   app.get('/v1/calls/:id', c => c.json(c.get('fixture').call(readParam(c, 'id', s.Address))))
@@ -1039,6 +1058,62 @@ export function buildApp() {
       row.finalizedSlot = String(state.slot)
       row.updatedSlot = String(state.slot)
       state.emit('quorum.updated', row)
+    }))
+  })
+  app.post('/v1/models/:id/batches/build', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId)); const body = await readJson(c, s.OpenBatchRequest)
+    const nonce = body.nonce ?? String(Date.now())
+    const address = fixtureAddress(`batch:${model.address}:${body.wallet}:${nonce}`)
+    const next: s.BatchRecord = {
+      address,
+      model: model.address,
+      modelName: model.name,
+      caller: body.wallet,
+      nonce,
+      manifestHash: body.manifestHash,
+      totalCount: body.totalCount,
+      completedCount: 0,
+      status: 'open',
+      receiptsRoot: '00'.repeat(32),
+      receipts: [],
+      createdSlot: String(state.slot),
+      completedSlot: null,
+      updatedSlot: String(state.slot),
+    }
+    return c.json(state.build('open_batch', [body.wallet], { model: model.address, batch: address }, () => {
+      state.batches.set(address, next)
+      state.emit('batch.updated', next)
+    }))
+  })
+  app.post('/v1/batches/:address/append/build', async c => {
+    const state = c.get('fixture'); const address = readParam(c, 'address', s.Address); const body = await readJson(c, s.AppendBatchReceiptsRequest)
+    const row = state.batches.get(address)
+    if (!row) fail('BATCH_NOT_FOUND', 'This batch was not found.')
+    if (row.status !== 'open') fail('INVALID_BATCH', 'This batch is already completed.', { stage: 'build' })
+    if (row.completedCount + body.receipts.length > row.totalCount) {
+      fail('INVALID_BATCH', `Appending ${body.receipts.length} receipt(s) exceeds totalCount ${row.totalCount}.`, { stage: 'build' })
+    }
+    const matched = body.receipts.map(rAddr => {
+      const r = state.receipts.find(item => item.address === rAddr)
+      if (!r || r.model !== row.model) {
+        fail('INVALID_BATCH', 'A cited receipt does not belong to this batch model.', { stage: 'build' })
+      }
+      return r
+    })
+    const nextRoot = computeBatchReceiptsRoot(
+      matched.map(r => ({ receipt: r.address, inputHash: r.inputHash, outputHash: r.outputHash })),
+      row.receiptsRoot,
+    )
+    return c.json(state.build('append_batch_receipts', [body.wallet], { model: row.model, batch: row.address }, () => {
+      row.receipts = [...row.receipts, ...body.receipts]
+      row.completedCount = row.receipts.length
+      row.receiptsRoot = nextRoot
+      if (row.completedCount === row.totalCount) {
+        row.status = 'completed'
+        row.completedSlot = String(state.slot)
+      }
+      row.updatedSlot = String(state.slot)
+      state.emit('batch.updated', row)
     }))
   })
   mountFixtureRedemptionRoutes(app)

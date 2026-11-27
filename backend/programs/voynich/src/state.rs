@@ -599,6 +599,31 @@ impl Quorum {
     pub const SPACE: usize = 8 + 32 + 32 + 8 + 32 + 1 + 1 + 1 + 32 + 1 + 1 + 32 * 5 + 8 + 8 + 1;
 }
 
+pub const MIN_BATCH_ITEMS: u16 = 1;
+pub const MAX_BATCH_ITEMS: u16 = 256;
+pub const MAX_BATCH_APPEND_CHUNK: usize = 16;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BatchStatus { Open, Completed }
+
+#[account]
+pub struct Batch {
+    pub model: Pubkey,
+    pub caller: Pubkey,
+    pub nonce: u64,
+    pub manifest_hash: [u8; 32],
+    pub total_count: u16,
+    pub completed_count: u16,
+    pub status: BatchStatus,
+    pub receipts_root: [u8; 32],
+    pub created_slot: u64,
+    pub completed_slot: u64,
+    pub bump: u8,
+}
+impl Batch {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 32 + 2 + 2 + 1 + 32 + 8 + 8 + 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1058,5 +1083,26 @@ mod tests {
         q.try_serialize(&mut buf).unwrap();
         assert_eq!(Quorum::SPACE, 326);
         assert_eq!(buf.len(), Quorum::SPACE);
+    }
+
+    #[test]
+    fn worst_case_batch_fits_within_space() {
+        let b = Batch {
+            model: Pubkey::new_unique(),
+            caller: Pubkey::new_unique(),
+            nonce: u64::MAX,
+            manifest_hash: [0x33; 32],
+            total_count: MAX_BATCH_ITEMS,
+            completed_count: MAX_BATCH_ITEMS,
+            status: BatchStatus::Completed,
+            receipts_root: [0x44; 32],
+            created_slot: u64::MAX,
+            completed_slot: u64::MAX,
+            bump: 255,
+        };
+        let mut buf = Vec::new();
+        b.try_serialize(&mut buf).unwrap();
+        assert_eq!(Batch::SPACE, 166);
+        assert_eq!(buf.len(), Batch::SPACE);
     }
 }

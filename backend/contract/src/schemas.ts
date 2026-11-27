@@ -3,7 +3,7 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.36'
+export const CONTRACT_VERSION = '0.1.37'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
@@ -15,6 +15,7 @@ export const errors = defineErrors({
   PASS_PLAN_NOT_FOUND: 404, PASS_NOT_FOUND: 404, INVALID_PASS: 422,
   REFERRAL_CONFIG_NOT_FOUND: 404, REFERRAL_NOT_FOUND: 404, INVALID_REFERRAL: 422,
   QUORUM_NOT_FOUND: 404, INVALID_QUORUM: 422,
+  BATCH_NOT_FOUND: 404, INVALID_BATCH: 422,
   GRANT_REQUIRED: 409, INVALID_QUOTE: 422, INVALID_VERSION: 422, SESSION_NOT_FOUND: 404, INVALID_SESSION: 422, CALL_NOT_FOUND: 404, CALL_NOT_OPEN: 409,
   CALL_NOT_REFUNDABLE: 409, CALL_DEADLINE_PASSED: 409, RECEIPT_NOT_FOUND: 404,
   INPUT_HASH_MISMATCH: 422, INVALID_ENVELOPE: 422, UPLOAD_INCOMPLETE: 409,
@@ -57,6 +58,9 @@ export const MAX_BENCHMARK_RECEIPTS = 16 as const
 export const MAX_REFERRAL_SHARE_BPS = 2500 as const
 export const MIN_QUORUM_VOTES = 2 as const
 export const MAX_QUORUM_VOTES = 5 as const
+export const MIN_BATCH_ITEMS = 1 as const
+export const MAX_BATCH_ITEMS = 256 as const
+export const MAX_BATCH_APPEND_CHUNK = 16 as const
 export const PROGRAM_LIMITS = { modelNameBytes: 32, weightsAccounts: MAX_WEIGHTS, measurements: 8, manifestBytes: 4096, endpointBytes: 256, weightsHeaderBytes: 56, maxOpenAnswerBytes: 4096, writeChunkBytes: WRITE_CHUNK_BYTES, maxUploadKeys: MAX_UPLOAD_KEYS, sealRangeChunks: SEAL_RANGE_CHUNKS, modelAccountBytes: MODEL_ACCOUNT_BYTES, baseFormatBytes: MAX_BASE_FORMAT, baseSourceBytes: MAX_BASE_SOURCE, sourceRepoBytes: MAX_SOURCE_REPO, commitShaBytes: MAX_COMMIT_SHA, measurementVersionBytes: MAX_MEASUREMENT_VERSION, policyCallers: MAX_POLICY_CALLERS, policyOperators: MAX_POLICY_OPERATORS, policyRegions: MAX_POLICY_REGIONS, policyRegionBytes: MAX_POLICY_REGION_LEN, splitRecipients: MAX_SPLIT_RECIPIENTS } as const
 export const AnswerMode = z.enum(['sealed', 'open'])
 export const PriceUnit = z.enum(['call', 'token'])
@@ -432,6 +436,29 @@ export const QuorumQuery = PageQuery.extend({
   caller: Address.optional(),
   status: QuorumStatus.optional(),
 })
+export const BatchStatus = z.enum(['open', 'completed'])
+export const BatchRecord = z.strictObject({
+  address: Address,
+  model: Address,
+  modelName: Slug.optional(),
+  caller: Address,
+  nonce: U64,
+  manifestHash: Hash,
+  totalCount: z.int().min(MIN_BATCH_ITEMS).max(MAX_BATCH_ITEMS),
+  completedCount: z.int().min(0).max(MAX_BATCH_ITEMS),
+  status: BatchStatus,
+  receiptsRoot: Hash,
+  receipts: z.array(Address).max(MAX_BATCH_ITEMS),
+  createdSlot: U64,
+  completedSlot: U64.nullable(),
+  updatedSlot: U64,
+})
+export const BatchesPage = page(BatchRecord)
+export const BatchQuery = PageQuery.extend({
+  model: ModelId.optional(),
+  caller: Address.optional(),
+  status: BatchStatus.optional(),
+})
 
 export const WalletRequest = z.strictObject({ wallet: Address })
 const CreateModelBase = z.strictObject({ wallet: Address, uploadKey: Address, uploadKeys: z.array(Address).min(1).max(MAX_UPLOAD_KEYS).optional(), weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS).optional(), name: Slug, manifest: Manifest, sizeBytes: z.int().positive(), plaintextSizeBytes: z.int().positive(), cipher: CipherHeader, price: Money, priceUnit: PriceUnit.optional(), operatorShareBps: z.int().min(0).max(10000), allowedMeasurements: z.array(Measurement).min(1).max(8), uploadFundingLamports: U64, base: ModelBase.optional() })
@@ -638,8 +665,21 @@ export const FinalizeQuorumRequest = z.strictObject({
     'receipts must contain distinct receipt addresses.',
   ),
 })
-export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split', 'deposit_bond', 'withdraw_bond', 'publish_benchmark', 'set_pass_plan', 'buy_pass', 'open_pass_call', 'close_pass', 'set_referral_config', 'register_call_referral', 'claim_referral', 'open_quorum', 'finalize_quorum'])
-export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional(), bond: Address.optional(), benchmark: Address.optional(), passPlan: Address.optional(), pass: Address.optional(), referralConfig: Address.optional(), referral: Address.optional(), callReferral: Address.optional(), quorum: Address.optional() }) })
+export const OpenBatchRequest = z.strictObject({
+  wallet: Address,
+  manifestHash: Hash.refine((value) => !/^0{64}$/.test(value), 'manifestHash must be non-zero.'),
+  totalCount: z.int().min(MIN_BATCH_ITEMS).max(MAX_BATCH_ITEMS),
+  nonce: U64.optional(),
+})
+export const AppendBatchReceiptsRequest = z.strictObject({
+  wallet: Address,
+  receipts: z.array(Address).min(1).max(MAX_BATCH_APPEND_CHUNK).refine(
+    (items) => new Set(items).size === items.length,
+    'receipts must contain distinct receipt addresses.',
+  ),
+})
+export const Action = z.enum(['create_model', 'attach_weights', 'write_weights', 'seal_range', 'seal_model', 'set_price', 'grant_by_owner', 'revoke_grant', 'set_quote', 'retire_model', 'open_call', 'settle_metered_call', 'refund_call', 'post_bounty', 'draw_bounty', 'collect_bounty', 'cancel_bounty', 'publish_measurement', 'deprecate_measurement', 'set_policy', 'clear_policy', 'begin_version', 'write_version_weights', 'seal_version_range', 'publish_version', 'open_session', 'close_session', 'open_session_call', 'set_split', 'claim_split', 'deposit_bond', 'withdraw_bond', 'publish_benchmark', 'set_pass_plan', 'buy_pass', 'open_pass_call', 'close_pass', 'set_referral_config', 'register_call_referral', 'claim_referral', 'open_quorum', 'finalize_quorum', 'open_batch', 'append_batch_receipts'])
+export const Build = z.strictObject({ id: z.string(), transactionBase64: Base64, blockhash: z.string(), lastValidBlockHeight: z.int().nonnegative(), cosigned: z.boolean(), action: Action, requiredSigners: z.array(Address), fixture: z.boolean(), addresses: z.strictObject({ model: Address.optional(), call: Address.optional(), receipt: Address.optional(), weights: z.array(Address).optional(), uploadKey: Address.optional(), bounty: Address.optional(), attempt: Address.optional(), measurement: Address.optional(), policy: Address.optional(), grant: Address.optional(), modelVersion: Address.optional(), session: Address.optional(), split: Address.optional(), bond: Address.optional(), benchmark: Address.optional(), passPlan: Address.optional(), pass: Address.optional(), referralConfig: Address.optional(), referral: Address.optional(), callReferral: Address.optional(), quorum: Address.optional(), batch: Address.optional() }) })
 export const TxFailure = z.strictObject({ stage: z.enum(['build', 'wallet-rejected', 'wallet-changed', 'simulation', 'send', 'confirm']), message: z.string(), nextStep: z.string().optional(), retryable: z.boolean(), program: z.strictObject({ address: Address, code: z.int().nullable(), name: z.string().nullable() }).optional() })
 export const TxStatus = z.strictObject({ id: z.string(), status: z.enum(['built', 'submitted', 'unconfirmed', 'confirmed', 'finalized', 'failed', 'expired']), signature: Signature.optional(), error: TxFailure.nullish() })
 export const TxSubmission = z.discriminatedUnion('mode', [z.strictObject({ mode: z.literal('relay'), buildId: z.string(), signedTransactionBase64: Base64, idempotencyKey: z.string().min(1).max(128) }), z.strictObject({ mode: z.literal('wallet-sent'), buildId: z.string(), signature: Signature, idempotencyKey: z.string().min(1).max(128) })])
@@ -667,6 +707,7 @@ export const ProgramEvent = z.discriminatedUnion('type', [
   z.strictObject({ ...eventFields, type: z.literal('referral_config.updated'), data: ReferralConfig }),
   z.strictObject({ ...eventFields, type: z.literal('referral.updated'), data: Referral }),
   z.strictObject({ ...eventFields, type: z.literal('quorum.updated'), data: QuorumRecord }),
+  z.strictObject({ ...eventFields, type: z.literal('batch.updated'), data: BatchRecord }),
   z.strictObject({ ...eventFields, type: z.literal('transaction.updated'), data: TxStatus }),
 ])
 
@@ -798,6 +839,12 @@ export type QuorumsPage = z.output<typeof QuorumsPage>
 export type QuorumQuery = z.output<typeof QuorumQuery>
 export type OpenQuorumRequest = z.output<typeof OpenQuorumRequest>
 export type FinalizeQuorumRequest = z.output<typeof FinalizeQuorumRequest>
+export type BatchStatus = z.output<typeof BatchStatus>
+export type BatchRecord = z.output<typeof BatchRecord>
+export type BatchesPage = z.output<typeof BatchesPage>
+export type BatchQuery = z.output<typeof BatchQuery>
+export type OpenBatchRequest = z.output<typeof OpenBatchRequest>
+export type AppendBatchReceiptsRequest = z.output<typeof AppendBatchReceiptsRequest>
 export type VersionStatus = z.output<typeof VersionStatus>
 export type ModelVersion = z.output<typeof ModelVersion>
 export type ModelVersions = z.output<typeof ModelVersions>

@@ -65,4 +65,6 @@ pub mod voynich {
     pub fn claim_referral(ctx: Context<ClaimReferral>) -> Result<()> { handlers::claim_referral(ctx) }
     pub fn open_quorum(ctx: Context<OpenQuorum>, nonce: u64, input_hash: [u8; 32], required_votes: u8, require_distinct_enclaves: bool) -> Result<()> { handlers::open_quorum(ctx, nonce, input_hash, required_votes, require_distinct_enclaves) }
     pub fn finalize_quorum<'info>(ctx: Context<'_, '_, 'info, 'info, FinalizeQuorum<'info>>) -> Result<()> { handlers::finalize_quorum(ctx) }
+    pub fn open_batch(ctx: Context<OpenBatch>, nonce: u64, manifest_hash: [u8; 32], total_count: u16) -> Result<()> { handlers::open_batch(ctx, nonce, manifest_hash, total_count) }
+    pub fn append_batch_receipts<'info>(ctx: Context<'_, '_, 'info, 'info, AppendBatchReceipts<'info>>) -> Result<()> { handlers::append_batch_receipts(ctx) }
 }

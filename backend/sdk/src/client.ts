@@ -1,6 +1,6 @@
 import { Connection, Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { IdlAccounts } from '@coral-xyz/anchor'
-import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AccountPasses, type AccountReferrals, type AccountSessions, type AnswerMode, type BenchmarkQuery, type BenchmarkRecord, type BenchmarksPage, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type ModelVersion, type ModelVersions, type Money, type OperatorBond, type Pass, type PassPlan, type PriceUnit, type QuorumQuery, type QuorumRecord, type QuorumsPage, type Receipt, type ReceiptView, type Referral, type ReferralConfig, type Session, type SplitRecipientInput, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
+import { ATTACH_WEIGHTS_BATCH, Address, ApiClientError, DEFAULT_UPLOAD_KEYS, INITIAL_CREATE_WEIGHTS, MAX_UPLOAD_KEYS, MAX_WEIGHTS, ModelBaseSchema, ProgramEvent, SEAL_RANGE_CHUNKS, StreamPiece as StreamPieceSchema, WRITE_CHUNK_BYTES, createClient, decodeManifest, fromBase58, type AccountPasses, type AccountReferrals, type AccountSessions, type AnswerMode, type BatchQuery, type BatchRecord, type BatchesPage, type BenchmarkQuery, type BenchmarkRecord, type BenchmarksPage, type Build, type Call, type CallAnswer, type Enclave, type GrantedEnclave, type Manifest, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type ModelVersion, type ModelVersions, type Money, type OperatorBond, type Pass, type PassPlan, type PriceUnit, type QuorumQuery, type QuorumRecord, type QuorumsPage, type Receipt, type ReceiptView, type Referral, type ReferralConfig, type Session, type SplitRecipientInput, type StreamFinishReason, type StreamPiece, type TxStatus } from '@voynich/contract'
 import { decodeAdapter } from './adapter.js'
 import { CIPHER_CHUNK_BYTES, WEIGHTS_CHUNK_BYTES, WEIGHTS_CIPHER, ciphertextHash, decryptCallOutput, encryptCallInput, fromBase64, fromHex, generateEncryptionKeyPair, openWeightsChunk, sealWeights, sha256, signSealDerivation, streamInitialHash, streamNextHash, toBase64, toHex, utf8, verifyPiece, verifyReceipt, wrapKey, type SealDerivationSigner, type WeightsCipherHeader } from './crypto.js'
 import { addresses, chainPrograms, decodeAttestation, decodeConfigAccount, decodeGrantAccount, decodeModelBaseBytes, decodeModelVersionAccount, decodeReceiptAccount, decodeWeightsHeader, modelVersionPda, PROGRAM_ID, type Voynich as VoynichProgram } from './program.js'
@@ -2164,6 +2164,49 @@ export function createVoynich(options: VoynichOptions) {
       receipts,
     }
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, getBond, depositBond, withdrawBond, listBenchmarks, listModelBenchmarks, publishBenchmark, getPassPlan, setPassPlan, buyPass, listPasses, pass, closePass, getReferralConfig, setReferralConfig, listReferrals, claimReferral, listQuorums, listModelQuorums, quorum, openQuorum, finalizeQuorum, runQuorum, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  async function listBatches(query: Partial<BatchQuery> = {}, opts: { signal?: AbortSignal } = {}): Promise<BatchesPage> {
+    return api.batches(query, { signal: opts.signal })
+  }
+  async function listModelBatches(modelId: string, query: { limit?: number; cursor?: string } = {}, opts: { signal?: AbortSignal } = {}): Promise<BatchesPage> {
+    return api.modelBatches(modelId, query, { signal: opts.signal })
+  }
+  async function batch(address: string, opts: { signal?: AbortSignal } = {}): Promise<BatchRecord> {
+    return api.batch(address, { signal: opts.signal })
+  }
+  async function openBatch(
+    modelId: string,
+    input: { manifestHash: string; totalCount: number; nonce?: bigint | number | string },
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<BatchRecord> {
+    const wallet = signer()
+    const build = await api.openBatch(modelId, {
+      wallet: wallet.publicKey.toBase58(),
+      manifestHash: input.manifestHash,
+      totalCount: input.totalCount,
+      ...(input.nonce !== undefined ? { nonce: String(input.nonce) } : {}),
+    }, { signal: opts.signal })
+    await send(build, [], undefined, opts.signal)
+    const address = build.addresses.batch!
+    return indexed(() => api.batch(address, { signal: opts.signal }), 'BATCH_NOT_FOUND', undefined, opts.signal)
+  }
+  async function appendBatchReceipts(
+    address: string,
+    receipts: string[],
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<{ batch: BatchRecord; transaction: TxStatus }> {
+    const wallet = signer()
+    const before = await api.batch(address, { signal: opts.signal })
+    const expectedCompleted = before.completedCount + receipts.length
+    const build = await api.appendBatchReceipts(address, { wallet: wallet.publicKey.toBase58(), receipts }, { signal: opts.signal })
+    const transaction = await send(build, [], undefined, opts.signal)
+    const updated = await indexed(
+      () => api.batch(address, { signal: opts.signal }),
+      'BATCH_NOT_FOUND',
+      value => value.completedCount >= expectedCompleted,
+      opts.signal,
+    )
+    return { batch: updated, transaction }
+  }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, getBond, depositBond, withdrawBond, listBenchmarks, listModelBenchmarks, publishBenchmark, getPassPlan, setPassPlan, buyPass, listPasses, pass, closePass, getReferralConfig, setReferralConfig, listReferrals, claimReferral, listQuorums, listModelQuorums, quorum, openQuorum, finalizeQuorum, runQuorum, listBatches, listModelBatches, batch, openBatch, appendBatchReceipts, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>

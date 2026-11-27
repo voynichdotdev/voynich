@@ -45,6 +45,7 @@ export class FixtureState {
   readonly referrals = new Map<string, import('@voynich/contract').Referral>()
   readonly callReferrals = new Map<string, { referrer: string; shareBps: number; settled: boolean }>()
   readonly quorums = new Map<string, import('@voynich/contract').QuorumRecord>()
+  readonly batches = new Map<string, import('@voynich/contract').BatchRecord>()
   readonly versions = new Map<string, import('@voynich/contract').ModelVersion[]>()
   readonly stagedVersions = new Map<string, { version: number; address: string; weights: string[]; sizeBytes: number; noncePrefix: string; manifest: import('@voynich/contract').Manifest; base: import('@voynich/contract').ModelBase | null; bytes: Uint8Array; sealedChunks: number }>()
   readonly sessions = new Map<string, import('@voynich/contract').Session>()

@@ -42,4 +42,5 @@ pub enum VoynichError {
     #[msg("The pass plan or prepaid pass is invalid, inactive, expired, or exhausted.")] InvalidPass,
     #[msg("The referral config, call referral, or referral claim is invalid.")] InvalidReferral,
     #[msg("The quorum configuration, status, or receipt consensus proofs are invalid.")] InvalidQuorum,
+    #[msg("The batch configuration, status, or receipt chunk is invalid.")] InvalidBatch,
 }

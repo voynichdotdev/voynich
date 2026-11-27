@@ -86,6 +86,11 @@ export function quorumPda(model: Key, caller: Key, nonce: bigint | number | stri
   new DataView(bytes.buffer).setBigUint64(0, BigInt(nonce), true)
   return pda(key(programId), utf8('quorum'), key(model).toBytes(), key(caller).toBytes(), bytes)
 }
+export function batchPda(model: Key, caller: Key, nonce: bigint | number | string, programId: Key = PROGRAM_ID): PublicKey {
+  const bytes = new Uint8Array(8)
+  new DataView(bytes.buffer).setBigUint64(0, BigInt(nonce), true)
+  return pda(key(programId), utf8('batch'), key(model).toBytes(), key(caller).toBytes(), bytes)
+}
 export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTATION_PROGRAM_ID) {
   return {
     config: pda(programId, utf8('config')),
@@ -108,6 +113,7 @@ export function addresses(programId = PROGRAM_ID, attestationProgramId = ATTESTA
     referral: (model: Key, referrer: Key) => referralPda(model, referrer, programId),
     callReferral: (call: Key) => callReferralPda(call, programId),
     quorum: (model: Key, caller: Key, nonce: bigint | number | string) => quorumPda(model, caller, nonce, programId),
+    batch: (model: Key, caller: Key, nonce: bigint | number | string) => batchPda(model, caller, nonce, programId),
     record: (signing: Key) => pda(attestationProgramId, utf8('record'), key(signing).toBytes()),
   }
 }
@@ -1921,6 +1927,133 @@ export async function buildFinalizeQuorumTx(params: {
     .accountsStrict({
       payer,
       quorum,
+      ...eventAccounts(programId),
+    })
+    .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: payer, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export const MIN_BATCH_ITEMS = 1 as const
+export const MAX_BATCH_ITEMS = 256 as const
+export const MAX_BATCH_APPEND_CHUNK = 16 as const
+export const BATCH_SPACE = 166 as const
+
+export type DecodedBatchAccount = {
+  model: PublicKey
+  caller: PublicKey
+  nonce: BN
+  manifestHash: string
+  totalCount: number
+  completedCount: number
+  status: 'open' | 'completed'
+  receiptsRoot: string
+  createdSlot: BN
+  completedSlot: BN
+  bump: number
+}
+
+export function computeBatchReceiptsRoot(
+  entries: ReadonlyArray<{ receipt: Key; inputHash: string | Uint8Array; outputHash: string | Uint8Array }>,
+  initialRoot: string | Uint8Array = new Uint8Array(32),
+): string {
+  let root: Uint8Array = typeof initialRoot === 'string' ? fromHex(initialRoot) : new Uint8Array(initialRoot)
+  if (root.length !== 32) throw new Error('initialRoot must be 32 bytes')
+  for (const entry of entries) {
+    const receiptBytes = key(entry.receipt).toBytes()
+    const inputBytes = typeof entry.inputHash === 'string' ? fromHex(entry.inputHash) : entry.inputHash
+    const outputBytes = typeof entry.outputHash === 'string' ? fromHex(entry.outputHash) : entry.outputHash
+    if (inputBytes.length !== 32 || outputBytes.length !== 32) {
+      throw new Error('Batch receipt hashes must be 32 bytes')
+    }
+    const buf = new Uint8Array(128)
+    buf.set(root, 0)
+    buf.set(receiptBytes, 32)
+    buf.set(inputBytes, 64)
+    buf.set(outputBytes, 96)
+    root = sha256(buf)
+  }
+  return toHex(root)
+}
+
+export function decodeBatchAccount(data: Uint8Array): DecodedBatchAccount {
+  if (!matchesDisc(data, 'account:Batch') || data.length < BATCH_SPACE) {
+    throw new Error('Invalid Batch account data')
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  let offset = 8
+  const model = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const caller = new PublicKey(data.subarray(offset, offset + 32)); offset += 32
+  const nonce = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const manifestHash = toHex(data.subarray(offset, offset + 32)); offset += 32
+  const totalCount = view.getUint16(offset, true); offset += 2
+  const completedCount = view.getUint16(offset, true); offset += 2
+  const statusByte = data[offset++]!
+  if (statusByte > 1) throw new Error(`Invalid Batch status: ${statusByte}`)
+  const status = statusByte === 0 ? 'open' : 'completed'
+  const receiptsRoot = toHex(data.subarray(offset, offset + 32)); offset += 32
+  const createdSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const completedSlot = new BN(view.getBigUint64(offset, true).toString()); offset += 8
+  const bump = data[offset++]!
+  return {
+    model, caller, nonce, manifestHash, totalCount, completedCount,
+    status, receiptsRoot, createdSlot, completedSlot, bump,
+  }
+}
+
+export async function buildOpenBatchTx(params: {
+  connection: Connection
+  caller: Key
+  model: Key
+  nonce: bigint | number | string
+  manifestHash: string | Uint8Array
+  totalCount: number
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const caller = key(params.caller)
+  const model = key(params.model)
+  const batch = batchPda(model, caller, params.nonce, programId)
+  const hashBytes = typeof params.manifestHash === 'string' ? fromHex(params.manifestHash) : params.manifestHash
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .openBatch(new BN(String(params.nonce)), [...hashBytes], params.totalCount)
+    .accountsStrict({
+      caller,
+      model,
+      batch,
+      systemProgram: SystemProgram.programId,
+      ...eventAccounts(programId),
+    })
+    .instruction()
+  const recentBlockhash = params.recentBlockhash ?? (await params.connection.getLatestBlockhash('confirmed')).blockhash
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: caller, recentBlockhash, instructions: [instruction] }).compileToV0Message(),
+  )
+}
+
+export async function buildAppendBatchReceiptsTx(params: {
+  connection: Connection
+  payer: Key
+  batch: Key
+  receipts: Key[]
+  recentBlockhash?: string
+  programId?: Key
+}): Promise<VersionedTransaction> {
+  const programId = key(params.programId ?? PROGRAM_ID)
+  const payer = key(params.payer)
+  const batch = key(params.batch)
+  const receiptKeys = params.receipts.map(key)
+  const { voynich } = chainPrograms(params.connection, { programId })
+  const instruction = await voynich.methods
+    .appendBatchReceipts()
+    .accountsStrict({
+      payer,
+      batch,
       ...eventAccounts(programId),
     })
     .remainingAccounts(receiptKeys.map(pubkey => ({ pubkey, isWritable: false, isSigner: false })))

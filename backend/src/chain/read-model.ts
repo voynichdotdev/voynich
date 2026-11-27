@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { PublicKey, type Connection } from '@solana/web3.js'
-import { decodeManifest, type AccountPasses, type AccountReferrals, type AttestationRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Pass, type PassPlan, type QuorumQuery, type QuorumRecord, type Receipt, type Referral, type ReferralConfig, type ModelQuery } from '@voynich/contract'
+import { decodeManifest, type AccountPasses, type AccountReferrals, type AttestationRecord, type BatchQuery, type BatchRecord, type BenchmarkQuery, type BenchmarkRecord, type Bounty, type BountyAttempt, type BountyDetail, type BountyQuery, type Call, type Enclave, type Grant, type MeasurementQuery, type MeasurementRecord, type Model, type ModelBase, type ModelPolicy, type ModelSplit, type Money, type OperatorBond, type Pass, type PassPlan, type QuorumQuery, type QuorumRecord, type Receipt, type Referral, type ReferralConfig, type ModelQuery } from '@voynich/contract'
 import { toBase64 } from 'voynich/crypto'
 import { fail } from './errors.js'
 
@@ -590,5 +590,59 @@ export class ReadModel {
       take: query.limit + 1,
     })
     return page(rows.map(row => this.quorumRow(row)), query)
+  }
+  private batchRow(row: Prisma.BatchGetPayload<{ include: { model: { select: { name: true } } } }>): BatchRecord {
+    return {
+      address: row.address,
+      model: row.modelAddress,
+      modelName: row.model.name,
+      caller: row.caller,
+      nonce: row.nonce,
+      manifestHash: row.manifestHash,
+      totalCount: row.totalCount,
+      completedCount: row.completedCount,
+      status: row.status,
+      receiptsRoot: row.receiptsRoot,
+      receipts: ((row.receipts as string[]) ?? []).slice(0, row.completedCount),
+      createdSlot: String(row.createdSlot),
+      completedSlot: row.completedSlot !== null ? String(row.completedSlot) : null,
+      updatedSlot: String(row.updatedSlot),
+    }
+  }
+  async batch(address: string): Promise<BatchRecord> {
+    const row = await this.db.batch.findUnique({ where: { address }, include: { model: { select: { name: true } } } })
+    if (!row) fail('BATCH_NOT_FOUND', 'This batch was not found.')
+    return this.batchRow(row)
+  }
+  async batches(query: BatchQuery) {
+    let modelAddress: string | undefined
+    if (query.model) {
+      const resolved = await this.db.model.findFirst({ where: { OR: [{ address: query.model }, { name: query.model }] }, select: { address: true } })
+      modelAddress = resolved?.address ?? query.model
+    }
+    const rows = await this.db.batch.findMany({
+      where: {
+        ...(modelAddress ? { modelAddress } : {}),
+        ...(query.caller ? { caller: query.caller } : {}),
+        ...(query.status ? { status: query.status } : {}),
+      },
+      orderBy: [{ createdSlot: 'desc' }, { address: 'asc' }],
+      include: { model: { select: { name: true } } },
+      skip: Number(query.cursor ?? 0),
+      take: query.limit + 1,
+    })
+    return page(rows.map(row => this.batchRow(row)), query)
+  }
+  async modelBatches(id: string, query: Page) {
+    const resolved = await this.db.model.findFirst({ where: { OR: [{ address: id }, { name: id }] }, select: { address: true } })
+    if (!resolved) fail('MODEL_NOT_FOUND', 'This model was not found.')
+    const rows = await this.db.batch.findMany({
+      where: { modelAddress: resolved.address },
+      orderBy: [{ createdSlot: 'desc' }, { address: 'asc' }],
+      include: { model: { select: { name: true } } },
+      skip: Number(query.cursor ?? 0),
+      take: query.limit + 1,
+    })
+    return page(rows.map(row => this.batchRow(row)), query)
   }
 }

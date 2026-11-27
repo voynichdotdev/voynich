@@ -13,6 +13,92 @@ export type Voynich = {
   },
   "instructions": [
     {
+      "name": "appendBatchReceipts",
+      "discriminator": [
+        194,
+        163,
+        106,
+        19,
+        247,
+        9,
+        28,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "batch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "batch.model",
+                "account": "batch"
+              },
+              {
+                "kind": "account",
+                "path": "batch.caller",
+                "account": "batch"
+              },
+              {
+                "kind": "account",
+                "path": "batch.nonce",
+                "account": "batch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "attachWeights",
       "discriminator": [
         18,
@@ -1864,6 +1950,133 @@ export type Voynich = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "openBatch",
+      "discriminator": [
+        103,
+        163,
+        23,
+        69,
+        63,
+        155,
+        108,
+        163
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "batch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "caller"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "manifestHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "totalCount",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "openCall",
@@ -6482,6 +6695,19 @@ export type Voynich = {
   ],
   "accounts": [
     {
+      "name": "batch",
+      "discriminator": [
+        156,
+        194,
+        70,
+        44,
+        22,
+        88,
+        137,
+        44
+      ]
+    },
+    {
       "name": "benchmark",
       "discriminator": [
         57,
@@ -6730,6 +6956,45 @@ export type Voynich = {
     }
   ],
   "events": [
+    {
+      "name": "batchCompleted",
+      "discriminator": [
+        29,
+        223,
+        111,
+        148,
+        201,
+        240,
+        170,
+        51
+      ]
+    },
+    {
+      "name": "batchOpened",
+      "discriminator": [
+        232,
+        120,
+        56,
+        150,
+        9,
+        193,
+        191,
+        96
+      ]
+    },
+    {
+      "name": "batchReceiptsAppended",
+      "discriminator": [
+        28,
+        18,
+        238,
+        15,
+        204,
+        221,
+        212,
+        153
+      ]
+    },
     {
       "name": "benchmarkPublished",
       "discriminator": [
@@ -7464,6 +7729,11 @@ export type Voynich = {
       "code": 6039,
       "name": "invalidQuorum",
       "msg": "The quorum configuration, status, or receipt consensus proofs are invalid."
+    },
+    {
+      "code": 6040,
+      "name": "invalidBatch",
+      "msg": "The batch configuration, status, or receipt chunk is invalid."
     }
   ],
   "types": [
@@ -7477,6 +7747,219 @@ export type Voynich = {
           },
           {
             "name": "open"
+          }
+        ]
+      }
+    },
+    {
+      "name": "batch",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "manifestHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "totalCount",
+            "type": "u16"
+          },
+          {
+            "name": "completedCount",
+            "type": "u16"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "batchStatus"
+              }
+            }
+          },
+          {
+            "name": "receiptsRoot",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "createdSlot",
+            "type": "u64"
+          },
+          {
+            "name": "completedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "batchCompleted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batch",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "completedCount",
+            "type": "u16"
+          },
+          {
+            "name": "totalCount",
+            "type": "u16"
+          },
+          {
+            "name": "receiptsRoot",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "completedSlot",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "batchStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "batchOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batch",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "manifestHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "totalCount",
+            "type": "u16"
+          },
+          {
+            "name": "createdSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "batchReceiptsAppended",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batch",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "completedCount",
+            "type": "u16"
+          },
+          {
+            "name": "totalCount",
+            "type": "u16"
+          },
+          {
+            "name": "receiptsRoot",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "batchStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "open"
+          },
+          {
+            "name": "completed"
           }
         ]
       }
@@ -11162,6 +11645,92 @@ export const IDL: Voynich = {
   },
   "instructions": [
     {
+      "name": "append_batch_receipts",
+      "discriminator": [
+        194,
+        163,
+        106,
+        19,
+        247,
+        9,
+        28,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "batch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "batch.model",
+                "account": "Batch"
+              },
+              {
+                "kind": "account",
+                "path": "batch.caller",
+                "account": "Batch"
+              },
+              {
+                "kind": "account",
+                "path": "batch.nonce",
+                "account": "Batch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "attach_weights",
       "discriminator": [
         18,
@@ -13013,6 +13582,133 @@ export const IDL: Voynich = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "open_batch",
+      "discriminator": [
+        103,
+        163,
+        23,
+        69,
+        63,
+        155,
+        108,
+        163
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "model",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model.name",
+                "account": "Model"
+              }
+            ]
+          }
+        },
+        {
+          "name": "batch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "model"
+              },
+              {
+                "kind": "account",
+                "path": "caller"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "manifest_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "total_count",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "open_call",
@@ -17631,6 +18327,19 @@ export const IDL: Voynich = {
   ],
   "accounts": [
     {
+      "name": "Batch",
+      "discriminator": [
+        156,
+        194,
+        70,
+        44,
+        22,
+        88,
+        137,
+        44
+      ]
+    },
+    {
       "name": "Benchmark",
       "discriminator": [
         57,
@@ -17879,6 +18588,45 @@ export const IDL: Voynich = {
     }
   ],
   "events": [
+    {
+      "name": "BatchCompleted",
+      "discriminator": [
+        29,
+        223,
+        111,
+        148,
+        201,
+        240,
+        170,
+        51
+      ]
+    },
+    {
+      "name": "BatchOpened",
+      "discriminator": [
+        232,
+        120,
+        56,
+        150,
+        9,
+        193,
+        191,
+        96
+      ]
+    },
+    {
+      "name": "BatchReceiptsAppended",
+      "discriminator": [
+        28,
+        18,
+        238,
+        15,
+        204,
+        221,
+        212,
+        153
+      ]
+    },
     {
       "name": "BenchmarkPublished",
       "discriminator": [
@@ -18613,6 +19361,11 @@ export const IDL: Voynich = {
       "code": 6039,
       "name": "InvalidQuorum",
       "msg": "The quorum configuration, status, or receipt consensus proofs are invalid."
+    },
+    {
+      "code": 6040,
+      "name": "InvalidBatch",
+      "msg": "The batch configuration, status, or receipt chunk is invalid."
     }
   ],
   "types": [
@@ -18626,6 +19379,219 @@ export const IDL: Voynich = {
           },
           {
             "name": "Open"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Batch",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "manifest_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "total_count",
+            "type": "u16"
+          },
+          {
+            "name": "completed_count",
+            "type": "u16"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "BatchStatus"
+              }
+            }
+          },
+          {
+            "name": "receipts_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          },
+          {
+            "name": "completed_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchCompleted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batch",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "completed_count",
+            "type": "u16"
+          },
+          {
+            "name": "total_count",
+            "type": "u16"
+          },
+          {
+            "name": "receipts_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "completed_slot",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "BatchStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batch",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "manifest_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "total_count",
+            "type": "u16"
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchReceiptsAppended",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batch",
+            "type": "pubkey"
+          },
+          {
+            "name": "model",
+            "type": "pubkey"
+          },
+          {
+            "name": "receipts",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "completed_count",
+            "type": "u16"
+          },
+          {
+            "name": "total_count",
+            "type": "u16"
+          },
+          {
+            "name": "receipts_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Open"
+          },
+          {
+            "name": "Completed"
           }
         ]
       }

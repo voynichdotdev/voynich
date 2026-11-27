@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{AnswerMode, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PassStatus, PriceUnit, QuorumStatus, SessionStatus, SplitRecipient};
+use crate::state::{AnswerMode, BatchStatus, CallStatus, CallbackAccount, ConfigArgs, MeasurementStatus, ModelBase, ModelStatus, PassStatus, PriceUnit, QuorumStatus, SessionStatus, SplitRecipient};
 
 #[event]
 pub struct ConfigChanged { pub admin: Pubkey, pub config: ConfigArgs }
@@ -160,4 +160,21 @@ pub struct QuorumAgreed {
     pub quorum: Pubkey, pub model: Pubkey, pub caller: Pubkey, pub input_hash: [u8; 32],
     pub agreed_output_hash: [u8; 32], pub vote_count: u8, pub distinct_enclaves: u8,
     pub receipts: [Pubkey; 5], pub finalized_slot: u64, pub status: QuorumStatus,
+}
+#[event]
+pub struct BatchOpened {
+    pub batch: Pubkey, pub model: Pubkey, pub caller: Pubkey, pub nonce: u64,
+    pub manifest_hash: [u8; 32], pub total_count: u16, pub created_slot: u64,
+}
+#[event]
+pub struct BatchReceiptsAppended {
+    pub batch: Pubkey, pub model: Pubkey, pub receipts: Vec<Pubkey>,
+    pub completed_count: u16, pub total_count: u16, pub receipts_root: [u8; 32],
+    pub slot: u64,
+}
+#[event]
+pub struct BatchCompleted {
+    pub batch: Pubkey, pub model: Pubkey, pub caller: Pubkey,
+    pub completed_count: u16, pub total_count: u16, pub receipts_root: [u8; 32],
+    pub completed_slot: u64, pub status: BatchStatus,
 }

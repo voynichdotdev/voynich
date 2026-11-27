@@ -97,6 +97,7 @@ model Model {
   referrals           Referral[]
   callReferrals       CallReferral[]
   quorums             Quorum[]
+  batches             Batch[]
   benchmarks          Benchmark[]
   versions            ModelVersion[]
   weights             Weights[]
@@ -679,6 +680,33 @@ model Quorum {
   @@index([caller, createdSlot(sort: Desc)])
   @@index([status, createdSlot(sort: Desc)])
   @@map("quorums")
+}
+
+enum BatchStatus {
+  open
+  completed
+}
+
+model Batch {
+  address        String      @id @db.VarChar(44)
+  modelAddress   String      @db.VarChar(44)
+  model          Model       @relation(fields: [modelAddress], references: [address])
+  caller         String      @db.VarChar(44)
+  nonce          String
+  manifestHash   String      @db.Char(64)
+  totalCount     Int
+  completedCount Int         @default(0)
+  status         BatchStatus @default(open)
+  receiptsRoot   String      @db.Char(64)
+  receipts       Json
+  createdSlot    BigInt
+  completedSlot  BigInt?
+  updatedSlot    BigInt
+
+  @@index([modelAddress, createdSlot(sort: Desc)])
+  @@index([caller, createdSlot(sort: Desc)])
+  @@index([status, createdSlot(sort: Desc)])
+  @@map("batches")
 }
 
 model RedemptionClaim {

@@ -7222,6 +7222,158 @@ test('Build 17 Step 2: compiled CLI quorum run / list / show and SDK runQuorum r
   }
 })
 
+test('Build 18 Step 1: Batch PDA decoder, computeBatchReceiptsRoot, tx builders, schema validation, and fixture API + SDK openBatch / appendBatchReceipts / listBatches flow', async () => {
+  const { Connection, Keypair, PublicKey } = await import('@solana/web3.js')
+  const {
+    AppendBatchReceiptsRequest, MAX_BATCH_APPEND_CHUNK, MAX_BATCH_ITEMS, MIN_BATCH_ITEMS, OpenBatchRequest,
+  } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const {
+    BATCH_SPACE, batchPda, buildAppendBatchReceiptsTx, buildOpenBatchTx, computeBatchReceiptsRoot, decodeBatchAccount,
+  } = await import('../sdk/src/program.js')
+  const { createVoynich } = await import('voynich')
+  const { sha256, toHex, utf8 } = await import('voynich/crypto')
+  const { buildApp } = await import('../src/app.js')
+
+  assert.equal(MIN_BATCH_ITEMS, 1)
+  assert.equal(MAX_BATCH_ITEMS, 256)
+  assert.equal(MAX_BATCH_APPEND_CHUNK, 16)
+  assert.equal(BATCH_SPACE, 166)
+
+  // 1. decodeBatchAccount round-trip on a full 166-byte Batch buffer
+  const modelKey = Keypair.generate().publicKey
+  const callerKey = Keypair.generate().publicKey
+  const manifestHashBytes = sha256(utf8('batch-manifest-v1'))
+  const r1 = Keypair.generate().publicKey
+  const r2 = Keypair.generate().publicKey
+  const r3 = Keypair.generate().publicKey
+  const expectedRootHex = computeBatchReceiptsRoot([
+    { receipt: r1, inputHash: toHex(sha256(utf8('in-1'))), outputHash: toHex(sha256(utf8('out-1'))) },
+    { receipt: r2, inputHash: toHex(sha256(utf8('in-2'))), outputHash: toHex(sha256(utf8('out-2'))) },
+    { receipt: r3, inputHash: toHex(sha256(utf8('in-3'))), outputHash: toHex(sha256(utf8('out-3'))) },
+  ])
+  // Verify chunked root equals single-pass root
+  const chunk1Root = computeBatchReceiptsRoot([
+    { receipt: r1, inputHash: toHex(sha256(utf8('in-1'))), outputHash: toHex(sha256(utf8('out-1'))) },
+    { receipt: r2, inputHash: toHex(sha256(utf8('in-2'))), outputHash: toHex(sha256(utf8('out-2'))) },
+  ])
+  const chunk2Root = computeBatchReceiptsRoot([
+    { receipt: r3, inputHash: toHex(sha256(utf8('in-3'))), outputHash: toHex(sha256(utf8('out-3'))) },
+  ], chunk1Root)
+  assert.equal(chunk2Root, expectedRootHex)
+
+  const bBuf = Buffer.alloc(BATCH_SPACE)
+  Buffer.from(sha256(utf8('account:Batch')).subarray(0, 8)).copy(bBuf, 0)
+  let off = 8
+  modelKey.toBuffer().copy(bBuf, off); off += 32
+  callerKey.toBuffer().copy(bBuf, off); off += 32
+  bBuf.writeBigUInt64LE(77n, off); off += 8
+  Buffer.from(manifestHashBytes).copy(bBuf, off); off += 32
+  bBuf.writeUInt16LE(3, off); off += 2
+  bBuf.writeUInt16LE(3, off); off += 2
+  bBuf[off++] = 1 // status = Completed
+  Buffer.from(expectedRootHex, 'hex').copy(bBuf, off); off += 32
+  bBuf.writeBigUInt64LE(474800001n, off); off += 8
+  bBuf.writeBigUInt64LE(474800020n, off); off += 8
+  bBuf[off++] = 249
+  assert.equal(off, BATCH_SPACE)
+
+  const decB = decodeBatchAccount(bBuf)
+  assert(decB.model.equals(modelKey))
+  assert(decB.caller.equals(callerKey))
+  assert.equal(decB.nonce.toString(), '77')
+  assert.equal(decB.manifestHash, toHex(manifestHashBytes))
+  assert.equal(decB.totalCount, 3)
+  assert.equal(decB.completedCount, 3)
+  assert.equal(decB.status, 'completed')
+  assert.equal(decB.receiptsRoot, expectedRootHex)
+  assert.equal(decB.createdSlot.toString(), '474800001')
+  assert.equal(decB.completedSlot.toString(), '474800020')
+  assert.equal(decB.bump, 249)
+
+  // 2. Offline tx builders & schema validation
+  const dummyConn = new Connection('http://127.0.0.1:9704', 'confirmed')
+  const bh = Keypair.generate().publicKey.toBase58()
+  const bKey = batchPda(modelKey, callerKey, 77n)
+  assert.equal((await buildOpenBatchTx({
+    connection: dummyConn,
+    caller: callerKey,
+    model: modelKey,
+    nonce: 77n,
+    manifestHash: manifestHashBytes,
+    totalCount: 3,
+    recentBlockhash: bh,
+  })).message.compiledInstructions.length, 1)
+  assert.equal((await buildAppendBatchReceiptsTx({
+    connection: dummyConn,
+    payer: callerKey,
+    batch: bKey,
+    receipts: [r1, r2],
+    recentBlockhash: bh,
+  })).message.compiledInstructions.length, 1)
+
+  assert.equal(OpenBatchRequest.safeParse({ wallet: callerKey.toBase58(), manifestHash: toHex(manifestHashBytes), totalCount: 0 }).success, false)
+  assert.equal(OpenBatchRequest.safeParse({ wallet: callerKey.toBase58(), manifestHash: toHex(manifestHashBytes), totalCount: 257 }).success, false)
+  assert.equal(OpenBatchRequest.safeParse({ wallet: callerKey.toBase58(), manifestHash: '00'.repeat(32), totalCount: 3 }).success, false)
+  assert.equal(AppendBatchReceiptsRequest.safeParse({ wallet: callerKey.toBase58(), receipts: [] }).success, false)
+  assert.equal(AppendBatchReceiptsRequest.safeParse({ wallet: callerKey.toBase58(), receipts: [r1.toBase58(), r1.toBase58()] }).success, false)
+
+  // 3. Fixture API + SDK openBatch -> 3 calls -> appendBatchReceipts in 2 chunks (2 + 1) -> listBatches / listModelBatches / batch
+  const app = buildApp()
+  const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', 'batch-test-session')
+    return app.request(new Request(req, { headers }))
+  }) as typeof fetch
+  const callerSigner = {
+    publicKey: new PublicKey(FIXTURE.caller),
+    async signTransaction(vtx: import('@solana/web3.js').VersionedTransaction) { return vtx },
+  }
+  const sdk = createVoynich({ apiUrl: 'http://localhost', signer: callerSigner, fetch: fetchFixture, pollMs: 5 })
+
+  const c1 = await sdk.call('sketch-32', new Array<number>(784).fill(0), { answerMode: 'open' })
+  const c2 = await sdk.call('sketch-32', new Array<number>(784).fill(0), { answerMode: 'open' })
+  const c3 = await sdk.call('sketch-32', new Array<number>(784).fill(0), { answerMode: 'open' })
+
+  const opened = await sdk.openBatch('sketch-32', { manifestHash: toHex(manifestHashBytes), totalCount: 3 })
+  assert.equal(opened.status, 'open')
+  assert.equal(opened.completedCount, 0)
+  assert.equal(opened.receiptsRoot, '00'.repeat(32))
+
+  // Chunk 1: 2 receipts
+  const afterChunk1 = await sdk.appendBatchReceipts(opened.address, [c1.receipt.address, c2.receipt.address])
+  assert.equal(afterChunk1.batch.status, 'open')
+  assert.equal(afterChunk1.batch.completedCount, 2)
+  assert.equal(afterChunk1.batch.receipts.length, 2)
+
+  // Overflow (appending 2 more when only 1 slot left) must reject 422
+  await assert.rejects(() => sdk.appendBatchReceipts(opened.address, [c1.receipt.address, c3.receipt.address]), /exceeds totalCount/)
+
+  // Chunk 2: final 1 receipt -> flips to completed with exact chained root!
+  const afterChunk2 = await sdk.appendBatchReceipts(opened.address, [c3.receipt.address])
+  const expectedFixtureRoot = computeBatchReceiptsRoot([
+    { receipt: c1.receipt.address, inputHash: c1.receipt.inputHash, outputHash: c1.receipt.outputHash },
+    { receipt: c2.receipt.address, inputHash: c2.receipt.inputHash, outputHash: c2.receipt.outputHash },
+    { receipt: c3.receipt.address, inputHash: c3.receipt.inputHash, outputHash: c3.receipt.outputHash },
+  ])
+  assert.equal(afterChunk2.batch.status, 'completed')
+  assert.equal(afterChunk2.batch.completedCount, 3)
+  assert.equal(afterChunk2.batch.receiptsRoot, expectedFixtureRoot)
+  assert.deepEqual(afterChunk2.batch.receipts, [c1.receipt.address, c2.receipt.address, c3.receipt.address])
+
+  // Completed batch rejects further appends
+  await assert.rejects(() => sdk.appendBatchReceipts(opened.address, [c1.receipt.address]), /already completed/)
+
+  const fetched = await sdk.batch(opened.address)
+  assert.equal(fetched.receiptsRoot, expectedFixtureRoot)
+  const byModel = await sdk.listModelBatches('sketch-32')
+  assert.equal(byModel.items.length, 1)
+  assert.equal(byModel.items[0]!.address, opened.address)
+  const allBatches = await sdk.listBatches({ status: 'completed' })
+  assert.equal(allBatches.items.length, 1)
+})
+
 test('LaunchLab and Raydium CPMM creator-fee 0.5% volume buyback math and balance parsing', async () => {
   const { creatorBuybackAfterGas, creatorVolumeShareOf, parseCreatorClaimedBalances } = await import('../src/chain/trading-fees.js')
 

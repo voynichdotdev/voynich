@@ -81,6 +81,11 @@ const voynich = {
   openQuorum: async (...args: Parameters<Voynich['openQuorum']>) => (await load(true)).openQuorum(...args),
   finalizeQuorum: async (...args: Parameters<Voynich['finalizeQuorum']>) => (await load(true)).finalizeQuorum(...args),
   runQuorum: async (...args: Parameters<Voynich['runQuorum']>) => (await load(true)).runQuorum(...args),
+  listBatches: async (...args: Parameters<Voynich['listBatches']>) => (await load()).listBatches(...args),
+  listModelBatches: async (...args: Parameters<Voynich['listModelBatches']>) => (await load()).listModelBatches(...args),
+  batch: async (...args: Parameters<Voynich['batch']>) => (await load()).batch(...args),
+  openBatch: async (...args: Parameters<Voynich['openBatch']>) => (await load(true)).openBatch(...args),
+  appendBatchReceipts: async (...args: Parameters<Voynich['appendBatchReceipts']>) => (await load(true)).appendBatchReceipts(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

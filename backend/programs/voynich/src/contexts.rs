@@ -545,3 +545,20 @@ pub struct FinalizeQuorum<'info> {
     #[account(mut)] pub payer: Signer<'info>,
     #[account(mut, seeds = [b"quorum", quorum.model.as_ref(), quorum.caller.as_ref(), &quorum.nonce.to_le_bytes()], bump = quorum.bump)] pub quorum: Box<Account<'info, Quorum>>,
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(nonce: u64, manifest_hash: [u8; 32], total_count: u16)]
+pub struct OpenBatch<'info> {
+    #[account(mut)] pub caller: Signer<'info>,
+    #[account(seeds = [b"model", model.name.as_bytes()], bump = model.bump)] pub model: Box<Account<'info, Model>>,
+    #[account(init, payer = caller, space = Batch::SPACE, seeds = [b"batch", model.key().as_ref(), caller.key().as_ref(), &nonce.to_le_bytes()], bump)] pub batch: Box<Account<'info, Batch>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+pub struct AppendBatchReceipts<'info> {
+    #[account(mut)] pub payer: Signer<'info>,
+    #[account(mut, seeds = [b"batch", batch.model.as_ref(), batch.caller.as_ref(), &batch.nonce.to_le_bytes()], bump = batch.bump)] pub batch: Box<Account<'info, Batch>>,
+}

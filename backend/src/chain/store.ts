@@ -923,6 +923,66 @@ export function createApply(attestationProgramId: string) {
           }
           break
         }
+        case 'batchopened': {
+          const address = text(data, 'batch')
+          const value = {
+            address,
+            modelAddress: text(data, 'model'),
+            caller: text(data, 'caller'),
+            nonce: text(data, 'nonce'),
+            manifestHash: hex(data, 'manifestHash'),
+            totalCount: number(data, 'totalCount'),
+            completedCount: 0,
+            status: 'open' as const,
+            receiptsRoot: '00'.repeat(32),
+            receipts: [] as unknown as Prisma.InputJsonValue,
+            createdSlot: slot(data, 'createdSlot'),
+            completedSlot: null,
+            updatedSlot: currentSlot,
+          }
+          await tx.batch.upsert({ where: { address }, create: value, update: value })
+          await notify(tx, 'batch.updated', address)
+          break
+        }
+        case 'batchreceiptsappended': {
+          const address = text(data, 'batch')
+          const existing = await tx.batch.findUnique({ where: { address } })
+          if (existing) {
+            const prevReceipts = (existing.receipts as string[]) ?? []
+            const chunk = ((data.receipts as string[]) ?? []).map(String)
+            const completedCount = number(data, 'completedCount')
+            const merged = [...prevReceipts, ...chunk].slice(0, completedCount)
+            await tx.batch.update({
+              where: { address },
+              data: {
+                completedCount,
+                receiptsRoot: hex(data, 'receiptsRoot'),
+                receipts: merged as unknown as Prisma.InputJsonValue,
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'batch.updated', address)
+          }
+          break
+        }
+        case 'batchcompleted': {
+          const address = text(data, 'batch')
+          const existing = await tx.batch.findUnique({ where: { address } })
+          if (existing) {
+            await tx.batch.update({
+              where: { address },
+              data: {
+                status: 'completed',
+                completedCount: number(data, 'completedCount'),
+                receiptsRoot: hex(data, 'receiptsRoot'),
+                completedSlot: slot(data, 'completedSlot'),
+                updatedSlot: currentSlot,
+              },
+            })
+            await notify(tx, 'batch.updated', address)
+          }
+          break
+        }
       }
     }
   }
