@@ -38,6 +38,7 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   suite: { type: 'string' }, name: { type: 'string' }, 'dataset-uri': { type: 'string' }, 'answer-mode': { type: 'string' },
   'min-calls': { type: 'string' }, inactive: { type: 'boolean' }, calls: { type: 'string' }, pass: { type: 'string' },
   referrer: { type: 'string' },
+  votes: { type: 'string' }, input: { type: 'string' }, 'distinct-enclaves': { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } })
 if (values['api-url'] ?? values.api) process.env.VOYNICH_API_URL = values['api-url'] ?? values.api
@@ -98,6 +99,7 @@ async function configureCliSigner(): Promise<void> {
     || (command === 'model' && argument === 'referral' && ['set', 'claim'].includes(third ?? ''))
     || (command === 'measurement' && ['publish', 'deprecate'].includes(argument ?? ''))
     || (command === 'benchmark' && argument === 'run')
+    || (command === 'quorum' && argument === 'run')
     || (command === 'pass' && (['buy', 'close'].includes(argument ?? '') || (argument === 'plan' && third === 'set') || (argument === 'list' && !values.wallet)))
     || (command === 'session' && ['open', 'close'].includes(argument ?? ''))
     || (command === 'session' && argument === 'list' && !values.wallet)
@@ -167,7 +169,7 @@ async function loadCliKeypair(): Promise<Keypair> {
   return Keypair.fromSecretKey(Uint8Array.from(decoded))
 }
 async function main(): Promise<unknown> {
-  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--pass <pass-address>] [--referrer <wallet>] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich pass plan show <model> | pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <n> [--inactive] | pass buy <model> --calls <n> | pass list [--wallet <pubkey>] | pass close <pass-address>\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model referral show <model> | model referral set <model> --share-bps <n> [--inactive] | model referral claim <model> [--referrer <wallet>]\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
+  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--pass <pass-address>] [--referrer <wallet>] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich quorum list [--model <id>] | quorum show <address> | quorum run <model> --votes <2..5> --input <file> [--distinct-enclaves] [--answer-mode open|sealed]\nvoynich pass plan show <model> | pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <n> [--inactive] | pass buy <model> --calls <n> | pass list [--wallet <pubkey>] | pass close <pass-address>\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model referral show <model> | model referral set <model> --share-bps <n> [--inactive] | model referral claim <model> [--referrer <wallet>]\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
   await configureCliSigner()
   if (command === 'models') return voynich.models()
   if (command === 'enclaves') return voynich.enclaves()
@@ -372,6 +374,65 @@ async function main(): Promise<unknown> {
       }
     }
     throw new Error('Use benchmark list [<model>] or benchmark run <model> --suite <json-file>.')
+  }
+  if (command === 'quorum') {
+    const action = required(argument, 'quorum subcommand (list, show, or run)')
+    if (action === 'list') {
+      const modelFilter = values.model ?? third
+      if (modelFilter) return voynich.listModelQuorums(modelFilter)
+      return voynich.listQuorums()
+    }
+    if (action === 'show') {
+      return voynich.quorum(required(third, 'quorum PDA address'))
+    }
+    if (action === 'run') {
+      const modelId = required(third, 'model')
+      const votes = Number(required(values.votes, '--votes <2..5>'))
+      if (!Number.isSafeInteger(votes) || votes < 2 || votes > 5) {
+        throw new Error('--votes must be an integer between 2 and 5.')
+      }
+      const inputPath = required(values.input ?? fourth, '--input <file>')
+      const rawInputText = await readFile(inputPath, 'utf8')
+      let parsedInput: unknown
+      try { parsedInput = JSON.parse(rawInputText) } catch { parsedInput = rawInputText.trim() }
+      const rawMode = (values['answer-mode'] ?? (values.open ? 'open' : 'open')).trim().toLowerCase()
+      if (rawMode !== 'open' && rawMode !== 'sealed') throw new Error('--answer-mode must be open or sealed.')
+      const answerMode: AnswerMode = rawMode
+      const requireDistinctEnclaves = Boolean(values['distinct-enclaves'])
+      const strategy = parseStrategy(values.strategy)
+      const maxTokens = values['max-tokens'] !== undefined ? Number(values['max-tokens']) : undefined
+      const signer = await loadCliKeypair()
+      const client = createVoynich({
+        apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+        rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+        signer,
+      })
+      stderr.write(`quorum: running ${votes} ${requireDistinctEnclaves ? 'distinct-enclave ' : ''}vote(s) on ${modelId} (${answerMode} mode)...\n`)
+      const res = await client.runQuorum(modelId, parsedInput as string | number[] | SketchInput, {
+        votes,
+        requireDistinctEnclaves,
+        answerMode,
+        ...(values.enclave ? { enclave: values.enclave } : {}),
+        ...(strategy ? { strategy } : {}),
+        ...(maxTokens !== undefined ? { maxTokens } : {}),
+        ...(values.ceiling !== undefined ? { ceiling: values.ceiling } : {}),
+      })
+      const quorumLink = `https://voynich.dev/quorums/${res.quorum.address}`
+      const receiptLinks = res.quorum.receipts.map(addr => `https://voynich.dev/receipts/${addr}`)
+      stderr.write(`quorum: ${res.quorum.status} (${res.quorum.voteCount}/${res.quorum.requiredVotes} votes, ${res.quorum.distinctEnclaves} enclave(s)) -> ${quorumLink}\n`)
+      return {
+        quorum: res.quorum,
+        agreedOutputHash: res.quorum.agreedOutputHash,
+        voteCount: res.quorum.voteCount,
+        requiredVotes: res.quorum.requiredVotes,
+        distinctEnclaves: res.quorum.distinctEnclaves,
+        quorumLink,
+        receiptLinks,
+        output: res.output,
+        transaction: res.transaction.signature ?? null,
+      }
+    }
+    throw new Error('Use quorum list [--model <id>], quorum show <address>, or quorum run <model> --votes <2..5> --input <file> [--distinct-enclaves] [--answer-mode open|sealed].')
   }
   if (command === 'measurement') {
     const action = required(argument, 'measurement subcommand (list, show, publish, deprecate, or verify)')

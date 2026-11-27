@@ -80,6 +80,7 @@ const voynich = {
   quorum: async (...args: Parameters<Voynich['quorum']>) => (await load()).quorum(...args),
   openQuorum: async (...args: Parameters<Voynich['openQuorum']>) => (await load(true)).openQuorum(...args),
   finalizeQuorum: async (...args: Parameters<Voynich['finalizeQuorum']>) => (await load(true)).finalizeQuorum(...args),
+  runQuorum: async (...args: Parameters<Voynich['runQuorum']>) => (await load(true)).runQuorum(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

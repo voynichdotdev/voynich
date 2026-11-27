@@ -7141,3 +7141,83 @@ test('Build 17 Step 1: Quorum PDA decoder, tx builders, schema validation, and f
   const allQuorums = await sdk.listQuorums({ caller: FIXTURE.caller })
   assert.equal(allQuorums.items.length, 2)
 })
+
+test('Build 17 Step 2: compiled CLI quorum run / list / show and SDK runQuorum repeatability & distinct-enclave guard', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { Keypair } = await import('@solana/web3.js')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { buildApp } = await import('../src/app.js')
+
+  const execFileAsync = promisify(execFile)
+  const callerKp = Keypair.generate()
+  const fixtureApp = buildApp()
+  const wrapperApp = new (await import('hono')).Hono()
+  wrapperApp.all('*', async c => {
+    const url = new URL(c.req.url)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('X-Fixture-Session', 'cli-quorum-test')
+    let bodyText: string | undefined
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      bodyText = (await c.req.text()).replaceAll(callerKp.publicKey.toBase58(), FIXTURE.caller)
+    }
+    return fixtureApp.request(new Request(url.toString(), { method: c.req.method, headers, body: bodyText }))
+  })
+  const server = serve({ fetch: wrapperApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b17s2-cli-'))
+  const callerKeyPath = join(scratch, 'caller.json')
+  const inputPath = join(scratch, 'input.json')
+  writeFileSync(callerKeyPath, JSON.stringify([...callerKp.secretKey]))
+  writeFileSync(inputPath, JSON.stringify(new Array<number>(784).fill(0)))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  try {
+    const runCli = async (args: string[]) => {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, ...args], { cwd: resolve('.'), encoding: 'utf8' })
+      return JSON.parse(stdout) as Record<string, unknown>
+    }
+
+    // 1. Reject --distinct-enclaves when only 1 fixture enclave serves sketch-32
+    await assert.rejects(
+      runCli(['quorum', 'run', 'sketch-32', '--votes', '2', '--input', inputPath, '--distinct-enclaves', '--keypair', callerKeyPath, '--json']),
+      /ENCLAVE_UNAVAILABLE|distinct enclaves/,
+    )
+
+    // 2. Run 2-of-2 repeatability quorum end-to-end
+    const ran = await runCli(['quorum', 'run', 'sketch-32', '--votes', '2', '--input', inputPath, '--answer-mode', 'open', '--keypair', callerKeyPath, '--json'])
+    const q = ran.quorum as Record<string, unknown>
+    assert.equal(q.status, 'agreed')
+    assert.equal(ran.voteCount, 2)
+    assert.equal(ran.requiredVotes, 2)
+    assert.equal(ran.distinctEnclaves, 1)
+    assert.equal(typeof ran.agreedOutputHash, 'string')
+    assert.equal((ran.agreedOutputHash as string).length, 64)
+    assert.equal((ran.receiptLinks as string[]).length, 2)
+    assert.equal(ran.quorumLink, `https://voynich.dev/quorums/${q.address as string}`)
+
+    // 3. quorum show <address>
+    const shown = await runCli(['quorum', 'show', q.address as string, '--json'])
+    assert.equal(shown.address, q.address)
+    assert.equal(shown.status, 'agreed')
+
+    // 4. quorum list and quorum list --model sketch-32
+    const listedAll = await runCli(['quorum', 'list', '--json']) as { items: Array<{ address: string }> }
+    assert.equal(listedAll.items.length, 1)
+    assert.equal(listedAll.items[0]!.address, q.address)
+
+    const listedModel = await runCli(['quorum', 'list', '--model', 'sketch-32', '--json']) as { items: Array<{ address: string }> }
+    assert.equal(listedModel.items.length, 1)
+    assert.equal(listedModel.items[0]!.address, q.address)
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

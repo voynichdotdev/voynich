@@ -20,7 +20,7 @@ export type SelectEnclaveOptions = {
 }
 export type CallStep = 'encrypting' | 'awaiting-signature' | 'escrowed' | 'answering' | 'verified'
 export type SessionAuth = { address: string; delegate: Keypair }
-export type CallOptions = { signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; strategy?: RoutingStrategy; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string; session?: SessionAuth; pass?: string; referrer?: string }
+export type CallOptions = { signal?: AbortSignal; onStep?: (step: CallStep) => void; enclave?: string; strategy?: RoutingStrategy; answerMode?: AnswerMode; maxTokens?: number; ceiling?: string; session?: SessionAuth; pass?: string; referrer?: string; preEncrypted?: { envelope: Uint8Array; replySecretKey: Uint8Array } }
 export type ClassificationScore = { label: string; probability: number }
 export type ClassificationOutput = { label: string; probability?: number; scores?: ClassificationScore[] }
 export type TextGenerationOutput = { text: string; tokens: number; finishReason: 'eos' | 'length' }
@@ -722,20 +722,27 @@ export function createVoynich(options: VoynichOptions) {
     const destination = await encryptionDestination(modelId, model, selected.enclave, true)
     if (opts.enclave && opts.enclave !== selected.enclave.address && opts.enclave !== destination.signingKey) throw new VoynichError('ENCLAVE_MISMATCH', 'The enclave does not match the requested call destination.')
     opts.onStep?.('encrypting')
-    const reply = generateEncryptionKeyPair()
-    let callPayload: Record<string, unknown>
-    if (destination.manifest.inputKind === 'text') {
-      if (typeof input !== 'string') throw new VoynichError('INVALID_INPUT', 'Text models require a string prompt input.')
-      callPayload = {
-        input,
-        ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
-        outputPublicKey: toBase64(reply.publicKey),
-      }
+    let reply: { publicKey: Uint8Array; secretKey: Uint8Array }
+    let encrypted: Uint8Array
+    if (opts.preEncrypted) {
+      reply = { publicKey: new Uint8Array(0), secretKey: opts.preEncrypted.replySecretKey }
+      encrypted = opts.preEncrypted.envelope
     } else {
-      const value = destination.manifest.inputKind === 'sketch' ? preprocessSketch(input as SketchInput) : input
-      callPayload = { input: value, outputPublicKey: toBase64(reply.publicKey) }
+      reply = generateEncryptionKeyPair()
+      let callPayload: Record<string, unknown>
+      if (destination.manifest.inputKind === 'text') {
+        if (typeof input !== 'string') throw new VoynichError('INVALID_INPUT', 'Text models require a string prompt input.')
+        callPayload = {
+          input,
+          ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+          outputPublicKey: toBase64(reply.publicKey),
+        }
+      } else {
+        const value = destination.manifest.inputKind === 'sketch' ? preprocessSketch(input as SketchInput) : input
+        callPayload = { input: value, outputPublicKey: toBase64(reply.publicKey) }
+      }
+      encrypted = encryptCallInput(utf8(JSON.stringify(callPayload)), destination.encryptionKey)
     }
-    const encrypted = encryptCallInput(utf8(JSON.stringify(callPayload)), destination.encryptionKey)
     const inputHash = toHex(sha256(encrypted))
     opts.onStep?.('awaiting-signature')
     const build = opts.pass
@@ -2068,6 +2075,95 @@ export function createVoynich(options: VoynichOptions) {
     const agreed = await indexed(() => api.quorum(address, { signal: opts.signal }), 'QUORUM_NOT_FOUND', value => value.status === 'agreed', opts.signal)
     return { quorum: agreed, transaction }
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, getBond, depositBond, withdrawBond, listBenchmarks, listModelBenchmarks, publishBenchmark, getPassPlan, setPassPlan, buyPass, listPasses, pass, closePass, getReferralConfig, setReferralConfig, listReferrals, claimReferral, listQuorums, listModelQuorums, quorum, openQuorum, finalizeQuorum, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  async function runQuorum(
+    modelId: string,
+    input: string | number[] | SketchInput,
+    opts: {
+      votes: number
+      requireDistinctEnclaves?: boolean
+      answerMode?: AnswerMode
+      enclave?: string
+      strategy?: RoutingStrategy
+      maxTokens?: number
+      ceiling?: string
+      signal?: AbortSignal
+    },
+  ): Promise<{ quorum: QuorumRecord; transaction: TxStatus; output: CallOutput; receipts: Receipt[] }> {
+    const votes = opts.votes
+    if (!Number.isSafeInteger(votes) || votes < 2 || votes > 5) {
+      throw new VoynichError('INVALID_QUORUM', 'votes must be an integer between 2 and 5.')
+    }
+    const requireDistinctEnclaves = opts.requireDistinctEnclaves ?? false
+    const answerMode: AnswerMode = opts.answerMode ?? 'open'
+    const [model, granted] = await Promise.all([
+      api.model(modelId, { signal: opts.signal }),
+      api.modelEnclaves(modelId, { signal: opts.signal }),
+    ])
+    const liveGranted = granted.items.filter(item => item.enclave.status === 'live' && item.enclave.reachable && item.grant.status === 'live')
+    let targets: GrantedEnclave[]
+    if (requireDistinctEnclaves) {
+      if (liveGranted.length < votes) {
+        throw new VoynichError('ENCLAVE_UNAVAILABLE', `Requested ${votes} distinct enclaves, but only ${liveGranted.length} live granted enclave(s) serve ${model.name}.`)
+      }
+      targets = liveGranted.slice(0, votes)
+    } else {
+      const selected = opts.enclave
+        ? liveGranted.find(item => item.enclave.address === opts.enclave || item.enclave.signingKey === opts.enclave)
+        : opts.strategy
+          ? selectEnclave(liveGranted, { strategy: opts.strategy, modelOperatorShareBps: model.operatorShareBps })
+          : liveGranted[0]
+      if (!selected) throw new VoynichError('ENCLAVE_UNAVAILABLE', 'No live, reachable granted enclave is available.')
+      targets = Array.from({ length: votes }, () => selected)
+    }
+
+    const primaryDest = await encryptionDestination(modelId, model, targets[0]!.enclave, true)
+    const reply = generateEncryptionKeyPair()
+    let callPayload: Record<string, unknown>
+    if (primaryDest.manifest.inputKind === 'text') {
+      if (typeof input !== 'string') throw new VoynichError('INVALID_INPUT', 'Text models require a string prompt input.')
+      callPayload = {
+        input,
+        ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+        outputPublicKey: toBase64(reply.publicKey),
+      }
+    } else {
+      const value = primaryDest.manifest.inputKind === 'sketch' ? preprocessSketch(input as SketchInput) : input
+      callPayload = { input: value, outputPublicKey: toBase64(reply.publicKey) }
+    }
+    const sharedEnvelope = encryptCallInput(utf8(JSON.stringify(callPayload)), primaryDest.encryptionKey)
+    const inputHash = toHex(sha256(sharedEnvelope))
+
+    const opened = await openQuorum(model.address, {
+      inputHash,
+      requiredVotes: votes,
+      requireDistinctEnclaves,
+    }, { signal: opts.signal })
+
+    const receipts: Receipt[] = []
+    let agreedOutput: CallOutput | null = null
+    for (let i = 0; i < votes; i++) {
+      const target = targets[i]!
+      const sameKey = target.enclave.encryptionKey === targets[0]!.enclave.encryptionKey
+      const res = await call(model.address, input, {
+        enclave: target.enclave.address,
+        answerMode,
+        ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+        ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}),
+        ...(sameKey ? { preEncrypted: { envelope: sharedEnvelope, replySecretKey: reply.secretKey } } : {}),
+        signal: opts.signal,
+      })
+      receipts.push(res.receipt)
+      if (!agreedOutput) agreedOutput = res.output
+    }
+
+    const finalized = await finalizeQuorum(opened.address, receipts.map(r => r.address), { signal: opts.signal })
+    return {
+      quorum: finalized.quorum,
+      transaction: finalized.transaction,
+      output: agreedOutput!,
+      receipts,
+    }
+  }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, getBond, depositBond, withdrawBond, listBenchmarks, listModelBenchmarks, publishBenchmark, getPassPlan, setPassPlan, buyPass, listPasses, pass, closePass, getReferralConfig, setReferralConfig, listReferrals, claimReferral, listQuorums, listModelQuorums, quorum, openQuorum, finalizeQuorum, runQuorum, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>
