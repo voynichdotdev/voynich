@@ -1,0 +1,34 @@
+[
+  {
+    "account": "payer",
+    "writable": "yes",
+    "signer": "yes",
+    "optional": "",
+    "address": "",
+    "is": "Anyone paying the transaction fee to finalize consensus once matching receipts exist on chain."
+  },
+  {
+    "account": "quorum",
+    "writable": "yes",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"quorum\", quorum.model, quorum.caller, quorum.nonce]`",
+    "is": "The open Quorum PDA sealed to `Agreed` here."
+  },
+  {
+    "account": "event_authority",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "PDA `[\"__event_authority\"]`",
+    "is": "The program's event authority."
+  },
+  {
+    "account": "program",
+    "writable": "",
+    "signer": "",
+    "optional": "",
+    "address": "",
+    "is": "The Voynich program."
+  }
+]

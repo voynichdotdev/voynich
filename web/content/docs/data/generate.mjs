@@ -289,6 +289,22 @@ const FIELDS = {
     settled: 'True once `settle_call` or `settle_metered_call` has credited this referral.',
     bump: 'The PDA bump.',
   },
+  Quorum: {
+    model: 'The Model evaluated by this quorum.',
+    caller: 'The wallet that opened the quorum and paid its rent.',
+    nonce: 'Caller-chosen u64 nonce deriving the Quorum PDA `["quorum", model, caller, nonce_le]`.',
+    input_hash: '32-byte SHA-256 hash of the input envelope that every cited receipt must match.',
+    required_votes: 'Minimum number of matching receipts required to agree (`MIN_QUORUM_VOTES = 2` to `MAX_QUORUM_VOTES = 5`).',
+    require_distinct_enclaves: 'When true, `distinct_enclaves >= required_votes` is enforced; when false, repeated calls to the same enclave count as repeatability proofs.',
+    status: '`Open` (`0`) or `Agreed` (`1`).',
+    agreed_output_hash: '32-byte SHA-256 output hash shared by all verified receipts once `Agreed` (all zero while `Open`).',
+    vote_count: 'Count of verified matching receipts recorded on finalization (`0` while `Open`).',
+    distinct_enclaves: 'Count of distinct enclaves among the verified receipts (`0` while `Open`).',
+    receipts: 'Fixed 5-slot array holding the verified canonical `Receipt` PDA addresses (unused trailing slots are the default address).',
+    created_slot: 'The slot the quorum was opened in.',
+    finalized_slot: 'The slot `finalize_quorum` sealed consensus in (`0` while `Open`).',
+    bump: 'The PDA bump.',
+  },
 }
 
 const accounts = idl.accounts.map((account) => {
@@ -363,6 +379,8 @@ const SAYS = {
   set_referral_config: 'Creates or updates a model\'s 52-byte ReferralConfig PDA (`["referral-config", model]`) setting `share_bps` (up to `2500`, 25% of `owner_amount`) and `active`.',
   register_call_referral: 'Creates a 108-byte CallReferral PDA (`["call-referral", call]`) and initializes (if needed) the 137-byte Referral PDA (`["referral", model, referrer]`) in the same transaction as `open_call`.',
   claim_referral: 'Permissionlessly transfers `total_earned - claimed` from a Referral PDA (SOL or SPL) directly to `referrer` and sets `claimed = total_earned`.',
+  open_quorum: 'Creates a 326-byte Quorum PDA (`["quorum", model, caller, nonce_le]`) declaring an `input_hash`, `required_votes` (`2..=5`), and `require_distinct_enclaves`.',
+  finalize_quorum: 'Permissionlessly verifies `required_votes..=5` canonical `Receipt` PDAs in remaining accounts (matching `model`, `input_hash`, and identical `output_hash`) and seals the Quorum `Agreed`.',
 }
 const ORDER = Object.keys(SAYS)
 
@@ -642,6 +660,14 @@ const ACCOUNTS = {
     referral_escrow: 'The Referral PDA\'s associated token account for `referral.mint`. Only for an SPL mint.',
     referrer_tokens: 'The referrer\'s associated token account for `referral.mint`. Only for an SPL mint.',
   },
+  open_quorum: {
+    caller: 'The wallet opening the quorum and paying the 326-byte Quorum PDA\'s rent.',
+    quorum: 'The Quorum PDA at `["quorum", model, caller, nonce_le]`, created here in `Open`.',
+  },
+  finalize_quorum: {
+    payer: 'Anyone paying the transaction fee to finalize consensus once matching receipts exist on chain.',
+    quorum: 'The open Quorum PDA sealed to `Agreed` here.',
+  },
 }
 
 const text = (bytes) => Buffer.from(bytes).toString('utf8')
@@ -725,6 +751,8 @@ const EVENTS = {
   CallReferralRegistered: ['register_call_referral', 'An open Call was attributed to a referrer wallet via a CallReferral PDA.'],
   ReferralCredited: ['settle_call, settle_metered_call', 'A settled referred call carved `floor(owner_amount * share_bps / 10_000)` into the referrer\'s Referral PDA.'],
   ReferralClaimed: ['claim_referral', 'Accrued referral balance (`total_earned - claimed`) was paid out to the referrer wallet.'],
+  QuorumOpened: ['open_quorum', 'A Quorum PDA was opened declaring a receipt-backed consensus target for a model input hash.'],
+  QuorumAgreed: ['finalize_quorum', 'Matching canonical Receipt PDAs were verified on chain and the Quorum was sealed `Agreed`.'],
 }
 for (const event of idl.events) need(EVENTS[event.name], `event ${event.name}`)
 out('program-events', Object.keys(EVENTS).map((name) => {
@@ -777,6 +805,7 @@ const RAISED = {
   InvalidBenchmark: 'In `publish_benchmark`: invalid slug `name` (outside 1 to 32 bytes), invalid `dataset_uri` (outside 1 to 160 bytes or bad scheme/whitespace), `sample_count == 0`, `passed_count > sample_count`, `score_bps != floor(passed_count * 10_000 / sample_count)`, `receipts` empty, > 16, or duplicated, or a remaining account that is not a canonical `Receipt` PDA owned by the Voynich program for `model`.',
   InvalidPass: 'In `set_pass_plan`: model is not `PriceUnit::Call`, or when active `price_per_call == 0`, `price_per_call > model.price`, `min_calls == 0`, `max_calls < min_calls`, or `ttl_slots == 0`. In `buy_pass`: plan is inactive, mint mismatch, or `calls_total` outside `min_calls..=max_calls`. In `open_pass_call`: pass is closed, expired, exhausted, mismatched on model/mint, or lacks escrow. In `close_pass`: pass is already closed, or a non-holder tried to close it while still open, unexpired, and unexhausted.',
   InvalidReferral: 'In `set_referral_config`: `share_bps > MAX_REFERRAL_SHARE_BPS` (`2500`), or `active == true` with `share_bps == 0`. In `register_call_referral`: config inactive, `referrer` is default or equals `caller` (self-referral), or call is not open. In `settle_call` / `settle_metered_call`: malformed referral remaining accounts. In `claim_referral`: zero claimable balance (`total_earned <= claimed`).',
+  InvalidQuorum: 'In `open_quorum`: `required_votes` outside `2..=5` or all-zero `input_hash`. In `finalize_quorum`: quorum already `Agreed`, remaining accounts fewer than `required_votes` or above `5`, duplicate receipts, non-canonical or wrong-program Receipt PDA, mismatched `model` or `input_hash`, divergent `output_hash`, or `distinct_enclaves < required_votes` when `require_distinct_enclaves` is true.',
 }
 for (const name of Object.keys(RAISED)) need(idl.errors.find((e) => e.name === name), `IDL error ${name}`)
 out('program-errors', idl.errors.map((error) => ({
@@ -850,6 +879,8 @@ const API_ERRORS = {
   REFERRAL_CONFIG_NOT_FOUND: 'This model has no referral share configured.',
   REFERRAL_NOT_FOUND: 'No referral account exists for this model and referrer.',
   INVALID_REFERRAL: 'The referral config, call referral, or referral claim is invalid.',
+  QUORUM_NOT_FOUND: 'No quorum account has this address.',
+  INVALID_QUORUM: 'The quorum configuration, status, or receipt consensus proofs are invalid.',
 }
 const status = contract.errors.status
 for (const code of Object.keys(API_ERRORS)) need(status[code], `contract error ${code}`)

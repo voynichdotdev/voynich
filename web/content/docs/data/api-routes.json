@@ -195,6 +195,31 @@
     "does": "List referral earnings and claimable balances for a referrer wallet"
   },
   {
+    "route": "GET /v1/quorums",
+    "operation": "quorums",
+    "does": "Browse receipt-backed multi-enclave quorum calls across all models"
+  },
+  {
+    "route": "GET /v1/models/{id}/quorums",
+    "operation": "modelQuorums",
+    "does": "List receipt-backed quorum calls for a model"
+  },
+  {
+    "route": "GET /v1/quorums/{address}",
+    "operation": "quorum",
+    "does": "Read one quorum account with agreed output hash and receipt proofs"
+  },
+  {
+    "route": "POST /v1/models/{id}/quorums/build",
+    "operation": "openQuorum",
+    "does": "Build open_quorum to declare a receipt-backed consensus target for a model input hash"
+  },
+  {
+    "route": "POST /v1/quorums/{address}/finalize/build",
+    "operation": "finalizeQuorum",
+    "does": "Build finalize_quorum to verify matching receipts on chain and seal quorum consensus"
+  },
+  {
     "route": "GET /v1/models/{id}/versions",
     "operation": "modelVersions",
     "does": "List published and uploading versions for a model, newest first"

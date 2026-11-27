@@ -30,6 +30,7 @@ The `voynich` program is an Anchor program. Its address on a cluster is `program
 | ReferralConfig | PDA `["referral-config", model]` | 52 bytes | the model's owner |
 | Referral | PDA `["referral", model, referrer]` | 137 bytes | the first referring caller |
 | CallReferral | PDA `["call-referral", call]` | 108 bytes | the call's caller |
+| Quorum | PDA `["quorum", model, caller, nonce]` | 326 bytes | the caller |
 
 In a seed, `name` is the model's name as UTF-8, an address is its 32 bytes, and `nonce` is 8 bytes little-endian.
 
@@ -188,3 +189,11 @@ Per-`(model, referrer)` accrued referral balance, at PDA `["referral", model, re
 Per-call referral binding, at PDA `["call-referral", call]` (`CallReferral::SPACE = 108` bytes). Created by `register_call_referral` in the same transaction as `open_call`, snapshotting `share_bps` from `ReferralConfig`.
 
 <Rows data="account-call-referral" columns="field,type,offset,meaning" />
+
+## Quorum
+
+Multi-enclave (or repeatability) receipt-backed consensus account, at PDA `["quorum", model, caller, nonce_le]` (`Quorum::SPACE = 326` bytes). Opened by `open_quorum` (`MIN_QUORUM_VOTES = 2` to `MAX_QUORUM_VOTES = 5`) and sealed `Agreed` permissionlessly by `finalize_quorum`.
+
+<Rows data="account-quorum" columns="field,type,offset,meaning" />
+
+`status` is one byte: 0 `Open`, 1 `Agreed`. `receipts` is a fixed `[pubkey; 5]` array padded with the default address. During `finalize_quorum`, the program verifies every cited `Receipt` PDA in remaining accounts across all Receipt eras (`data.len() >= 168`), enforcing canonical `["receipt", call]` derivation, matching `model` and `input_hash`, distinct receipts, identical `output_hash`, and `distinct_enclaves >= required_votes` when `require_distinct_enclaves` is true.

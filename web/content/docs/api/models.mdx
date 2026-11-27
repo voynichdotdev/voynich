@@ -1173,6 +1173,81 @@ Builds [`set_referral_config`](/docs/program/instructions#setreferralconfig) as 
 
 Builds [`claim_referral`](/docs/program/instructions#claimreferral) to permissionlessly pay `totalEarned - claimed` from the `Referral` PDA directly to `referrer`. Body (`ClaimReferralRequest`): `{ wallet, referrer? }` (`referrer` defaults to `wallet`). Returns a [Build](/docs/api/transactions#build) with `action: "claim_referral"` and `addresses: { model, referral }`. Answers `REFERRAL_NOT_FOUND` (`404`) or `INVALID_REFERRAL` (`422`) when nothing is claimable.
 
+## QuorumRecord
+
+An on-chain 326-byte `Quorum` PDA (`["quorum", model, caller, nonce_le]`) anchoring multi-enclave or repeatability receipt consensus for one model input hash.
+
+<Fields>
+<Field name="address" type="address" required>
+The `Quorum` PDA address.
+</Field>
+<Field name="model" type="address" required>
+The Model address.
+</Field>
+<Field name="modelName" type="string or null">
+The model's slug name when indexed.
+</Field>
+<Field name="caller" type="address" required>
+The wallet that opened the quorum.
+</Field>
+<Field name="nonce" type="decimal string" required>
+Caller-chosen u64 nonce.
+</Field>
+<Field name="inputHash" type="hash (64 hex chars)" required>
+SHA-256 of the input envelope shared by all receipts in this quorum.
+</Field>
+<Field name="requiredVotes" type="integer (2 to 5)" required>
+Minimum matching receipts needed to seal consensus.
+</Field>
+<Field name="requireDistinctEnclaves" type="boolean" required>
+Whether distinct enclaves are required (`true`) or repeated calls to one enclave count (`false`).
+</Field>
+<Field name="status" type="'open' | 'agreed'" required>
+Whether the quorum is awaiting receipts (`open`) or sealed on chain (`agreed`).
+</Field>
+<Field name="agreedOutputHash" type="hash or null" required>
+Shared SHA-256 output hash once `agreed`, or `null` while `open`.
+</Field>
+<Field name="voteCount" type="integer" required>
+Number of verified matching receipts (`0` while `open`).
+</Field>
+<Field name="distinctEnclaves" type="integer" required>
+Number of distinct enclaves among verified receipts (`0` while `open`).
+</Field>
+<Field name="receipts" type="array of 0 to 5 addresses" required>
+Verified canonical `Receipt` PDA addresses sealed on finalization.
+</Field>
+<Field name="createdSlot" type="slot" required>
+The slot the quorum was opened in.
+</Field>
+<Field name="finalizedSlot" type="slot or null" required>
+The slot `finalize_quorum` sealed consensus in, or `null` while `open`.
+</Field>
+<Field name="updatedSlot" type="slot" required>
+The slot of the latest quorum event.
+</Field>
+</Fields>
+
+## `GET /v1/quorums`
+
+Lists receipt-backed quorum calls across all models (`QuorumsPage`). Accepts `cursor`, `limit` ([Pagination](/docs/api/overview#pagination)), and optional filters `model`, `caller`, and `status` (`open` or `agreed`).
+
+## `GET /v1/models/{id}/quorums`
+
+Lists quorum calls for model `{id}` (`QuorumsPage`). Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
+
+## `GET /v1/quorums/{address}`
+
+Reads one [QuorumRecord](#quorumrecord) by its PDA address. Answers `QUORUM_NOT_FOUND` (`404`) when none exists.
+
+## `POST /v1/models/{id}/quorums/build`
+
+Builds [`open_quorum`](/docs/program/instructions#openquorum). Body (`OpenQuorumRequest`): `{ wallet, inputHash, requiredVotes, requireDistinctEnclaves?, nonce? }`. Returns a [Build](/docs/api/transactions#build) with `action: "open_quorum"` and `addresses: { model, quorum }`. Answers `MODEL_NOT_FOUND`, `INVALID_QUORUM` (`422`), or `INSUFFICIENT_FUNDS`.
+
+## `POST /v1/quorums/{address}/finalize/build`
+
+Builds permissionless [`finalize_quorum`](/docs/program/instructions#finalizequorum) attaching `receipts` in remaining accounts. Body (`FinalizeQuorumRequest`): `{ wallet, receipts }`. Returns a [Build](/docs/api/transactions#build) with `action: "finalize_quorum"` and `addresses: { model, quorum }`. Answers `QUORUM_NOT_FOUND` (`404`) or `INVALID_QUORUM` (`422`).
+
 ## Read next
 
 <Cards>

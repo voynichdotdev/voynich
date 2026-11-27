@@ -78,6 +78,12 @@
     "bytes": ""
   },
   {
+    "account": "Quorum",
+    "discriminator": "`971dc56ce9935ce7`",
+    "fields": 14,
+    "bytes": "326"
+  },
+  {
     "account": "Receipt",
     "discriminator": "`279a496a50669199`",
     "fields": 19,

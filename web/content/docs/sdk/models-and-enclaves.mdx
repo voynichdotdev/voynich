@@ -30,6 +30,11 @@ Eight read functions read what the API indexes from the chain (none needs a wall
 | `setReferralConfig(modelId, input, options?)` | Signs `set_referral_config` as the model owner and returns the indexed `ReferralConfig`. | [`POST /v1/models/{id}/referral/build`](/docs/api/models#post-v1modelsidreferralbuild) |
 | `listReferrals(wallet?, signal?)` | Accrued referral balances for `wallet` (or the signer's wallet). | [`GET /v1/accounts/{wallet}/referrals`](/docs/api/accounts-and-stats#get-v1accountswalletreferrals) |
 | `claimReferral(modelId, referrer?, options?)` | Signs `claim_referral` and returns `{ referral, transaction }`. | [`POST /v1/models/{id}/referral/claim/build`](/docs/api/models#post-v1modelsidreferralclaimbuild) |
+| `listQuorums(query?, options?)` | A page of receipt-backed quorum calls across all models (`QuorumsPage`). | [`GET /v1/quorums`](/docs/api/models#get-v1quorums) |
+| `listModelQuorums(modelId, query?, options?)` | A page of quorum calls for one model (`QuorumsPage`). | [`GET /v1/models/{id}/quorums`](/docs/api/models#get-v1modelsidquorums) |
+| `quorum(address, options?)` | One `QuorumRecord` by its PDA address. | [`GET /v1/quorums/{address}`](/docs/api/models#get-v1quorumsaddress) |
+| `openQuorum(modelId, input, options?)` | Signs `open_quorum` and returns the indexed `QuorumRecord`. | [`POST /v1/models/{id}/quorums/build`](/docs/api/models#post-v1modelsidquorumsbuild) |
+| `finalizeQuorum(address, receipts, options?)` | Signs permissionless `finalize_quorum` and returns `{ quorum, transaction }`. | [`POST /v1/quorums/{address}/finalize/build`](/docs/api/models#post-v1quorumsaddressfinalizebuild) |
 | `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
 | `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
 | `getBond(enclaveKey, options?)` | The enclave's `OperatorBond`, or `null` when none exists. | [`GET /v1/enclaves/{key}/bond`](/docs/api/enclaves#get-v1enclaveskeybond) |
@@ -167,6 +172,21 @@ const { referral } = await voynich.claimReferral('sketch-32', referrerWallet)
 ```
 
 `getReferralConfig(modelId)` reads `GET /v1/models/{id}/referral` and returns `null` on `REFERRAL_CONFIG_NOT_FOUND`. `setReferralConfig(modelId, { shareBps, active })` requires the model owner's signer (`shareBps <= 2500`). Passing `referrer` in `call(modelId, input, { referrer })` appends `register_call_referral` in the same transaction as `open_call`, carving `floor(owner_amount * shareBps / 10_000)` to the referrer on settlement (coexisting with `Split`). `claimReferral(modelId, referrer?)` is permissionless and releases `totalEarned - claimed` directly to `referrer`.
+
+## Quorum calls (`listQuorums`, `listModelQuorums`, `quorum`, `openQuorum`, `finalizeQuorum`)
+
+```ts
+const q = await voynich.openQuorum('sketch-32', {
+  inputHash,
+  requiredVotes: 2,
+  requireDistinctEnclaves: true,
+})
+
+const { quorum: agreed } = await voynich.finalizeQuorum(q.address, [receiptA, receiptB])
+console.log(agreed.status, agreed.agreedOutputHash, agreed.distinctEnclaves)
+```
+
+`listQuorums(query?)` reads `GET /v1/quorums` (filtering optionally by `model`, `caller`, `status`, `limit`, `cursor`). `listModelQuorums(modelId, query?)` and `quorum(address)` read model and single-quorum snapshots. `openQuorum(modelId, { inputHash, requiredVotes, requireDistinctEnclaves?, nonce? })` creates a 326-byte `Quorum` PDA (`2..=5` votes), and `finalizeQuorum(address, receipts)` permissionlessly verifies the cited `Receipt` PDAs on chain and seals `status: 'agreed'`.
 
 ## enclaves and enclave
 

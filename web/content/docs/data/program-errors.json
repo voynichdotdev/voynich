@@ -271,5 +271,12 @@
     "hex": "`0x1796`",
     "message": "The referral config, call referral, or referral claim is invalid.",
     "raisedWhen": "In `set_referral_config`: `share_bps > MAX_REFERRAL_SHARE_BPS` (`2500`), or `active == true` with `share_bps == 0`. In `register_call_referral`: config inactive, `referrer` is default or equals `caller` (self-referral), or call is not open. In `settle_call` / `settle_metered_call`: malformed referral remaining accounts. In `claim_referral`: zero claimable balance (`total_earned <= claimed`)."
+  },
+  {
+    "name": "InvalidQuorum",
+    "code": "6039",
+    "hex": "`0x1797`",
+    "message": "The quorum configuration, status, or receipt consensus proofs are invalid.",
+    "raisedWhen": "In `open_quorum`: `required_votes` outside `2..=5` or all-zero `input_hash`. In `finalize_quorum`: quorum already `Agreed`, remaining accounts fewer than `required_votes` or above `5`, duplicate receipts, non-canonical or wrong-program Receipt PDA, mismatched `model` or `input_hash`, divergent `output_hash`, or `distinct_enclaves < required_votes` when `require_distinct_enclaves` is true."
   }
 ]

@@ -280,5 +280,17 @@
     "arguments": "",
     "signers": "`payer`",
     "does": "Permissionlessly transfers `total_earned - claimed` from a Referral PDA (SOL or SPL) directly to `referrer` and sets `claimed = total_earned`."
+  },
+  {
+    "instruction": "open_quorum",
+    "arguments": "`nonce: u64`, `input_hash: [u8; 32]`, `required_votes: u8`, `require_distinct_enclaves: bool`",
+    "signers": "`caller`",
+    "does": "Creates a 326-byte Quorum PDA (`[\"quorum\", model, caller, nonce_le]`) declaring an `input_hash`, `required_votes` (`2..=5`), and `require_distinct_enclaves`."
+  },
+  {
+    "instruction": "finalize_quorum",
+    "arguments": "",
+    "signers": "`payer`",
+    "does": "Permissionlessly verifies `required_votes..=5` canonical `Receipt` PDAs in remaining accounts (matching `model`, `input_hash`, and identical `output_hash`) and seals the Quorum `Agreed`."
   }
 ]

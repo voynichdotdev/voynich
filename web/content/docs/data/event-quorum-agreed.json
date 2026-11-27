@@ -1,0 +1,42 @@
+[
+  {
+    "field": "quorum",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "caller",
+    "type": "pubkey"
+  },
+  {
+    "field": "input_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "agreed_output_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "vote_count",
+    "type": "u8"
+  },
+  {
+    "field": "distinct_enclaves",
+    "type": "u8"
+  },
+  {
+    "field": "receipts",
+    "type": "[pubkey; 5]"
+  },
+  {
+    "field": "finalized_slot",
+    "type": "u64"
+  },
+  {
+    "field": "status",
+    "type": "QuorumStatus"
+  }
+]

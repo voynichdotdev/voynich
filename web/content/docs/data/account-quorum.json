@@ -1,0 +1,86 @@
+[
+  {
+    "field": "model",
+    "type": "pubkey",
+    "offset": "8",
+    "meaning": "The Model evaluated by this quorum."
+  },
+  {
+    "field": "caller",
+    "type": "pubkey",
+    "offset": "40",
+    "meaning": "The wallet that opened the quorum and paid its rent."
+  },
+  {
+    "field": "nonce",
+    "type": "u64",
+    "offset": "72",
+    "meaning": "Caller-chosen u64 nonce deriving the Quorum PDA `[\"quorum\", model, caller, nonce_le]`."
+  },
+  {
+    "field": "input_hash",
+    "type": "[u8; 32]",
+    "offset": "80",
+    "meaning": "32-byte SHA-256 hash of the input envelope that every cited receipt must match."
+  },
+  {
+    "field": "required_votes",
+    "type": "u8",
+    "offset": "112",
+    "meaning": "Minimum number of matching receipts required to agree (`MIN_QUORUM_VOTES = 2` to `MAX_QUORUM_VOTES = 5`)."
+  },
+  {
+    "field": "require_distinct_enclaves",
+    "type": "bool",
+    "offset": "113",
+    "meaning": "When true, `distinct_enclaves >= required_votes` is enforced; when false, repeated calls to the same enclave count as repeatability proofs."
+  },
+  {
+    "field": "status",
+    "type": "QuorumStatus",
+    "offset": "114",
+    "meaning": "`Open` (`0`) or `Agreed` (`1`)."
+  },
+  {
+    "field": "agreed_output_hash",
+    "type": "[u8; 32]",
+    "offset": "115",
+    "meaning": "32-byte SHA-256 output hash shared by all verified receipts once `Agreed` (all zero while `Open`)."
+  },
+  {
+    "field": "vote_count",
+    "type": "u8",
+    "offset": "147",
+    "meaning": "Count of verified matching receipts recorded on finalization (`0` while `Open`)."
+  },
+  {
+    "field": "distinct_enclaves",
+    "type": "u8",
+    "offset": "148",
+    "meaning": "Count of distinct enclaves among the verified receipts (`0` while `Open`)."
+  },
+  {
+    "field": "receipts",
+    "type": "[pubkey; 5]",
+    "offset": "149",
+    "meaning": "Fixed 5-slot array holding the verified canonical `Receipt` PDA addresses (unused trailing slots are the default address)."
+  },
+  {
+    "field": "created_slot",
+    "type": "u64",
+    "offset": "309",
+    "meaning": "The slot the quorum was opened in."
+  },
+  {
+    "field": "finalized_slot",
+    "type": "u64",
+    "offset": "317",
+    "meaning": "The slot `finalize_quorum` sealed consensus in (`0` while `Open`)."
+  },
+  {
+    "field": "bump",
+    "type": "u8",
+    "offset": "325",
+    "meaning": "The PDA bump."
+  }
+]

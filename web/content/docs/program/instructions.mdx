@@ -3,7 +3,7 @@ title: Instructions
 description: Every instruction of the voynich program, with its arguments, accounts, checks, effects and errors.
 ---
 
-The program has 47 instructions.
+The program has 49 instructions.
 
 <Rows data="program-instructions" columns="instruction,arguments,signers,does" />
 
@@ -525,3 +525,25 @@ Permissionlessly transfers `owed = referral.total_earned - referral.claimed` fro
 
 - **Checks.** `referrer` matches `referral.referrer` (`InvalidRecipient`) and `referral.total_earned > referral.claimed` (`InvalidReferral`). For an SPL mint, `referral_escrow` and `referrer_tokens` match `referral.mint` (`InvalidTokenAccount`).
 - **Effects.** Transfers `owed` to `referrer` (or `referrer_tokens`), sets `referral.claimed = referral.total_earned`, and emits `ReferralClaimed`.
+
+## open_quorum
+
+Creates a 326-byte `Quorum` PDA at `["quorum", model, caller, nonce_le]` declaring a receipt-backed consensus target for a model input hash.
+
+<Rows data="ix-open-quorum-args" />
+
+<Rows data="ix-open-quorum" />
+
+- **Checks.** `required_votes` is between `2` (`MIN_QUORUM_VOTES`) and `5` (`MAX_QUORUM_VOTES`), and `input_hash` is non-zero (`InvalidQuorum`).
+- **Effects.** Initializes `Quorum` in `Open` with `created_slot = clock.slot` and zeroed `agreed_output_hash` / `receipts`, and emits `QuorumOpened`.
+
+## finalize_quorum
+
+Permissionlessly verifies `required_votes..=5` canonical `Receipt` PDAs passed in remaining accounts and seals the `Quorum` PDA `Agreed`.
+
+<Rows data="ix-finalize-quorum" />
+
+Remaining accounts carry the `Receipt` accounts proving consensus.
+
+- **Checks.** `quorum.status == Open`, `required_votes <= remaining_accounts.len() <= 5`, all receipt pubkeys are unique, each remaining account is owned by the Voynich program with `data.len() >= 168`, starts with `Receipt::DISCRIMINATOR`, derives canonically from `["receipt", data[8..40]]`, matches `quorum.model` and `quorum.input_hash`, shares an identical `output_hash`, and satisfies `distinct_enclaves >= required_votes` when `require_distinct_enclaves` is true (`InvalidQuorum`).
+- **Effects.** Sets `quorum.status = Agreed`, records `agreed_output_hash`, `vote_count`, `distinct_enclaves`, `receipts`, and `finalized_slot = clock.slot`, and emits `QuorumAgreed`.

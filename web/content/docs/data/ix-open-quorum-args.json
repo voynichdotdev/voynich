@@ -1,0 +1,18 @@
+[
+  {
+    "argument": "nonce",
+    "type": "u64"
+  },
+  {
+    "argument": "input_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "argument": "required_votes",
+    "type": "u8"
+  },
+  {
+    "argument": "require_distinct_enclaves",
+    "type": "bool"
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "field": "quorum",
+    "type": "pubkey"
+  },
+  {
+    "field": "model",
+    "type": "pubkey"
+  },
+  {
+    "field": "caller",
+    "type": "pubkey"
+  },
+  {
+    "field": "nonce",
+    "type": "u64"
+  },
+  {
+    "field": "input_hash",
+    "type": "[u8; 32]"
+  },
+  {
+    "field": "required_votes",
+    "type": "u8"
+  },
+  {
+    "field": "require_distinct_enclaves",
+    "type": "bool"
+  },
+  {
+    "field": "created_slot",
+    "type": "u64"
+  }
+]

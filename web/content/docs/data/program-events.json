@@ -232,5 +232,17 @@
     "discriminator": "`c36d4dc486e24e6c`",
     "emittedBy": "`claim_referral`",
     "says": "Accrued referral balance (`total_earned - claimed`) was paid out to the referrer wallet."
+  },
+  {
+    "event": "QuorumOpened",
+    "discriminator": "`d7397c0ed4a73aaf`",
+    "emittedBy": "`open_quorum`",
+    "says": "A Quorum PDA was opened declaring a receipt-backed consensus target for a model input hash."
+  },
+  {
+    "event": "QuorumAgreed",
+    "discriminator": "`a7ede724c54389c3`",
+    "emittedBy": "`finalize_quorum`",
+    "says": "Matching canonical Receipt PDAs were verified on chain and the Quorum was sealed `Agreed`."
   }
 ]
