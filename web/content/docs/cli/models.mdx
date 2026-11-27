@@ -499,6 +499,28 @@ Passed to each evaluation call: `--answer-mode` (`sealed` by default, or `open`)
 
 Each case supplies `input` (sketch input, numeric array, or text prompt) and at least one of `expectedLabel` or `expectedContains` (1 to 16 cases per suite; a ready-to-run sample sits at `backend/models/sketch-32/eval-suite.json`). `voynich benchmark run` logs per-case `PASS`/`FAIL` and receipt addresses to stderr and prints the published `BenchmarkRecord` plus per-case results as JSON on stdout.
 
+## voynich quorum
+
+Lists, inspects, or runs receipt-backed multi-enclave (or repeatability) quorum calls backed by an on-chain 326-byte `Quorum` PDA (`["quorum", model, caller, nonce_le]`). The same from code is [Quorum calls](/docs/sdk/models-and-enclaves#quorum-calls-listquorums-listmodelquorums-quorum-openquorum-finalizequorum).
+
+```bash
+voynich quorum list [--model <id>]
+voynich quorum show <quorum-address>
+voynich quorum run <model> --votes <2..5> --input <file> [--distinct-enclaves] [--answer-mode open|sealed] [--enclave <key>] [--strategy balanced|cheapest|fastest]
+```
+
+<Fields>
+<Field name="list [--model <id>]" type="read">
+Reads `GET /v1/quorums` (or `GET /v1/models/{id}/quorums` when `--model` or a positional model id is given; no wallet required) and prints the `QuorumsPage` JSON.
+</Field>
+<Field name="show <quorum-address>" type="read">
+Reads `GET /v1/quorums/{address}` (no wallet required) and prints the `QuorumRecord` JSON with `agreedOutputHash`, `voteCount`, `distinctEnclaves`, and `receipts`.
+</Field>
+<Field name="run <model> --votes <2..5> --input <file>" type="caller write">
+Opens a `Quorum` PDA, executes `2..5` independent calls sharing the exact encrypted input envelope (`preEncrypted`) and `inputHash`, finalizes the `Quorum` PDA on chain via `finalize_quorum`, and prints `{ quorum, agreedOutputHash, voteCount, requiredVotes, distinctEnclaves, quorumLink, receiptLinks, output, transaction }` as JSON on stdout. Pass `--distinct-enclaves` to require `distinctEnclaves >= votes`; `--answer-mode` defaults to `open`.
+</Field>
+</Fields>
+
 ## Failures
 
 The two list commands exit with code `1` and print the API's code and message when the API refuses the request. The API's codes are in the [HTTP API overview](/docs/api/overview).

@@ -5,6 +5,7 @@ import { loadModelBenchmarks } from '@/lib/benchmarks'
 import { loadMeasurements } from '@/lib/measurements'
 import { loadModelPassPlan } from '@/lib/passes'
 import { loadModelPolicy } from '@/lib/policy'
+import { loadModelQuorums } from '@/lib/quorums'
 import { loadModelReferralConfig, parseReferralFromParams } from '@/lib/referrals'
 import { loadModelSplit } from '@/lib/splits'
 import { loadModelVersions } from '@/lib/versions'
@@ -27,13 +28,14 @@ export default async function ModelPage({ params, searchParams }: Props) {
   const name = decodeURIComponent(id)
   const fixture = fixtureFrom(sp)
   const client = api(fixture)
-  const [model, enclaves, receipts, measurements, versions, benchmarks] = await Promise.all([
+  const [model, enclaves, receipts, measurements, versions, benchmarks, quorums] = await Promise.all([
     read(client.model(name)),
     read(client.modelEnclaves(name)),
     read(client.modelReceipts(name, { limit: 8 })),
     loadMeasurements(client),
     loadModelVersions(client, name),
     loadModelBenchmarks(client, name),
+    loadModelQuorums(client, name),
   ])
   const q = fixture ? `?fixture=${fixture}` : ''
 
@@ -61,5 +63,5 @@ export default async function ModelPage({ params, searchParams }: Props) {
   ])
   const referrer = parseReferralFromParams(sp)
 
-  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} referrer={referrer} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, passPlan, referralConfig, versions, benchmarks }} />
+  return <ModelView fixture={fixture} asOwner={sp.as === 'owner'} referrer={referrer} initial={{ model: model.data, enclaves, receipts, measurements, policy, split, passPlan, referralConfig, versions, benchmarks, quorums }} />
 }

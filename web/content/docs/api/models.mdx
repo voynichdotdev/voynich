@@ -1234,11 +1234,11 @@ Lists receipt-backed quorum calls across all models (`QuorumsPage`). Accepts `cu
 
 ## `GET /v1/models/{id}/quorums`
 
-Lists quorum calls for model `{id}` (`QuorumsPage`). Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
+Lists quorum calls for model `{id}` (`QuorumsPage`), backing the **Quorums** panel on `/models/{id}`. Accepts `cursor` and `limit`. Answers `MODEL_NOT_FOUND` if `{id}` does not exist.
 
 ## `GET /v1/quorums/{address}`
 
-Reads one [QuorumRecord](#quorumrecord) by its PDA address. Answers `QUORUM_NOT_FOUND` (`404`) when none exists.
+Reads one [QuorumRecord](#quorumrecord) by its PDA address, backing the `/quorums/{address}` proof page with clickable links to every cited `/receipts/{receipt}`. Answers `QUORUM_NOT_FOUND` (`404`) when none exists.
 
 ## `POST /v1/models/{id}/quorums/build`
 

@@ -35,6 +35,7 @@ Eight read functions read what the API indexes from the chain (none needs a wall
 | `quorum(address, options?)` | One `QuorumRecord` by its PDA address. | [`GET /v1/quorums/{address}`](/docs/api/models#get-v1quorumsaddress) |
 | `openQuorum(modelId, input, options?)` | Signs `open_quorum` and returns the indexed `QuorumRecord`. | [`POST /v1/models/{id}/quorums/build`](/docs/api/models#post-v1modelsidquorumsbuild) |
 | `finalizeQuorum(address, receipts, options?)` | Signs permissionless `finalize_quorum` and returns `{ quorum, transaction }`. | [`POST /v1/quorums/{address}/finalize/build`](/docs/api/models#post-v1quorumsaddressfinalizebuild) |
+| `runQuorum(modelId, input, options)` | End-to-end helper: opens a `Quorum` PDA, executes `2..5` calls sharing one `preEncrypted` envelope, and finalizes consensus on chain. | [`POST /v1/quorums/{address}/finalize/build`](/docs/api/models#post-v1quorumsaddressfinalizebuild) |
 | `enclaves(query?)` | A page of enclaves. | [`GET /v1/enclaves`](/docs/api/enclaves) |
 | `enclave(key)` | One enclave with its grants, receipts and earnings. | [`GET /v1/enclaves/{key}`](/docs/api/enclaves) |
 | `getBond(enclaveKey, options?)` | The enclave's `OperatorBond`, or `null` when none exists. | [`GET /v1/enclaves/{key}/bond`](/docs/api/enclaves#get-v1enclaveskeybond) |
@@ -186,7 +187,7 @@ const { quorum: agreed } = await voynich.finalizeQuorum(q.address, [receiptA, re
 console.log(agreed.status, agreed.agreedOutputHash, agreed.distinctEnclaves)
 ```
 
-`listQuorums(query?)` reads `GET /v1/quorums` (filtering optionally by `model`, `caller`, `status`, `limit`, `cursor`). `listModelQuorums(modelId, query?)` and `quorum(address)` read model and single-quorum snapshots. `openQuorum(modelId, { inputHash, requiredVotes, requireDistinctEnclaves?, nonce? })` creates a 326-byte `Quorum` PDA (`2..=5` votes), and `finalizeQuorum(address, receipts)` permissionlessly verifies the cited `Receipt` PDAs on chain and seals `status: 'agreed'`.
+`listQuorums(query?)` reads `GET /v1/quorums` (filtering optionally by `model`, `caller`, `status`, `limit`, `cursor`). `listModelQuorums(modelId, query?)` and `quorum(address)` read model and single-quorum snapshots. `openQuorum(modelId, { inputHash, requiredVotes, requireDistinctEnclaves?, nonce? })` creates a 326-byte `Quorum` PDA (`2..=5` votes), and `finalizeQuorum(address, receipts)` permissionlessly verifies the cited `Receipt` PDAs on chain and seals `status: 'agreed'`. For one-call orchestration, `runQuorum(modelId, input, { votes, requireDistinctEnclaves?, answerMode?, enclave?, strategy? })` opens the quorum, runs `votes` calls sharing one `preEncrypted` envelope (`inputHash`), finalizes consensus on chain, and returns `{ quorum, transaction, output, receipts }`.
 
 ## enclaves and enclave
 

@@ -1,0 +1,82 @@
+/* The /quorums/[id] consensus proof page. */
+
+.page { padding-top: var(--s6); }
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s5) var(--s7);
+  flex-wrap: wrap;
+  padding-bottom: var(--s5);
+  margin-bottom: var(--s5);
+  border-bottom: 1px solid var(--line);
+}
+.title { min-width: 0; }
+.nameRow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.name {
+  font-family: var(--font-mono);
+  font-size: clamp(26px, 3vw, 36px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.address { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: 13px; color: var(--text-2); }
+.stats { display: flex; gap: var(--s6); flex-wrap: wrap; }
+.stats > div { min-width: 104px; }
+
+.regions { row-gap: var(--gutter); align-items: stretch; }
+.proof { grid-column: span 7; min-width: 0; }
+.receiptsPanel { grid-column: span 5; min-width: 0; }
+.stripWrap { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.kv { padding: 4px 16px 12px; }
+.kv > dt.wide { grid-column: 1 / -1; border-bottom: 0; padding-bottom: 0; }
+.kv > dd.wide { grid-column: 1 / -1; text-align: left; padding-top: 8px; padding-bottom: 12px; }
+.kv > dd:last-child { border-bottom: 0; padding-bottom: 4px; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-tile);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.receiptList { font-size: 13px; }
+.receiptList > li + li { border-top: 1px solid var(--line); }
+.receiptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+.receiptLeft { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.receiptPill {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--ochre-2);
+  border-radius: var(--r-tile);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  transition: border-color var(--step-1), color var(--step-1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .receiptPill:hover { border-color: var(--ochre); color: var(--ochre); }
+}
+
+@media (max-width: 1023px) {
+  .proof, .receiptsPanel { grid-column: 1 / -1; }
+}

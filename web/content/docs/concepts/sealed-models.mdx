@@ -207,6 +207,10 @@ A:" --open
 
 Any wallet (owner or third-party evaluator) can anchor an immutable, receipt-backed evaluation score for a model in an 843-byte `Benchmark` PDA (`["benchmark", model, name]`) via [`publish_benchmark`](/docs/program/instructions#publishbenchmark) or [`voynich benchmark run`](/docs/cli/models#voynich-benchmark). During publication, the program verifies 1 to 16 unique canonical `Receipt` PDAs in remaining accounts against `model` across all Receipt eras, checks `score_bps == floor(passed_count * 10_000 / sample_count)`, and snapshots `model.effective_version()`. On the site, [`/benchmarks`](/benchmarks) lists the live receipt-backed leaderboard across all models and `/models/<name>` displays each model's **Benchmarks** panel with score percentage, `passed / total`, version, dataset hash, and clickable receipt links straight to `/receipts/<id>`.
 
+## Quorum calls
+
+Any caller can anchor multi-enclave (or repeatability) receipt consensus in a 326-byte `Quorum` PDA (`["quorum", model, caller, nonce_le]`) via [`open_quorum`](/docs/program/instructions#openquorum) and permissionless [`finalize_quorum`](/docs/program/instructions#finalizequorum) (or one-command [`voynich quorum run`](/docs/cli/models#voynich-quorum) / `voynich.runQuorum`). Finalization verifies 2 to 5 distinct canonical `Receipt` PDAs on chain against `model`, `input_hash`, identical `output_hash`, and (when `require_distinct_enclaves` is true) distinct enclaves. On the site, the **Quorums** panel on `/models/<name>` and the `/quorums/<address>` proof page display quorum status, `votes / required`, `distinctEnclaves`, `agreedOutputHash`, and clickable links to every verifying `/receipts/<id>`.
+
 ## Statuses
 
 | Status | The model is | What can happen |

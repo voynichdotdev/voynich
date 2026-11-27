@@ -28,7 +28,7 @@
     "react-dom": "^19.3.1",
     "remark-gfm": "^4.0.1",
     "shiki": "^4.6.0",
-    "voynich": "file:vendor/voynich-0.2.53.tgz",
+    "voynich": "file:vendor/voynich-0.2.54.tgz",
     "zod": "^4.6.7"
   },
   "devDependencies": {

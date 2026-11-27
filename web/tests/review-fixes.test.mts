@@ -19,6 +19,7 @@ import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, 
 import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
 import { buyModelPass, closeModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan, passPlanCliCommand, setModelPassPlan } from '@/lib/passes'
 import { MAX_REFERRAL_SHARE_BPS, buildReferralLink, claimModelReferral, formatReferralBalance, formatReferralShare, loadAccountReferrals, loadModelReferralConfig, parseReferralFromParams, referralSetCliCommand, setModelReferralConfig } from '@/lib/referrals'
+import { formatQuorumMode, formatQuorumStatus, formatQuorumVotes, loadModelQuorums, loadQuorum, loadQuorums, quorumRunCliCommand } from '@/lib/quorums'
 import { SESSION_DELEGATES_KEY, findActiveBrowserSession, loadAccountSessions, loadSessionDelegate, removeSessionDelegate, saveSessionDelegate, submitDelegateBuild } from '@/lib/sessions'
 import { SPLIT_LIMITS, claimModelSplit, formatSplitPct, loadModelSplit, pctToBps, setModelSplit, splitEquals, splitSetCliCommand, splitToDraft, totalUnclaimedLamports, validateSplitDraft } from '@/lib/splits'
 import { effectiveModelVersion, fallbackModelVersions, loadModelVersions, matchReceiptVersion, upgradeCliCommand } from '@/lib/versions'
@@ -3317,5 +3318,79 @@ test('Build 16 Step 2: referral share helpers, ?ref= parsing, CLI hint, error ma
   const accountViewSrc = fs.readFileSync(path.join(ROOT, 'components/account/AccountView.tsx'), 'utf8')
   for (const sym of ['id="referrals"', 'loadAccountReferrals', 'claimModelReferral', 'Claimable']) {
     assert.ok(accountViewSrc.includes(sym), `AccountView must include ${sym}`)
+  }
+})
+
+test('Build 17 Step 2: quorum helpers, CLI hint, error mapping, /quorums/[id] proof page, and /models/[id] Quorums wiring', async () => {
+  assert.equal(formatQuorumStatus('agreed'), 'Agreed')
+  assert.equal(formatQuorumStatus('open'), 'Open')
+  assert.equal(formatQuorumVotes(2, 2), '2 / 2')
+  assert.equal(formatQuorumMode(true), 'Distinct enclaves required')
+  assert.equal(formatQuorumMode(false), 'Repeatability')
+  assert.equal(quorumRunCliCommand('sketch-32'), 'voynich quorum run sketch-32 --votes 2 --input input.json')
+  assert.equal(
+    quorumRunCliCommand('sketch-32', 3, 'draw.json', true),
+    'voynich quorum run sketch-32 --votes 3 --input draw.json --distinct-enclaves',
+  )
+
+  const modelAddr = Keypair.generate().publicKey.toBase58()
+  const caller = Keypair.generate().publicKey.toBase58()
+  const quorumAddr = Keypair.generate().publicKey.toBase58()
+  const r1 = Keypair.generate().publicKey.toBase58()
+  const r2 = Keypair.generate().publicKey.toBase58()
+  const sampleQuorum = {
+    address: quorumAddr,
+    model: modelAddr,
+    modelName: 'sketch-32',
+    caller,
+    nonce: '1',
+    inputHash: 'aa'.repeat(32),
+    requiredVotes: 2,
+    requireDistinctEnclaves: true,
+    status: 'agreed' as const,
+    agreedOutputHash: 'bb'.repeat(32),
+    voteCount: 2,
+    distinctEnclaves: 2,
+    receipts: [r1, r2],
+    createdSlot: '475100000',
+    finalizedSlot: '475100010',
+    updatedSlot: '475100010',
+  }
+  const page = { items: [sampleQuorum], page: { nextCursor: null, hasMore: false }, asOf: '2026-11-27T10:00:00Z' }
+  const okClient = {
+    quorum: async () => sampleQuorum,
+    modelQuorums: async () => page,
+    quorums: async () => page,
+  } as unknown as Parameters<typeof loadQuorum>[0]
+  const failClient = {
+    quorum: async () => { throw new Error('offline') },
+    modelQuorums: async () => { throw new Error('offline') },
+    quorums: async () => { throw new Error('offline') },
+  } as unknown as Parameters<typeof loadQuorum>[0]
+
+  assert.equal((await loadQuorum(okClient, quorumAddr))?.status, 'agreed')
+  assert.equal(await loadQuorum(failClient, quorumAddr), null)
+  assert.equal((await loadModelQuorums(okClient, modelAddr)).length, 1)
+  assert.deepEqual(await loadModelQuorums(failClient, modelAddr), [])
+  assert.equal((await loadQuorums(okClient))?.items.length, 1)
+  assert.equal(await loadQuorums(failClient), null)
+
+  assert.ok(errorMessage({ body: { error: { code: 'QUORUM_NOT_FOUND' } } }).includes('quorum'))
+  assert.ok(errorMessage({ body: { error: { code: 'INVALID_QUORUM' } } }).includes('Quorum receipts'))
+
+  const quorumPageSrc = fs.readFileSync(path.join(ROOT, 'app/quorums/[id]/page.tsx'), 'utf8')
+  assert.ok(quorumPageSrc.includes('QuorumView') && quorumPageSrc.includes('client.quorum'))
+
+  const quorumViewSrc = fs.readFileSync(path.join(ROOT, 'components/quorum/QuorumView.tsx'), 'utf8')
+  for (const sym of ['Consensus proof', 'Cited receipts', 'Agreed output SHA-256', 'formatQuorumVotes', '/receipts/']) {
+    assert.ok(quorumViewSrc.includes(sym), `QuorumView must include ${sym}`)
+  }
+
+  const modelPageSrc = fs.readFileSync(path.join(ROOT, 'app/models/[id]/page.tsx'), 'utf8')
+  assert.ok(modelPageSrc.includes('loadModelQuorums') && modelPageSrc.includes('quorums'))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['id="quorums"', 'quorumRunCliCommand', 'formatQuorumVotes', '/quorums/', '/receipts/']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
   }
 })

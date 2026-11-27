@@ -15,6 +15,7 @@ import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
 import { buyModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan } from '@/lib/passes'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
+import { formatQuorumMode, formatQuorumStatus, formatQuorumVotes, loadModelQuorums, quorumRunCliCommand, type QuorumRecord } from '@/lib/quorums'
 import { buildReferralLink, formatReferralShare, loadModelReferralConfig } from '@/lib/referrals'
 import { play } from '@/lib/sound'
 import { claimModelSplit, formatSplitPct, loadModelSplit, totalUnclaimedLamports } from '@/lib/splits'
@@ -45,6 +46,7 @@ type Props = {
     referralConfig?: ReferralConfig | null
     versions?: ModelVersions | null
     benchmarks?: BenchmarkRecord[]
+    quorums?: QuorumRecord[]
   }
 }
 
@@ -73,6 +75,8 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
   const [buyPassTx, setBuyPassTx] = useState<BuyPassTx | null>(null)
   const [versions, setVersions] = useState<ModelVersions | null>(initial.versions ?? null)
   const [benchmarks, setBenchmarks] = useState<BenchmarkRecord[]>(initial.benchmarks ?? [])
+  const [quorums, setQuorums] = useState<QuorumRecord[]>(initial.quorums ?? [])
+  const [quorumCopied, setQuorumCopied] = useState(false)
   const [config, setConfig] = useState<Config | null>(null)
   const [claimTx, setClaimTx] = useState<ClaimTx | null>(null)
   const id = initial.model.address
@@ -80,7 +84,7 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
 
   const refresh = useCallback(async () => {
     const client = api(fixture)
-    const [m, e, r, ms, vs, bs, pp, rc] = await Promise.all([
+    const [m, e, r, ms, vs, bs, pp, rc, qs] = await Promise.all([
       read(client.model(id)),
       read(client.modelEnclaves(id)),
       read(client.modelReceipts(id, { limit: 8 })),
@@ -89,6 +93,7 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
       loadModelBenchmarks(client, id),
       loadModelPassPlan(client, id),
       loadModelReferralConfig(client, id),
+      loadModelQuorums(client, id),
     ])
     const nextModel = m.ok ? m.data : model
     if (m.ok) setModel(m.data)
@@ -99,6 +104,7 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
     setBenchmarks(bs)
     setPassPlan(pp)
     setReferralConfig(rc)
+    setQuorums(qs)
     const [nextPolicy, nextSplit] = await Promise.all([
       loadModelPolicy(client, nextModel),
       loadModelSplit(client, nextModel),
@@ -596,6 +602,87 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
           )}
           <div className={s.splitFoot}>
             <code className={`mono ${s.upgradeCode}`}>{benchmarkRunCliCommand(model.name)}</code>
+          </div>
+        </section>
+
+        <section id="quorums" className={`panel ${s.full}`} aria-labelledby="quorums-heading">
+          <div className="panel-head">
+            <div className={s.splitHeadMeta}>
+              <h2 id="quorums-heading">Quorums</h2>
+              <span className={s.kindBadge}>{group(quorums.length)}</span>
+            </div>
+            <span className="t-small dim">Multi-receipt on-chain consensus proofs</span>
+          </div>
+          {quorums.length === 0 ? (
+            <div className="panel-body">
+              <p className="t-small dim">No quorum consensus proofs recorded for this model yet. Run a multi-vote quorum call from the CLI to verify agreement across receipts on chain.</p>
+            </div>
+          ) : (
+            <ul
+              className={s.list}
+              style={{ '--cols': 'minmax(0, 1.05fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.45fr)' } as React.CSSProperties}
+            >
+              <li className={s.listHead} aria-hidden="true">
+                <span>Quorum</span>
+                <span>Status</span>
+                <span className={s.num}>Votes</span>
+                <span>Enclaves</span>
+                <span>Agreed output</span>
+                <span>Receipts</span>
+              </li>
+              {quorums.map((qr) => (
+                <li key={qr.address} className={s.row}>
+                  <span data-label="Quorum">
+                    <Link href={`/quorums/${qr.address}${q}`} className="link mono" title={qr.address}>
+                      {short(qr.address, 6)}
+                    </Link>
+                  </span>
+                  <span data-label="Status">
+                    <State state={qr.status === 'agreed' ? 'live' : 'uploading'} label={formatQuorumStatus(qr.status)} />
+                  </span>
+                  <span data-label="Votes" className={`mono ${s.num} ${qr.status === 'agreed' ? 'ochre' : ''}`}>
+                    {formatQuorumVotes(qr.voteCount, qr.requiredVotes)}
+                  </span>
+                  <span data-label="Enclaves" className={s.callerCell}>
+                    <span className="mono">{group(qr.distinctEnclaves)}</span>
+                    <span className={s.kindBadge}>{formatQuorumMode(qr.requireDistinctEnclaves)}</span>
+                  </span>
+                  <span data-label="Agreed output">
+                    {qr.agreedOutputHash ? (
+                      <Hash value={qr.agreedOutputHash} chars={6} label="agreed output hash" />
+                    ) : (
+                      <span className="sub">Pending</span>
+                    )}
+                  </span>
+                  <span data-label="Receipts" className={s.receiptPills}>
+                    {qr.receipts.slice(0, 4).map((r) => (
+                      <Link key={r} href={`/receipts/${r}${q}`} className={s.receiptPill} title={r}>
+                        {short(r, 4)}
+                      </Link>
+                    ))}
+                    {qr.receipts.length > 4 ? <span className={s.kindBadge}>+{qr.receipts.length - 4}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className={s.splitFoot}>
+            <div className={s.upgradeRow} style={{ width: '100%' }}>
+              <code className={`mono ${s.upgradeCode}`}>{quorumRunCliCommand(model.name)}</code>
+              <button
+                type="button"
+                className="btn"
+                data-size="s"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(quorumRunCliCommand(model.name))
+                  play('copy')
+                  setQuorumCopied(true)
+                  setTimeout(() => setQuorumCopied(false), 1800)
+                }}
+              >
+                {quorumCopied ? 'Copied' : 'Copy command'}
+              </button>
+            </div>
           </div>
         </section>
 

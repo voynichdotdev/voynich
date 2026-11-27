@@ -126,6 +126,12 @@ export function errorMessage(e: unknown): string {
   if (code === 'INVALID_REFERRAL') {
     return x?.body?.error?.message || 'Referral share must be between 0% and 25% and cannot be self-referred.'
   }
+  if (code === 'QUORUM_NOT_FOUND') {
+    return x?.body?.error?.message || 'No quorum record exists at this address.'
+  }
+  if (code === 'INVALID_QUORUM') {
+    return x?.body?.error?.message || 'Quorum receipts must match the same model, input hash, and output hash.'
+  }
   if (x?.body?.error?.message) return x.body.error.message
   if (e instanceof TypeError) return 'The API did not answer. Check the connection and try again.'
   if (x?.name === 'ZodError') return 'The API answered in a form this site does not read. Reload the page and try again.'
