@@ -2207,6 +2207,71 @@ export function createVoynich(options: VoynichOptions) {
     )
     return { batch: updated, transaction }
   }
-  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, getBond, depositBond, withdrawBond, listBenchmarks, listModelBenchmarks, publishBenchmark, getPassPlan, setPassPlan, buyPass, listPasses, pass, closePass, getReferralConfig, setReferralConfig, listReferrals, claimReferral, listQuorums, listModelQuorums, quorum, openQuorum, finalizeQuorum, runQuorum, listBatches, listModelBatches, batch, openBatch, appendBatchReceipts, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
+  async function runBatch(
+    modelId: string,
+    inputs: ReadonlyArray<string | number[] | SketchInput>,
+    opts: {
+      answerMode?: AnswerMode
+      enclave?: string
+      strategy?: RoutingStrategy
+      maxTokens?: number
+      ceiling?: string
+      chunkSize?: number
+      manifestHash?: string
+      signal?: AbortSignal
+    } = {},
+  ): Promise<{
+    batch: BatchRecord
+    manifestHash: string
+    receiptsRoot: string
+    completedCount: number
+    totalCount: number
+    receipts: Receipt[]
+    outputs: CallOutput[]
+    transactions: TxStatus[]
+  }> {
+    if (!Array.isArray(inputs) || inputs.length < 1 || inputs.length > 256) {
+      throw new VoynichError('INVALID_BATCH', 'inputs must contain between 1 and 256 items.')
+    }
+    const chunkSize = opts.chunkSize ?? 16
+    if (!Number.isSafeInteger(chunkSize) || chunkSize < 1 || chunkSize > 16) {
+      throw new VoynichError('INVALID_BATCH', 'chunkSize must be an integer between 1 and 16.')
+    }
+    const manifestHash = opts.manifestHash ?? toHex(sha256(utf8(JSON.stringify(inputs))))
+    const answerMode: AnswerMode = opts.answerMode ?? 'open'
+    let current = await openBatch(modelId, { manifestHash, totalCount: inputs.length }, { signal: opts.signal })
+    const receipts: Receipt[] = []
+    const outputs: CallOutput[] = []
+    for (const item of inputs) {
+      const res = await call(modelId, item, {
+        answerMode,
+        ...(opts.enclave ? { enclave: opts.enclave } : {}),
+        ...(opts.strategy ? { strategy: opts.strategy } : {}),
+        ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+        ...(opts.ceiling !== undefined ? { ceiling: opts.ceiling } : {}),
+        signal: opts.signal,
+      })
+      receipts.push(res.receipt)
+      outputs.push(res.output)
+    }
+    const transactions: TxStatus[] = []
+    for (let i = 0; i < receipts.length; i += chunkSize) {
+      const chunk = receipts.slice(i, i + chunkSize).map(r => r.address)
+      const appended = await appendBatchReceipts(current.address, chunk, { signal: opts.signal })
+      current = appended.batch
+      transactions.push(appended.transaction)
+    }
+    return {
+      batch: current,
+      manifestHash,
+      receiptsRoot: current.receiptsRoot,
+      completedCount: current.completedCount,
+      totalCount: current.totalCount,
+      receipts,
+      outputs,
+      transactions,
+    }
+  }
+  return { api, call, stream, openStream, streamPieces, settle, verify, seal, grant, refund, setPrice, retire, revoke, setQuote, listVersions, publishVersion, openSession, closeSession, listSessions, session, publishMeasurement, deprecateMeasurement, policy, setPolicy, clearPolicy, getSplit, setSplit, claimSplit, getBond, depositBond, withdrawBond, listBenchmarks, listModelBenchmarks, publishBenchmark, getPassPlan, setPassPlan, buyPass, listPasses, pass, closePass, getReferralConfig, setReferralConfig, listReferrals, claimReferral, listQuorums, listModelQuorums, quorum, openQuorum, finalizeQuorum, runQuorum, listBatches, listModelBatches, batch, openBatch, appendBatchReceipts, runBatch, models: api.models, model: api.model, enclaves: api.enclaves, enclave: api.enclave, measurements: api.measurements, measurement: api.measurement, account: (wallet = signer().publicKey.toBase58()) => api.account(wallet), send }
 }
 export type Voynich = ReturnType<typeof createVoynich>

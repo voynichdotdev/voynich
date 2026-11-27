@@ -7419,3 +7419,87 @@ test('LaunchLab and Raydium CPMM creator-fee 0.5% volume buyback math and balanc
   assert.equal(parsed.claimedSol, 950_000_000n)
   assert.equal(parsed.claimedBase, 0n)
 })
+
+test('Build 18 Step 2: compiled CLI batch run / list / show and SDK runBatch multi-chunk commit', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, resolve } = await import('node:path')
+  const { serve } = await import('@hono/node-server')
+  const { Keypair } = await import('@solana/web3.js')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { sha256, toHex, utf8 } = await import('voynich/crypto')
+  const { buildApp } = await import('../src/app.js')
+
+  const execFileAsync = promisify(execFile)
+  const callerKp = Keypair.generate()
+  const fixtureApp = buildApp()
+  const wrapperApp = new (await import('hono')).Hono()
+  wrapperApp.all('*', async c => {
+    const url = new URL(c.req.url)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('X-Fixture-Session', 'cli-batch-test')
+    let bodyText: string | undefined
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      bodyText = (await c.req.text()).replaceAll(callerKp.publicKey.toBase58(), FIXTURE.caller)
+    }
+    return fixtureApp.request(new Request(url.toString(), { method: c.req.method, headers, body: bodyText }))
+  })
+  const server = serve({ fetch: wrapperApp.fetch, hostname: '127.0.0.1', port: 0 })
+  await new Promise<void>(r => server.once('listening', () => r()))
+  const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+
+  const scratch = mkdtempSync(join(tmpdir(), 'voynich-b18s2-cli-'))
+  const callerKeyPath = join(scratch, 'caller.json')
+  const inputsPath = join(scratch, 'inputs.json')
+  writeFileSync(callerKeyPath, JSON.stringify([...callerKp.secretKey]))
+  const inputsJson = JSON.stringify([
+    new Array<number>(784).fill(0),
+    new Array<number>(784).fill(0),
+    new Array<number>(784).fill(0),
+  ])
+  writeFileSync(inputsPath, inputsJson)
+  const expectedManifestHash = toHex(sha256(utf8(inputsJson)))
+  const cliPath = resolve('sdk/dist/cli.js')
+
+  try {
+    const runCli = async (args: string[]) => {
+      const { stdout } = await execFileAsync(process.execPath, [cliPath, '--api', apiUrl, ...args], { cwd: resolve('.'), encoding: 'utf8' })
+      return JSON.parse(stdout) as Record<string, unknown>
+    }
+
+    // 1. Run 3-item batch with --chunk-size 2 -> 2 append transactions (2 + 1) -> status completed
+    const ran = await runCli(['batch', 'run', 'sketch-32', '--inputs', inputsPath, '--chunk-size', '2', '--answer-mode', 'open', '--keypair', callerKeyPath, '--json'])
+    const b = ran.batch as Record<string, unknown>
+    assert.equal(b.status, 'completed')
+    assert.equal(ran.manifestHash, expectedManifestHash)
+    assert.equal(ran.completedCount, 3)
+    assert.equal(ran.totalCount, 3)
+    assert.equal(typeof ran.receiptsRoot, 'string')
+    assert.equal((ran.receiptsRoot as string).length, 64)
+    assert.equal((ran.receiptLinks as string[]).length, 3)
+    assert.equal((ran.outputs as unknown[]).length, 3)
+    assert.equal((ran.transactions as unknown[]).length, 2)
+    assert.equal(ran.batchLink, `https://voynich.dev/batches/${b.address as string}`)
+
+    // 2. batch show <address>
+    const shown = await runCli(['batch', 'show', b.address as string, '--json'])
+    assert.equal(shown.address, b.address)
+    assert.equal(shown.status, 'completed')
+    assert.equal(shown.receiptsRoot, ran.receiptsRoot)
+
+    // 3. batch list & batch list --model sketch-32
+    const listedAll = await runCli(['batch', 'list', '--json']) as { items: Array<{ address: string }> }
+    assert.equal(listedAll.items.length, 1)
+    assert.equal(listedAll.items[0]!.address, b.address)
+
+    const listedModel = await runCli(['batch', 'list', '--model', 'sketch-32', '--json']) as { items: Array<{ address: string }> }
+    assert.equal(listedModel.items.length, 1)
+    assert.equal(listedModel.items[0]!.address, b.address)
+  } finally {
+    ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

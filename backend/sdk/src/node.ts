@@ -86,6 +86,7 @@ const voynich = {
   batch: async (...args: Parameters<Voynich['batch']>) => (await load()).batch(...args),
   openBatch: async (...args: Parameters<Voynich['openBatch']>) => (await load(true)).openBatch(...args),
   appendBatchReceipts: async (...args: Parameters<Voynich['appendBatchReceipts']>) => (await load(true)).appendBatchReceipts(...args),
+  runBatch: async (...args: Parameters<Voynich['runBatch']>) => (await load(true)).runBatch(...args),
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export default voynich

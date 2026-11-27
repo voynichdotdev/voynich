@@ -39,6 +39,7 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   'min-calls': { type: 'string' }, inactive: { type: 'boolean' }, calls: { type: 'string' }, pass: { type: 'string' },
   referrer: { type: 'string' },
   votes: { type: 'string' }, input: { type: 'string' }, 'distinct-enclaves': { type: 'boolean' },
+  inputs: { type: 'string' }, 'chunk-size': { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } })
 if (values['api-url'] ?? values.api) process.env.VOYNICH_API_URL = values['api-url'] ?? values.api
@@ -100,6 +101,7 @@ async function configureCliSigner(): Promise<void> {
     || (command === 'measurement' && ['publish', 'deprecate'].includes(argument ?? ''))
     || (command === 'benchmark' && argument === 'run')
     || (command === 'quorum' && argument === 'run')
+    || (command === 'batch' && argument === 'run')
     || (command === 'pass' && (['buy', 'close'].includes(argument ?? '') || (argument === 'plan' && third === 'set') || (argument === 'list' && !values.wallet)))
     || (command === 'session' && ['open', 'close'].includes(argument ?? ''))
     || (command === 'session' && argument === 'list' && !values.wallet)
@@ -169,7 +171,7 @@ async function loadCliKeypair(): Promise<Keypair> {
   return Keypair.fromSecretKey(Uint8Array.from(decoded))
 }
 async function main(): Promise<unknown> {
-  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--pass <pass-address>] [--referrer <wallet>] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich quorum list [--model <id>] | quorum show <address> | quorum run <model> --votes <2..5> --input <file> [--distinct-enclaves] [--answer-mode open|sealed]\nvoynich pass plan show <model> | pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <n> [--inactive] | pass buy <model> --calls <n> | pass list [--wallet <pubkey>] | pass close <pass-address>\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model referral show <model> | model referral set <model> --share-bps <n> [--inactive] | model referral claim <model> [--referrer <wallet>]\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
+  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--pass <pass-address>] [--referrer <wallet>] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich quorum list [--model <id>] | quorum show <address> | quorum run <model> --votes <2..5> --input <file> [--distinct-enclaves] [--answer-mode open|sealed]\nvoynich batch list [--model <id>] | batch show <address> | batch run <model> --inputs <json-array-file> [--answer-mode open|sealed] [--enclave <key>] [--strategy balanced|cheapest|fastest] [--chunk-size <1..16>]\nvoynich pass plan show <model> | pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <n> [--inactive] | pass buy <model> --calls <n> | pass list [--wallet <pubkey>] | pass close <pass-address>\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model referral show <model> | model referral set <model> --share-bps <n> [--inactive] | model referral claim <model> [--referrer <wallet>]\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
   await configureCliSigner()
   if (command === 'models') return voynich.models()
   if (command === 'enclaves') return voynich.enclaves()
@@ -433,6 +435,67 @@ async function main(): Promise<unknown> {
       }
     }
     throw new Error('Use quorum list [--model <id>], quorum show <address>, or quorum run <model> --votes <2..5> --input <file> [--distinct-enclaves] [--answer-mode open|sealed].')
+  }
+  if (command === 'batch') {
+    const action = required(argument, 'batch subcommand (list, show, or run)')
+    if (action === 'list') {
+      const modelFilter = values.model ?? third
+      if (modelFilter) return voynich.listModelBatches(modelFilter)
+      return voynich.listBatches()
+    }
+    if (action === 'show') {
+      return voynich.batch(required(third, 'batch PDA address'))
+    }
+    if (action === 'run') {
+      const modelId = required(third, 'model')
+      const inputsPath = required(values.inputs ?? fourth, '--inputs <json-array-file>')
+      const rawInputsBytes = await readFile(inputsPath)
+      const parsedInputs = JSON.parse(rawInputsBytes.toString('utf8')) as unknown
+      if (!Array.isArray(parsedInputs) || parsedInputs.length < 1 || parsedInputs.length > 256) {
+        throw new Error('--inputs file must contain a JSON array of 1 to 256 items.')
+      }
+      const chunkSize = values['chunk-size'] !== undefined ? Number(values['chunk-size']) : 16
+      if (!Number.isSafeInteger(chunkSize) || chunkSize < 1 || chunkSize > 16) {
+        throw new Error('--chunk-size must be an integer between 1 and 16.')
+      }
+      const rawMode = (values['answer-mode'] ?? (values.open ? 'open' : 'open')).trim().toLowerCase()
+      if (rawMode !== 'open' && rawMode !== 'sealed') throw new Error('--answer-mode must be open or sealed.')
+      const answerMode: AnswerMode = rawMode
+      const strategy = parseStrategy(values.strategy)
+      const maxTokens = values['max-tokens'] !== undefined ? Number(values['max-tokens']) : undefined
+      const manifestHash = toHex(sha256(new Uint8Array(rawInputsBytes)))
+      const signer = await loadCliKeypair()
+      const client = createVoynich({
+        apiUrl: process.env.VOYNICH_API_URL ?? 'http://127.0.0.1:9702',
+        rpcUrl: process.env.SOLANA_RPC_URL || undefined,
+        signer,
+      })
+      stderr.write(`batch: running ${parsedInputs.length} item(s) on ${modelId} (chunk size ${chunkSize}, ${answerMode} mode)...\n`)
+      const res = await client.runBatch(modelId, parsedInputs as ReadonlyArray<string | number[] | SketchInput>, {
+        answerMode,
+        chunkSize,
+        manifestHash,
+        ...(values.enclave ? { enclave: values.enclave } : {}),
+        ...(strategy ? { strategy } : {}),
+        ...(maxTokens !== undefined ? { maxTokens } : {}),
+        ...(values.ceiling !== undefined ? { ceiling: values.ceiling } : {}),
+      })
+      const batchLink = `https://voynich.dev/batches/${res.batch.address}`
+      const receiptLinks = res.batch.receipts.map(addr => `https://voynich.dev/receipts/${addr}`)
+      stderr.write(`batch: ${res.batch.status} (${res.completedCount}/${res.totalCount}, root ${res.receiptsRoot.slice(0, 12)}...) -> ${batchLink}\n`)
+      return {
+        batch: res.batch,
+        manifestHash: res.manifestHash,
+        receiptsRoot: res.receiptsRoot,
+        completedCount: res.completedCount,
+        totalCount: res.totalCount,
+        batchLink,
+        receiptLinks,
+        outputs: res.outputs,
+        transactions: res.transactions.map(tx => tx.signature ?? null),
+      }
+    }
+    throw new Error('Use batch list [--model <id>], batch show <address>, or batch run <model> --inputs <json-array-file> [--answer-mode open|sealed] [--enclave <key>] [--strategy balanced|cheapest|fastest] [--chunk-size <1..16>].')
   }
   if (command === 'measurement') {
     const action = required(argument, 'measurement subcommand (list, show, publish, deprecate, or verify)')
