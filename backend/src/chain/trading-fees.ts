@@ -24,6 +24,10 @@ export type ClaimTxMeta = {
   postBalances: readonly number[]
   preTokenBalances?: readonly TokenBalanceSnapshot[] | null
   postTokenBalances?: readonly TokenBalanceSnapshot[] | null
+  loadedAddresses?: {
+    writable?: readonly { toBase58(): string }[]
+    readonly?: readonly { toBase58(): string }[]
+  } | null
 }
 
 export type ClaimedBalances = {
@@ -40,6 +44,76 @@ export type ProtocolPaymentSum = {
 export function buybackShareOf(claimed: bigint, bps: number): bigint {
   if (claimed <= 0n || bps <= 0) return 0n
   return (claimed * BigInt(bps)) / 10_000n
+}
+
+/**
+ * Computes the exact creator-fee slice corresponding to `targetVolumePpm` (e.g. 5,000 ppm = 0.50%
+ * of swap volume) out of a net creator payout whose gross rate is `grossCreatorRatePpm` and whose
+ * protocol cut on collect is `protocolShareRatePpm` (both in parts per 1,000,000).
+ */
+export function creatorVolumeShareOf(
+  claimedNet: bigint,
+  grossCreatorRatePpm: bigint,
+  protocolShareRatePpm: bigint,
+  targetVolumePpm: bigint,
+): { buybackAmount: bigint; effectiveBps: number } {
+  if (claimedNet <= 0n || targetVolumePpm <= 0n || grossCreatorRatePpm <= 0n || protocolShareRatePpm >= 1_000_000n) {
+    return { buybackAmount: 0n, effectiveBps: 0 }
+  }
+  const netRatePpt = grossCreatorRatePpm * (1_000_000n - protocolShareRatePpm)
+  const targetRatePpt = targetVolumePpm * 1_000_000n
+  if (netRatePpt <= 0n) return { buybackAmount: 0n, effectiveBps: 0 }
+  if (netRatePpt <= targetRatePpt) {
+    return { buybackAmount: claimedNet, effectiveBps: 10_000 }
+  }
+  const buybackAmount = (claimedNet * targetRatePpt) / netRatePpt
+  const effectiveBps = Number((targetRatePpt * 10_000n + netRatePpt / 2n) / netRatePpt)
+  return { buybackAmount, effectiveBps }
+}
+
+/** Deducts claim + swap/burn network fee allowance from the creator buyback share so existing wallet SOL is untouched. */
+export function creatorBuybackAfterGas(shareLamports: bigint, claimFeeLamports: bigint, extraGasLamports = 45_000n): bigint {
+  const allowance = (claimFeeLamports > 0n ? claimFeeLamports : 5_000n) + extraGasLamports
+  return shareLamports > allowance ? shareLamports - allowance : 0n
+}
+
+/**
+ * Extracts exact net WSOL (unwrapped to SOL) and base tokens received by `creatorBase58` in a
+ * LaunchLab `claim_creator_fee` or Raydium CPMM `collect_creator_fee` transaction. Summing native
+ * balances across `{creator, creatorWsolAta, creatorBaseAta}` makes ATA creation rent and WSOL
+ * unwrap of pre-existing balances cancel identically while excluding Raydium's protocol fee share.
+ */
+export function parseCreatorClaimedBalances(
+  meta: ClaimTxMeta,
+  creatorBase58: string,
+  creatorWsolAtaBase58: string,
+  creatorBaseAtaBase58: string,
+  outputMintBase58: string,
+  staticAccountKeys: readonly string[],
+): ClaimedBalances {
+  const allKeys = [
+    ...staticAccountKeys,
+    ...(meta.loadedAddresses?.writable?.map(k => k.toBase58()) ?? []),
+    ...(meta.loadedAddresses?.readonly?.map(k => k.toBase58()) ?? []),
+  ]
+  const owned = new Set([creatorBase58, creatorWsolAtaBase58, creatorBaseAtaBase58])
+  let preOwned = 0n
+  let postOwned = 0n
+  for (let i = 0; i < allKeys.length; i++) {
+    if (!owned.has(allKeys[i]!)) continue
+    if (i < meta.preBalances.length) preOwned += BigInt(meta.preBalances[i]!)
+    if (i < meta.postBalances.length) postOwned += BigInt(meta.postBalances[i]!)
+  }
+  const fee = allKeys[0] === creatorBase58 ? BigInt(meta.fee ?? 0) : 0n
+  const netDelta = postOwned - preOwned + fee
+  const claimedSol = netDelta > 0n ? netDelta : 0n
+
+  const isCreatorBase = (row: TokenBalanceSnapshot) => row.mint === outputMintBase58 && row.owner === creatorBase58
+  const baseDelta = sumTokenAmounts(meta.postTokenBalances, isCreatorBase) - sumTokenAmounts(meta.preTokenBalances, isCreatorBase)
+  return {
+    claimedSol,
+    claimedBase: baseDelta > 0n ? baseDelta : 0n,
+  }
 }
 
 function sumTokenAmounts(

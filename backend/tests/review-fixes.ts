@@ -7221,3 +7221,49 @@ test('Build 17 Step 2: compiled CLI quorum run / list / show and SDK runQuorum r
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+test('LaunchLab and Raydium CPMM creator-fee 0.5% volume buyback math and balance parsing', async () => {
+  const { creatorBuybackAfterGas, creatorVolumeShareOf, parseCreatorClaimedBalances } = await import('../src/chain/trading-fees.js')
+
+  // 1. Pre-migration LaunchLab curve: 5,000 ppm (0.50%) creator fee, 0 ppm protocol share -> 100% (10,000 bps) goes to buyback
+  const curveShare = creatorVolumeShareOf(2_018_446_217n, 5_000n, 0n, 5_000n)
+  assert.equal(curveShare.buybackAmount, 2_018_446_217n)
+  assert.equal(curveShare.effectiveBps, 10_000)
+  assert.equal(creatorBuybackAfterGas(curveShare.buybackAmount, 5_000n), 2_018_396_217n)
+
+  // 2. Post-migration Raydium CPMM (2LUhdN19zFJU7fUjWyRB5CfHmGSsA32NhL7qHmNj2rnB):
+  //    gross 21,053 ppm, 50,000 ppm (5%) Raydium share -> net creator rate = 20,000.35 ppm (2.00%).
+  //    Target 5,000 ppm (0.50% of volume) -> ~25.00% (2,500 bps) of net claimed SOL, keeping ~75% in creator wallet.
+  const cpmmNetClaimed = 2_000_035_000n // exact net creator payout on 100 SOL volume
+  const cpmmShare = creatorVolumeShareOf(cpmmNetClaimed, 21_053n, 50_000n, 5_000n)
+  assert.equal(cpmmShare.buybackAmount, 500_000_000n) // exact 0.50 SOL on 100 SOL volume
+  assert.equal(cpmmShare.effectiveBps, 2_500)
+
+  // 3. parseCreatorClaimedBalances excludes pre-existing WSOL + ATA rent and accounts for newly opened base ATA rent
+  const creator = Keypair.generate().publicKey.toBase58()
+  const wsolAta = Keypair.generate().publicKey.toBase58()
+  const baseAta = Keypair.generate().publicKey.toBase58()
+  const mint = Keypair.generate().publicKey.toBase58()
+  const vault = Keypair.generate().publicKey.toBase58()
+  const raydiumFee = Keypair.generate().publicKey.toBase58()
+
+  // Creator starts with 800,000,000 lamports and a pre-existing WSOL ATA holding 12,039,280 lamports;
+  // tx opens baseAta (2,039,280 rent), collects 950,000,000 net WSOL (while 50,000,000 goes to Raydium),
+  // unwraps WSOL ATA to 0, and pays 5,000 tx fee.
+  const parsed = parseCreatorClaimedBalances(
+    {
+      fee: 5_000,
+      preBalances: [800_000_000, 12_039_280, 0, 5_000_000_000, 0],
+      postBalances: [800_000_000 + 12_039_280 - 2_039_280 + 950_000_000 - 5_000, 0, 2_039_280, 4_000_000_000, 50_000_000],
+      preTokenBalances: [],
+      postTokenBalances: [],
+    },
+    creator,
+    wsolAta,
+    baseAta,
+    mint,
+    [creator, wsolAta, baseAta, vault, raydiumFee],
+  )
+  assert.equal(parsed.claimedSol, 950_000_000n)
+  assert.equal(parsed.claimedBase, 0n)
+})
