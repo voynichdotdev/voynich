@@ -1321,6 +1321,10 @@ Builds permissionless [`append_batch_receipts`](/docs/program/instructions#appen
 
 Lists live Voynich models in OpenAI `/v1/models` format (`OpenAIModelsList`: `{ object: "list", data: OpenAIModel[] }`). Each `OpenAIModel` carries `id`, `object` (`"model"`), `created`, `owned_by`, and a `voynich` metadata block (`OpenAIModelMetadata`: `address`, `slug`, `inputKind`, `pricingMode`, `price`, `mint`, `status`, `currentVersion`). Used by OpenAI SDK clients pointed at [`voynich serve`](/docs/cli/call#voynich-serve).
 
+## `GET /v1/mcp/manifest`
+
+Returns machine-readable MCP server metadata and tool schemas (`McpManifest`: `{ name, version, protocolVersion, transport, command, args, tools }`, where `protocolVersion` is `"2024-11-05"` and `transport` is `"stdio"`). `tools` lists the five `McpToolSchema` definitions (`voynich_list_models`, `voynich_call_model`, `voynich_verify_receipt`, `voynich_model_benchmarks`, `voynich_model_quorums`) exposed by [`voynich mcp`](/docs/cli/call#voynich-mcp).
+
 ## Read next
 
 <Cards>

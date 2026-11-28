@@ -250,6 +250,11 @@
     "does": "List live Voynich models in OpenAI /v1/models format"
   },
   {
+    "route": "GET /v1/mcp/manifest",
+    "operation": "mcpManifest",
+    "does": "Read machine-readable MCP server metadata and tool schemas"
+  },
+  {
     "route": "GET /v1/models/{id}/versions",
     "operation": "modelVersions",
     "does": "List published and uploading versions for a model, newest first"

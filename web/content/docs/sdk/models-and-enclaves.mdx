@@ -214,6 +214,10 @@ console.log(done.status, done.receiptsRoot, done.completedCount)
 
 `voynich/node` exports `createOpenAICompatServer(options)` and `formatMessagesAsPrompt(messages)` to embed the OpenAI-compatible `/v1/models` and `/v1/chat/completions` proxy directly inside a Node service (default `127.0.0.1:8787`, `webUrl: 'https://voynich.dev'`). Non-streaming calls return `chat.completion` JSON with `X-Voynich-Receipt`, `X-Voynich-Model`, and `X-Voynich-Verify-Url` headers plus a `voynich` receipt field; `stream: true` streams verified `chat.completion.chunk` SSE events ending with `data: [DONE]`. See the full [OpenAI-compatible gateway](/docs/sdk/openai-compatible) guide for JS, Python, and `cURL` examples.
 
+## MCP server (`createMcpServer`)
+
+`voynich/node` exports `createMcpServer(options)` implementing a zero-dependency JSON-RPC 2.0 MCP server (`protocolVersion: '2024-11-05'`) over newline-delimited stdio (with injectable `input`/`output` streams and `handleRequest(msg)`). It implements `initialize`, `notifications/initialized`, `ping`, `tools/list`, and `tools/call` across `voynich_list_models`, `voynich_call_model`, `voynich_verify_receipt`, `voynich_model_benchmarks`, and `voynich_model_quorums`.
+
 ## enclaves and enclave
 
 ```ts

@@ -59,6 +59,7 @@ voynich models --api-url https://api.voynich.dev
 | [`voynich model revoke <model> <enclave>`](/docs/cli/grant#voynich-model-revoke) | Revoke an enclave's grant, as the model's owner. |
 | [`voynich call <model> <input.json>`](/docs/cli/call) | Call a model and print the output, the receipt and the checks. |
 | [`voynich serve`](/docs/cli/call#voynich-serve) | Run a local OpenAI-compatible `/v1/models` and `/v1/chat/completions` gateway backed by Voynich receipts. |
+| [`voynich mcp`](/docs/cli/call#voynich-mcp) | Run a JSON-RPC 2.0 stdio MCP server exposing 5 Voynich tools (`voynich_list_models`, `voynich_call_model`, `voynich_verify_receipt`, `voynich_model_benchmarks`, `voynich_model_quorums`). |
 | [`voynich session open\|list\|close`](/docs/cli/call#voynich-session) | Open, list, or close a funded one-signature caller Session PDA. |
 | [`voynich pass plan\|buy\|list\|close`](/docs/cli/call#voynich-pass) | Configure a model PassPlan or buy, list, and close discounted prepaid call Pass PDAs. |
 | [`voynich settle <call>`](/docs/cli/call#voynich-settle) | Self-settle an open per-token metered stream before its deadline using the last signed piece. |

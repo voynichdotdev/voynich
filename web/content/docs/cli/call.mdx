@@ -321,3 +321,19 @@ Routes served by the gateway:
 - `GET /health`: gateway readiness status.
 - `GET /v1/models`: proxies [`GET /v1/openai/models`](/docs/api/models#get-v1openaimodels) in OpenAI list format.
 - `POST /v1/chat/completions`: accepts standard `{ model, messages, max_tokens?, stream? }` payloads. Non-streaming responses return a `chat.completion` object with `voynich: { receipt, call, verifyUrl, paid }` and response headers `X-Voynich-Receipt`, `X-Voynich-Model`, and `X-Voynich-Verify-Url` (exposed via CORS). Streaming (`stream: true`) emits `chat.completion.chunk` SSE events ending with `finish_reason`, the `voynich` receipt payload, and `data: [DONE]`.
+
+## voynich mcp
+
+Starts a zero-dependency JSON-RPC 2.0 Model Context Protocol (`2024-11-05`) server over newline-delimited stdio so MCP-compatible clients (Claude Desktop, Cursor, custom agents) can discover models, call sealed models, verify receipts, and read benchmarks or quorums. The same from Node is [`createMcpServer`](/docs/sdk/models-and-enclaves#mcp-server-createmcpserver).
+
+```bash
+voynich mcp [--keypair <file>] [--api <url>] [--rpc <url>] [--session <pda> --delegate <file>] [--pass <pda>] [--referrer <wallet>] [--strategy balanced|cheapest|fastest] [--enclave <key>] [--answer-mode open|sealed] [--web https://voynich.dev]
+```
+
+Without `--keypair` (or `--session` + `--delegate`), the server starts in read-only mode and returns an `isError: true` tool result if `voynich_call_model` is invoked. Tools exposed via `tools/list` and `tools/call`:
+
+- `voynich_list_models`: list live sealed models.
+- `voynich_call_model`: encrypt input, escrow and settle a call, and return the decrypted output plus receipt address and verification URL.
+- `voynich_verify_receipt`: run all five receipt verification checks and return the result with `verifyUrl`.
+- `voynich_model_benchmarks`: list receipt-backed on-chain benchmarks for a model.
+- `voynich_model_quorums`: list receipt-backed quorum calls for a model.
