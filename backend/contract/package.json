@@ -1,6 +1,6 @@
 {
   "name": "@voynich/contract",
-  "version": "0.1.39",
+  "version": "0.1.40",
   "type": "module",
   "sideEffects": false,
   "files": [

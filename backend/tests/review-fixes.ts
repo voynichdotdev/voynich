@@ -7747,3 +7747,106 @@ test('Build 20 Step 1: GET /v1/mcp/manifest + zero-dependency JSON-RPC 2.0 stdio
   assert.equal(quorumPayload.model, 'sketch-32')
   assert(Array.isArray(quorumPayload.quorums))
 })
+
+test('Build 21 Step 1: Solana Actions Spec headers, GET/POST /v1/actions/models/:id/{pass,call}, deserializable tx payload, and voynich blink CLI', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const { resolve } = await import('node:path')
+  const { VersionedTransaction } = await import('@solana/web3.js')
+  const { ACTIONS_VERSION, ActionGetResponse, ActionPostResponse, SOLANA_MAINNET_CHAIN_ID } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { actionUrl, blinkUrl } = await import('voynich')
+  const { buildApp } = await import('../src/app.js')
+
+  const execFileAsync = promisify(execFile)
+  const app = buildApp()
+  const sessionHeaders = { 'X-Fixture-Session': 'actions-blink-test' }
+
+  // 1. OPTIONS preflight (even from external Blink origin https://x.com) returns exact Solana Actions 2.1.3 + mainnet chain headers
+  const optRes = await app.request('http://localhost/v1/actions/models/sketch-32/pass', { method: 'OPTIONS', headers: { ...sessionHeaders, Origin: 'https://x.com' } })
+  assert.equal(optRes.status, 204)
+  assert.equal(optRes.headers.get('access-control-allow-origin'), '*')
+  assert.equal(optRes.headers.get('x-action-version'), ACTIONS_VERSION)
+  assert.equal(optRes.headers.get('x-blockchain-ids'), SOLANA_MAINNET_CHAIN_ID)
+  assert((optRes.headers.get('access-control-expose-headers') ?? '').includes('X-Action-Version'))
+
+  // 2. GET /v1/actions/models/sketch-32/pass when no PassPlan exists -> disabled: true
+  const disabledPassRes = await app.request('http://localhost/v1/actions/models/sketch-32/pass', { headers: sessionHeaders })
+  assert.equal(disabledPassRes.status, 200)
+  assert.equal(disabledPassRes.headers.get('x-action-version'), ACTIONS_VERSION)
+  const disabledPass = ActionGetResponse.parse(await disabledPassRes.json())
+  assert.equal(disabledPass.disabled, true)
+
+  // Configure an active PassPlan on sketch-32 in fixture mode
+  const setPlanRes = await app.request(`http://localhost/v1/models/${FIXTURE.model}/pass-plan/build`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...sessionHeaders },
+    body: JSON.stringify({
+      wallet: FIXTURE.owner,
+      pricePerCall: '80000',
+      minCalls: 3,
+      maxCalls: 25,
+      ttlSlots: '5000',
+      active: true,
+    }),
+  })
+  assert.equal(setPlanRes.status, 200)
+  const planBuild = await setPlanRes.json() as { id: string; transactionBase64: string }
+  await app.request('http://localhost/v1/transactions/submit', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...sessionHeaders },
+    body: JSON.stringify({ mode: 'relay', buildId: planBuild.id, signedTransactionBase64: planBuild.transactionBase64, idempotencyKey: planBuild.id }),
+  })
+
+  // 3. GET /v1/actions/models/sketch-32/pass with active PassPlan -> 3 linked actions (min, 2*min, custom {calls})
+  const activePassRes = await app.request('http://localhost/v1/actions/models/sketch-32/pass', { headers: sessionHeaders })
+  assert.equal(activePassRes.status, 200)
+  const activePass = ActionGetResponse.parse(await activePassRes.json())
+  assert.equal(activePass.type, 'action')
+  assert.equal(activePass.links?.actions.length, 3)
+  assert.equal(activePass.links?.actions[0]!.href, '/v1/actions/models/sketch-32/pass?calls=3')
+  assert.equal(activePass.links?.actions[1]!.href, '/v1/actions/models/sketch-32/pass?calls=6')
+
+  // 4. POST /v1/actions/models/sketch-32/pass?calls=5 -> deserializable VersionedTransaction base64
+  const postPassRes = await app.request('http://localhost/v1/actions/models/sketch-32/pass?calls=5', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...sessionHeaders },
+    body: JSON.stringify({ account: FIXTURE.caller }),
+  })
+  assert.equal(postPassRes.status, 200)
+  assert.equal(postPassRes.headers.get('x-action-version'), ACTIONS_VERSION)
+  const postPass = ActionPostResponse.parse(await postPassRes.json())
+  const decodedPassTx = VersionedTransaction.deserialize(Buffer.from(postPass.transaction, 'base64'))
+  assert(decodedPassTx.message.compiledInstructions.length >= 1)
+
+  // 5. GET & POST /v1/actions/models/sketch-32/call?ref=<wallet>
+  const getCallRes = await app.request(`http://localhost/v1/actions/models/sketch-32/call?ref=${FIXTURE.owner}`, { headers: sessionHeaders })
+  assert.equal(getCallRes.status, 200)
+  const getCall = ActionGetResponse.parse(await getCallRes.json())
+  assert.equal(getCall.type, 'action')
+  assert((getCall.links?.actions[0]!.href ?? '').includes(`ref=${FIXTURE.owner}`))
+
+  const postCallRes = await app.request(`http://localhost/v1/actions/models/sketch-32/call?ref=${FIXTURE.owner}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...sessionHeaders },
+    body: JSON.stringify({ account: FIXTURE.caller }),
+  })
+  assert.equal(postCallRes.status, 200)
+  assert.equal(postCallRes.headers.get('x-blockchain-ids'), SOLANA_MAINNET_CHAIN_ID)
+  const postCall = ActionPostResponse.parse(await postCallRes.json())
+  const decodedCallTx = VersionedTransaction.deserialize(Buffer.from(postCall.transaction, 'base64'))
+  assert(decodedCallTx.message.compiledInstructions.length >= 1)
+  assert((postCall.message ?? '').includes('https://voynich.dev/receipts/'))
+
+  // 6. SDK actionUrl / blinkUrl + compiled CLI `voynich blink`
+  const expectedAction = 'https://api.voynich.dev/v1/actions/models/sketch-32/pass'
+  assert.equal(actionUrl('sketch-32', 'pass'), expectedAction)
+  assert.equal(blinkUrl('sketch-32', 'pass'), `https://dial.to/?action=${encodeURIComponent(`solana-action:${expectedAction}`)}`)
+
+  const cliPath = resolve('sdk/dist/cli.js')
+  const { stdout } = await execFileAsync(process.execPath, [cliPath, 'blink', 'sketch-32', '--kind', 'call', '--referrer', FIXTURE.owner, '--api', 'https://api.voynich.dev', '--json'], { cwd: resolve('.'), encoding: 'utf8' })
+  const blinkOut = JSON.parse(stdout) as { actionUrl: string; solanaActionUri: string; blinkUrl: string }
+  assert.equal(blinkOut.actionUrl, `https://api.voynich.dev/v1/actions/models/sketch-32/call?ref=${FIXTURE.owner}`)
+  assert.equal(blinkOut.solanaActionUri, `solana-action:${blinkOut.actionUrl}`)
+  assert.equal(blinkOut.blinkUrl, `https://dial.to/?action=${encodeURIComponent(blinkOut.solanaActionUri)}`)
+})

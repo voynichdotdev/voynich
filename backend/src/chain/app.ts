@@ -18,6 +18,7 @@ import type { ChainRuntime } from '../runtime.js'
 import { builders } from './builders.js'
 import { fail, transactionFailure } from './errors.js'
 import { quoteModelCost } from './cost-quote.js'
+import { ACTIONS_HEADERS, applyActionsHeaders, buildCallActionMeta, buildPassActionMeta, encryptActionCallInput } from '../actions.js'
 import { mountRedemptionRoutes } from './redemption.js'
 
 const runtimeAnswer = z.strictObject({ status: z.enum(['waiting', 'answered', 'failed']), outputEnvelope: s.Envelope.nullable(), openAnswer: s.Base64.nullable().optional().transform(value => value ?? null), outputHash: s.Hash.nullable(), signature: s.ReceiptSignature.nullable(), settleTransaction: s.Signature.nullable(), receiptAddress: s.Address.nullable(), failure: s.CallFailure.nullable() })
@@ -58,7 +59,7 @@ async function* iterateUpstreamSse(body: ReadableStream<Uint8Array>): AsyncGener
 }
 
 export function buildChainApp(runtime: ChainRuntime) {
-  const app = createApi({ origins: runtime.env.CORS_ORIGINS, allowHeaders: [...RELAY_HEADERS, 'Last-Event-ID', 'X-Fixture', 'X-Fixture-Session'], contractVersion: s.CONTRACT_VERSION })
+  const app = createApi({ origins: runtime.env.CORS_ORIGINS, allowHeaders: [...RELAY_HEADERS, 'Last-Event-ID', 'X-Fixture', 'X-Fixture-Session'], contractVersion: s.CONTRACT_VERSION, publicCorsPrefixes: ['/v1/actions/'] })
   const read = runtime.readModel
   const build = builders(runtime)
   app.onError((error, c) => {
@@ -140,6 +141,23 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.get('/v1/batches/:address', async c => c.json(await read.batch(readParam(c, 'address', s.Address))))
   app.get('/v1/openai/models', async c => c.json(await read.openaiModels()))
   app.get('/v1/mcp/manifest', c => c.json(s.buildMcpManifest(new URL(c.req.url).origin)))
+  app.use('/v1/actions/*', async (c, next) => {
+    applyActionsHeaders(c)
+    await next()
+    applyActionsHeaders(c)
+  })
+  app.options('/v1/actions/*', c => c.body(null, 204, ACTIONS_HEADERS))
+  app.get('/v1/actions/models/:id/pass', async c => {
+    const model = await read.model(readParam(c, 'id', s.ModelId))
+    let plan: s.PassPlan | null = null
+    try { plan = await read.modelPassPlan(model.address) } catch { plan = null }
+    return c.json(buildPassActionMeta(model, plan))
+  })
+  app.get('/v1/actions/models/:id/call', async c => {
+    const model = await read.model(readParam(c, 'id', s.ModelId))
+    const ref = c.req.query('ref')?.trim() || undefined
+    return c.json(buildCallActionMeta(model, ref))
+  })
   app.get('/v1/accounts/:wallet/passes', async c => c.json(await read.accountPasses(readParam(c, 'wallet', s.Address))))
   app.get('/v1/passes/:address', async c => c.json(await read.pass(readParam(c, 'address', s.Address))))
   app.get('/v1/models/:id/versions', async c => c.json(await read.modelVersions(readParam(c, 'id', s.ModelId))))
@@ -359,6 +377,63 @@ export function buildChainApp(runtime: ChainRuntime) {
   app.post('/v1/quorums/:address/finalize/build', async c => c.json(await build.finalizeQuorum(readParam(c, 'address', s.Address), await readJson(c, s.FinalizeQuorumRequest))))
   app.post('/v1/models/:id/batches/build', async c => c.json(await build.openBatch(readParam(c, 'id', s.ModelId), await readJson(c, s.OpenBatchRequest))))
   app.post('/v1/batches/:address/append/build', async c => c.json(await build.appendBatchReceipts(readParam(c, 'address', s.Address), await readJson(c, s.AppendBatchReceiptsRequest))))
+  app.post('/v1/actions/models/:id/pass', async c => {
+    const model = await read.model(readParam(c, 'id', s.ModelId))
+    const plan = await read.modelPassPlan(model.address)
+    if (!plan.active) fail('INVALID_PASS', 'No active prepaid pass plan is configured for this model.', { stage: 'build' })
+    const body = await readJson(c, s.ActionPostRequest)
+    const callsRaw = c.req.query('calls')
+    const callsTotal = callsRaw !== undefined ? Number(callsRaw) : plan.minCalls
+    if (!Number.isSafeInteger(callsTotal) || callsTotal < plan.minCalls || callsTotal > plan.maxCalls) {
+      fail('INVALID_PASS', `calls must be between ${plan.minCalls} and ${plan.maxCalls}.`, { stage: 'validation' })
+    }
+    const built = await build.buyPass({ wallet: body.account, model: model.address, callsTotal })
+    return c.json({
+      type: 'transaction' as const,
+      transaction: built.transactionBase64,
+      message: `Buy ${callsTotal}-call pass on ${model.name} (Pass PDA: ${built.addresses.pass ?? ''}).`,
+    })
+  })
+  app.post('/v1/actions/models/:id/call', async c => {
+    const model = await read.model(readParam(c, 'id', s.ModelId))
+    const body = await readJson(c, s.ActionPostRequest)
+    const granted = await read.modelEnclaves(model.address)
+    const live = granted.items.find(item => item.enclave.status === 'live' && item.enclave.reachable && item.grant.status === 'live')
+      ?? granted.items.find(item => item.enclave.status === 'live' && item.grant.status === 'live')
+    if (!live) fail('ENCLAVE_NOT_FOUND', 'No live granted enclave is available for this model.')
+    const prompt = c.req.query('prompt')?.trim() || undefined
+    const maxTokensRaw = c.req.query('maxTokens')
+    const maxTokens = maxTokensRaw !== undefined && /^\d+$/.test(maxTokensRaw) ? Math.max(1, Math.min(4096, Number(maxTokensRaw))) : undefined
+    const refRaw = c.req.query('ref')?.trim()
+    let referrer: string | undefined
+    if (refRaw && s.Address.safeParse(refRaw).success) {
+      try {
+        const refCfg = await read.modelReferral(model.address)
+        if (refCfg.active && refCfg.shareBps > 0) referrer = refRaw
+      } catch {
+        referrer = undefined
+      }
+    }
+    const { inputHash } = encryptActionCallInput(model, live.enclave.encryptionKey, prompt, maxTokens)
+    const isMetered = model.priceUnit === 'token'
+    const ceiling = isMetered ? String(BigInt(model.price.amount) * BigInt(maxTokens ?? 32)) : undefined
+    const built = await build.open({
+      wallet: body.account,
+      model: model.address,
+      enclave: live.enclave.address,
+      inputHash,
+      answerMode: isMetered ? 'sealed' : 'open',
+      ...(ceiling !== undefined ? { ceiling } : {}),
+      ...(referrer ? { referrer } : {}),
+    })
+    const callAddr = built.addresses.call!
+    const receiptAddr = runtime.addresses.receipt(new PublicKey(callAddr)).toBase58()
+    return c.json({
+      type: 'transaction' as const,
+      transaction: built.transactionBase64,
+      message: `Opened call ${callAddr} on ${model.name}. Receipt: https://voynich.dev/receipts/${receiptAddr}`,
+    })
+  })
   app.post('/v1/passes/buy/build', async c => c.json(await build.buyPass(await readJson(c, s.BuyPassRequest))))
   app.post('/v1/passes/call/build', async c => c.json(await build.openPassCall(await readJson(c, s.OpenPassCallRequest))))
   app.post('/v1/passes/close/build', async c => c.json(await build.closePass(await readJson(c, s.ClosePassRequest))))

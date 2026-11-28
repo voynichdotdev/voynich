@@ -10,6 +10,29 @@ import { historicalAttestation, transactionSettledReceipt } from './history.js'
 export const VERSION_WRITE_CHUNK_BYTES = 704
 const VERSION_WRITE_CONCURRENCY = 4
 
+export type BlinkKind = 'pass' | 'call'
+export function actionUrl(
+  modelId: string,
+  kind: BlinkKind = 'pass',
+  opts: { apiUrl?: string; referrer?: string } = {},
+): string {
+  const base = (opts.apiUrl ?? 'https://api.voynich.dev').replace(/\/+$/, '')
+  const path = `${base}/v1/actions/models/${encodeURIComponent(modelId)}/${kind}`
+  if (kind === 'call' && opts.referrer) {
+    return `${path}?ref=${encodeURIComponent(opts.referrer)}`
+  }
+  return path
+}
+export function blinkUrl(
+  modelId: string,
+  kind: BlinkKind = 'pass',
+  opts: { apiUrl?: string; referrer?: string; dialectHost?: string } = {},
+): string {
+  const target = actionUrl(modelId, kind, opts)
+  const host = (opts.dialectHost ?? 'https://dial.to').replace(/\/+$/, '')
+  return `${host}/?action=${encodeURIComponent(`solana-action:${target}`)}`
+}
+
 export type WalletSigner = { publicKey: PublicKey; signTransaction(transaction: VersionedTransaction): Promise<VersionedTransaction>; signMessage?(message: Uint8Array): Promise<Uint8Array> }
 export type VoynichSigner = WalletSigner | Keypair
 export type VoynichOptions = { apiUrl: string; rpcUrl?: string; signer?: VoynichSigner; connection?: Connection; headers?: Record<string, string>; fixture?: string; fetch?: typeof fetch; pollMs?: number }

@@ -3,7 +3,7 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.39'
+export const CONTRACT_VERSION = '0.1.40'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
@@ -577,6 +577,46 @@ export function buildMcpManifest(apiUrl = 'https://api.voynich.dev'): z.output<t
     tools: [...MCP_TOOLS],
   }
 }
+export const ACTIONS_VERSION = '2.1.3' as const
+export const SOLANA_MAINNET_CHAIN_ID = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' as const
+export const ActionParameter = z.strictObject({
+  name: z.string().min(1),
+  label: z.string().min(1).optional(),
+  required: z.boolean().optional(),
+  type: z.enum(['text', 'number', 'textarea', 'select', 'radio', 'checkbox', 'url', 'email', 'date', 'datetime-local']).optional(),
+  pattern: z.string().optional(),
+  patternDescription: z.string().optional(),
+  min: z.union([z.number(), z.string()]).optional(),
+  max: z.union([z.number(), z.string()]).optional(),
+})
+export const LinkedAction = z.strictObject({
+  type: z.enum(['transaction', 'post', 'external-link', 'message']).optional(),
+  label: z.string().min(1),
+  href: z.string().min(1),
+  parameters: z.array(ActionParameter).optional(),
+})
+export const ActionGetResponse = z.strictObject({
+  type: z.literal('action'),
+  icon: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  label: z.string().min(1),
+  disabled: z.boolean().optional(),
+  links: z.strictObject({
+    actions: z.array(LinkedAction),
+  }).optional(),
+  error: z.strictObject({
+    message: z.string().min(1),
+  }).optional(),
+})
+export const ActionPostRequest = z.strictObject({
+  account: Address,
+})
+export const ActionPostResponse = z.strictObject({
+  type: z.literal('transaction'),
+  transaction: Base64,
+  message: z.string().optional(),
+})
 
 export const WalletRequest = z.strictObject({ wallet: Address })
 const CreateModelBase = z.strictObject({ wallet: Address, uploadKey: Address, uploadKeys: z.array(Address).min(1).max(MAX_UPLOAD_KEYS).optional(), weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS).optional(), name: Slug, manifest: Manifest, sizeBytes: z.int().positive(), plaintextSizeBytes: z.int().positive(), cipher: CipherHeader, price: Money, priceUnit: PriceUnit.optional(), operatorShareBps: z.int().min(0).max(10000), allowedMeasurements: z.array(Measurement).min(1).max(8), uploadFundingLamports: U64, base: ModelBase.optional() })
@@ -968,6 +1008,11 @@ export type OpenAIModel = z.output<typeof OpenAIModel>
 export type OpenAIModelsList = z.output<typeof OpenAIModelsList>
 export type McpToolSchema = z.output<typeof McpToolSchema>
 export type McpManifest = z.output<typeof McpManifest>
+export type ActionParameter = z.output<typeof ActionParameter>
+export type LinkedAction = z.output<typeof LinkedAction>
+export type ActionGetResponse = z.output<typeof ActionGetResponse>
+export type ActionPostRequest = z.output<typeof ActionPostRequest>
+export type ActionPostResponse = z.output<typeof ActionPostResponse>
 export type VersionStatus = z.output<typeof VersionStatus>
 export type ModelVersion = z.output<typeof ModelVersion>
 export type ModelVersions = z.output<typeof ModelVersions>

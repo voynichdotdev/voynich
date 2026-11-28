@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Voynich API",
-    "version": "0.1.39",
+    "version": "0.1.40",
     "description": "Public reads and unsigned transaction builds. No sessions or login. MODE=fixture serves isolated in-memory fixture sessions selected by X-Fixture-Session. Amounts and slots are decimal strings. Null mint means native SOL. Example fixture monetary values are not launch configuration."
   },
   "servers": [
@@ -13219,6 +13219,1022 @@
         }
       }
     },
+    "/v1/actions/models/{id}/pass": {
+      "get": {
+        "operationId": "actionModelPassGet",
+        "summary": "Solana Actions metadata for buying a prepaid pass on a model",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModelId"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "PASS_PLAN_NOT_FOUND",
+                "PASS_NOT_FOUND",
+                "INVALID_PASS",
+                "REFERRAL_CONFIG_NOT_FOUND",
+                "REFERRAL_NOT_FOUND",
+                "INVALID_REFERRAL",
+                "QUORUM_NOT_FOUND",
+                "INVALID_QUORUM",
+                "BATCH_NOT_FOUND",
+                "INVALID_BATCH",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionGetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "actionModelPassPost",
+        "summary": "Build an unsigned buy_pass Solana Action transaction for a Blink wallet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModelId"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "PASS_PLAN_NOT_FOUND",
+                "PASS_NOT_FOUND",
+                "INVALID_PASS",
+                "REFERRAL_CONFIG_NOT_FOUND",
+                "REFERRAL_NOT_FOUND",
+                "INVALID_REFERRAL",
+                "QUORUM_NOT_FOUND",
+                "INVALID_QUORUM",
+                "BATCH_NOT_FOUND",
+                "INVALID_BATCH",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionPostRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionPostResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/actions/models/{id}/call": {
+      "get": {
+        "operationId": "actionModelCallGet",
+        "summary": "Solana Actions metadata for opening a sealed model call from a Blink",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModelId"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "PASS_PLAN_NOT_FOUND",
+                "PASS_NOT_FOUND",
+                "INVALID_PASS",
+                "REFERRAL_CONFIG_NOT_FOUND",
+                "REFERRAL_NOT_FOUND",
+                "INVALID_REFERRAL",
+                "QUORUM_NOT_FOUND",
+                "INVALID_QUORUM",
+                "BATCH_NOT_FOUND",
+                "INVALID_BATCH",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionGetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "actionModelCallPost",
+        "summary": "Build an unsigned open_call Solana Action transaction for a Blink wallet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModelId"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "PASS_PLAN_NOT_FOUND",
+                "PASS_NOT_FOUND",
+                "INVALID_PASS",
+                "REFERRAL_CONFIG_NOT_FOUND",
+                "REFERRAL_NOT_FOUND",
+                "INVALID_REFERRAL",
+                "QUORUM_NOT_FOUND",
+                "INVALID_QUORUM",
+                "BATCH_NOT_FOUND",
+                "INVALID_BATCH",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionPostRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionPostResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/models/{id}/versions": {
       "get": {
         "operationId": "modelVersions",
@@ -24850,6 +25866,238 @@
           "append_batch_receipts"
         ]
       },
+      "ActionGetResponse": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "action"
+          },
+          "icon": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "transaction",
+                        "post",
+                        "external-link",
+                        "message"
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "href": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "parameters": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "textarea",
+                              "select",
+                              "radio",
+                              "checkbox",
+                              "url",
+                              "email",
+                              "date",
+                              "datetime-local"
+                            ]
+                          },
+                          "pattern": {
+                            "type": "string"
+                          },
+                          "patternDescription": {
+                            "type": "string"
+                          },
+                          "min": {
+                            "type": [
+                              "number",
+                              "string"
+                            ]
+                          },
+                          "max": {
+                            "type": [
+                              "number",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "href"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "actions"
+            ],
+            "additionalProperties": false
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "icon",
+          "title",
+          "description",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "ActionParameter": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "number",
+              "textarea",
+              "select",
+              "radio",
+              "checkbox",
+              "url",
+              "email",
+              "date",
+              "datetime-local"
+            ]
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "patternDescription": {
+            "type": "string"
+          },
+          "min": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "max": {
+            "type": [
+              "number",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "ActionPostRequest": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 44
+          }
+        },
+        "required": [
+          "account"
+        ],
+        "additionalProperties": false
+      },
+      "ActionPostResponse": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "transaction"
+          },
+          "transaction": {
+            "type": "string",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "transaction"
+        ],
+        "additionalProperties": false
+      },
       "AnswerMode": {
         "type": "string",
         "enum": [
@@ -31573,6 +32821,89 @@
           "model",
           "ciphertext",
           "recentReceipts"
+        ],
+        "additionalProperties": false
+      },
+      "LinkedAction": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "transaction",
+              "post",
+              "external-link",
+              "message"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "href": {
+            "type": "string",
+            "minLength": 1
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "textarea",
+                    "select",
+                    "radio",
+                    "checkbox",
+                    "url",
+                    "email",
+                    "date",
+                    "datetime-local"
+                  ]
+                },
+                "pattern": {
+                  "type": "string"
+                },
+                "patternDescription": {
+                  "type": "string"
+                },
+                "min": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "max": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "label",
+          "href"
         ],
         "additionalProperties": false
       },

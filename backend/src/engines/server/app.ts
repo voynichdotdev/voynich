@@ -21,6 +21,8 @@ export type ApiOptions = {
   maxBodyBytes?: number
   /** sent as X-Contract-Version, so a web built against an older contract can tell */
   contractVersion?: string
+  /** path prefixes (e.g. '/v1/actions/') that opt out of strict origin allowlisting and set their own public CORS headers */
+  publicCorsPrefixes?: readonly string[]
 }
 
 export type ApiVariables = { requestId: string }
@@ -44,21 +46,25 @@ export function createApi<V extends object = {}>(options: ApiOptions) {
     console.log(JSON.stringify({ level: 'info', event: 'http', requestId, method: c.req.method, route: c.req.routePath, status: c.res.status, ms: Date.now() - started }))
   })
 
-  app.use(
-    '*',
-    cors({
-      origin: (origin) => (origins.has(origin) ? origin : null),
-      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', ...(options.allowHeaders ?? [])],
-      exposeHeaders: ['X-Request-Id', 'Retry-After', ...(options.contractVersion ? ['X-Contract-Version'] : []), ...(options.exposeHeaders ?? [])],
-      credentials: options.credentials ?? false,
-      maxAge: 600,
-    }),
-  )
+  const publicCorsPrefixes = options.publicCorsPrefixes ?? []
+  const isPublicCors = (path: string) => publicCorsPrefixes.some(prefix => path.startsWith(prefix))
+  const strictCors = cors({
+    origin: (origin) => (origins.has(origin) ? origin : null),
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', ...(options.allowHeaders ?? [])],
+    exposeHeaders: ['X-Request-Id', 'Retry-After', ...(options.contractVersion ? ['X-Contract-Version'] : []), ...(options.exposeHeaders ?? [])],
+    credentials: options.credentials ?? false,
+    maxAge: 600,
+  })
+  app.use('*', async (c, next) => {
+    if (isPublicCors(c.req.path)) return next()
+    return strictCors(c, next)
+  })
 
   // CORS only stops a browser from reading the answer; a simple POST from another site still runs.
   // Refusing unknown origins outright is what keeps cookie sessions safe from cross-site requests.
   app.use('*', async (c, next) => {
+    if (isPublicCors(c.req.path)) return next()
     const origin = c.req.header('Origin')
     if (origin && !origins.has(origin)) fail('ORIGIN_NOT_ALLOWED', 'This origin is not allowed.', { stage: 'validation' })
     await next()

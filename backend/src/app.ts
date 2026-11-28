@@ -13,10 +13,12 @@ import { FixtureState, addRange, fail } from './fixture-runtime.js'
 import { addresses, chainPrograms, computeBatchReceiptsRoot } from 'voynich/program'
 import { createModelFootprint } from './chain/create-model.js'
 import { mountFixtureRedemptionRoutes } from './chain/redemption.js'
+import { ACTIONS_HEADERS, applyActionsHeaders, buildCallActionMeta, buildFixtureActionTransaction, buildPassActionMeta, encryptActionCallInput } from './actions.js'
 
 export function buildApp() {
   const app = createApi<{ scenario: typeof SCENARIOS[number] | null; fixture: FixtureState }>({
     origins: env.CORS_ORIGINS, allowHeaders: ['X-Fixture', 'X-Fixture-Session', 'Last-Event-ID'], contractVersion: s.CONTRACT_VERSION,
+    publicCorsPrefixes: ['/v1/actions/'],
   })
   const sessions = new FixtureSessions(scenario => new FixtureState(scenario))
   app.use('*', fixtureScenario({ scenarios: SCENARIOS, errors: ERROR_FIXTURES, status: s.errors.status }))
@@ -242,6 +244,57 @@ export function buildApp() {
     return c.json({ object: 'list' as const, data })
   })
   app.get('/v1/mcp/manifest', c => c.json(s.buildMcpManifest(new URL(c.req.url).origin)))
+  app.use('/v1/actions/*', async (c, next) => {
+    applyActionsHeaders(c)
+    await next()
+    applyActionsHeaders(c)
+  })
+  app.options('/v1/actions/*', c => c.body(null, 204, ACTIONS_HEADERS))
+  app.get('/v1/actions/models/:id/pass', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const plan = state.passPlans.get(model.address) ?? null
+    return c.json(buildPassActionMeta(model, plan))
+  })
+  app.get('/v1/actions/models/:id/call', c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const ref = c.req.query('ref')?.trim() || undefined
+    return c.json(buildCallActionMeta(model, ref))
+  })
+  app.post('/v1/actions/models/:id/pass', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const plan = state.passPlans.get(model.address)
+    if (!plan || !plan.active) fail('INVALID_PASS', 'No active prepaid pass plan is configured for this model.', { stage: 'build' })
+    const body = await readJson(c, s.ActionPostRequest)
+    const callsRaw = c.req.query('calls')
+    const callsTotal = callsRaw !== undefined ? Number(callsRaw) : plan.minCalls
+    if (!Number.isSafeInteger(callsTotal) || callsTotal < plan.minCalls || callsTotal > plan.maxCalls) {
+      fail('INVALID_PASS', `calls must be between ${plan.minCalls} and ${plan.maxCalls}.`, { stage: 'validation' })
+    }
+    const passAddr = fixtureAddress(`pass:${model.address}:${body.account}:${callsTotal}`)
+    return c.json({
+      type: 'transaction' as const,
+      transaction: buildFixtureActionTransaction(body.account),
+      message: `Buy ${callsTotal}-call pass on ${model.name} (Pass PDA: ${passAddr}).`,
+    })
+  })
+  app.post('/v1/actions/models/:id/call', async c => {
+    const state = c.get('fixture'); const model = state.model(readParam(c, 'id', s.ModelId))
+    const body = await readJson(c, s.ActionPostRequest)
+    const grant = state.grants.find(g => g.model === model.address && g.status === 'live')
+    if (!grant) fail('ENCLAVE_NOT_FOUND', 'No live granted enclave is available for this model.')
+    const enclave = state.enclave(grant.enclave)
+    const prompt = c.req.query('prompt')?.trim() || undefined
+    const maxTokensRaw = c.req.query('maxTokens')
+    const maxTokens = maxTokensRaw !== undefined && /^\d+$/.test(maxTokensRaw) ? Math.max(1, Math.min(4096, Number(maxTokensRaw))) : undefined
+    encryptActionCallInput(model, enclave.encryptionKey, prompt, maxTokens)
+    const callAddr = fixtureAddress(`action-call:${model.address}:${body.account}:${Date.now()}`)
+    const receiptAddr = addresses().receipt(new PublicKey(callAddr)).toBase58()
+    return c.json({
+      type: 'transaction' as const,
+      transaction: buildFixtureActionTransaction(body.account),
+      message: `Opened call ${callAddr} on ${model.name}. Receipt: https://voynich.dev/receipts/${receiptAddr}`,
+    })
+  })
   app.get('/v1/calls/:id', c => c.json(c.get('fixture').call(readParam(c, 'id', s.Address))))
   app.get('/v1/bounties', c => {
     const state = c.get('fixture'); const q = readQuery(c, s.BountyQuery, queryKeys)
