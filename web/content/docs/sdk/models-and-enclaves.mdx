@@ -218,6 +218,10 @@ console.log(done.status, done.receiptsRoot, done.completedCount)
 
 `voynich/node` exports `createMcpServer(options)` implementing a zero-dependency JSON-RPC 2.0 MCP server (`protocolVersion: '2024-11-05'`) over newline-delimited stdio (with injectable `input`/`output` streams and `handleRequest(msg)`). It implements `initialize`, `notifications/initialized`, `ping`, `tools/list`, and `tools/call` across `voynich_list_models`, `voynich_call_model`, `voynich_verify_receipt`, `voynich_model_benchmarks`, and `voynich_model_quorums`. See the full [MCP server](/docs/sdk/mcp-server) guide for client configuration snippets.
 
+## Solana Actions and Blinks (`actionUrl`, `blinkUrl`)
+
+`voynich` exports `actionUrl(modelId, kind, { apiUrl?, referrer? })` and `blinkUrl(modelId, kind, { apiUrl?, referrer?, dialectHost? })` (`kind: 'pass' | 'call'`) to construct Solana Actions (`2.1.3`) endpoints and Dialect Blink URLs for any model, optionally carrying `?ref=<wallet>` for referral attribution.
+
 ## enclaves and enclave
 
 ```ts

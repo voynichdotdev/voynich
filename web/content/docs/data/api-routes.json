@@ -255,6 +255,26 @@
     "does": "Read machine-readable MCP server metadata and tool schemas"
   },
   {
+    "route": "GET /v1/actions/models/{id}/pass",
+    "operation": "actionModelPassGet",
+    "does": "Solana Actions metadata for buying a prepaid pass on a model"
+  },
+  {
+    "route": "POST /v1/actions/models/{id}/pass",
+    "operation": "actionModelPassPost",
+    "does": "Build an unsigned buy_pass Solana Action transaction for a Blink wallet"
+  },
+  {
+    "route": "GET /v1/actions/models/{id}/call",
+    "operation": "actionModelCallGet",
+    "does": "Solana Actions metadata for opening a sealed model call from a Blink"
+  },
+  {
+    "route": "POST /v1/actions/models/{id}/call",
+    "operation": "actionModelCallPost",
+    "does": "Build an unsigned open_call Solana Action transaction for a Blink wallet"
+  },
+  {
     "route": "GET /v1/models/{id}/versions",
     "operation": "modelVersions",
     "does": "List published and uploading versions for a model, newest first"

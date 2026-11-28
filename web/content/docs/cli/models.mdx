@@ -543,6 +543,16 @@ Hashes the raw JSON array file (1 to 256 items) into `manifestHash`, opens a `Ba
 </Field>
 </Fields>
 
+## voynich blink
+
+Generates Solana Actions (`2.1.3`) and Dialect Blink share URLs for buying a prepaid pass or calling a sealed model from a wallet or X post (no wallet required).
+
+```bash
+voynich blink <model> [--kind pass|call] [--referrer <wallet>] [--api <url>] [--json]
+```
+
+Prints `{ "model", "kind", "actionUrl", "solanaActionUri", "blinkUrl" }` as JSON on stdout. `--kind` defaults to `call`; pass `--referrer <wallet>` to append `?ref=<wallet>` for referral attribution.
+
 ## Failures
 
 The two list commands exit with code `1` and print the API's code and message when the API refuses the request. The API's codes are in the [HTTP API overview](/docs/api/overview).

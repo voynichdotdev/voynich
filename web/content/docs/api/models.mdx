@@ -1325,6 +1325,15 @@ Lists live Voynich models in OpenAI `/v1/models` format (`OpenAIModelsList`: `{ 
 
 Returns machine-readable MCP server metadata and tool schemas (`McpManifest`: `{ name, version, protocolVersion, transport, command, args, tools }`, where `protocolVersion` is `"2024-11-05"` and `transport` is `"stdio"`). `tools` lists the five `McpToolSchema` definitions (`voynich_list_models`, `voynich_call_model`, `voynich_verify_receipt`, `voynich_model_benchmarks`, `voynich_model_quorums`) exposed by [`voynich mcp`](/docs/cli/call#voynich-mcp).
 
+## Solana Actions (`/v1/actions/models/{id}/pass` and `/call`)
+
+Four Solana Actions Spec `2.1.3` endpoints serve Blink-compatible metadata and unsigned `VersionedTransaction` payloads with open CORS (`Access-Control-Allow-Origin: *`), `X-Action-Version: 2.1.3`, and `X-Blockchain-Ids: solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` (including `OPTIONS` preflight for external Blink origins such as `https://x.com` and `https://dial.to`):
+
+- `GET /v1/actions/models/{id}/pass`: returns `ActionGetResponse` with quick-buy actions (`minCalls`, `2 * minCalls`, and custom `{calls}` input), or `disabled: true` when the model has no active `PassPlan`.
+- `POST /v1/actions/models/{id}/pass`: takes `ActionPostRequest` (`{ account }`, plus `?calls=<n>`) and returns `ActionPostResponse` (`{ type: "transaction", transaction, message }`) containing an unsigned base64 `buy_pass` transaction.
+- `GET /v1/actions/models/{id}/call`: returns `ActionGetResponse` with a `prompt` parameter for `text` models or sample call action for `sketch`/`tensor` models, preserving optional `?ref=<wallet>`.
+- `POST /v1/actions/models/{id}/call`: takes `{ account }` (plus `?prompt=...` and optional `?ref=<wallet>`), encrypts the input to a live granted enclave, builds an unsigned `open_call` (plus `register_call_referral` when `?ref=` is active), and returns `ActionPostResponse` whose `message` includes the direct `https://voynich.dev/receipts/<receipt>` verification link.
+
 ## Read next
 
 <Cards>

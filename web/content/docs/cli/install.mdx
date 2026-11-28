@@ -51,6 +51,7 @@ voynich models --api-url https://api.voynich.dev
 | [`voynich benchmark list\|run`](/docs/cli/models#voynich-benchmark) | List verifiable benchmarks or run a JSON evaluation suite and anchor its receipt-backed score on chain. |
 | [`voynich quorum list\|show\|run`](/docs/cli/models#voynich-quorum) | List, inspect, or run receipt-backed multi-enclave quorum calls and finalize consensus on chain. |
 | [`voynich batch list\|show\|run`](/docs/cli/models#voynich-batch) | List, inspect, or run receipt-chained batch jobs (`1..256` items) and commit `receiptsRoot` on chain. |
+| [`voynich blink <model>`](/docs/cli/models#voynich-blink) | Generate Solana Actions (`2.1.3`) and Dialect Blink share URLs for buying a pass or calling a model. |
 | [`voynich model versions <model>`](/docs/cli/models#voynich-model-versions) | List a model's version history (`v1..vN`, status, hashes, slots). |
 | [`voynich model upgrade <model> <weights file>`](/docs/cli/models#voynich-model-upgrade) | Publish `currentVersion + 1` of a live model at the same address without downtime. |
 | [`voynich model retire <model>`](/docs/cli/models#voynich-model-retire) | Retire a model, as the model's owner. |
@@ -132,7 +133,7 @@ The CLI signs with a keypair file. Which file depends on the command.
 2. `OPERATOR_KEYPAIR`
 3. the Solana CLI's keypair, found the same way as above.
 
-**`models`, `enclaves`, `verify`, `account`, `enclave status`, `benchmark list`, `quorum list`, `quorum show`, `batch list`, `batch show`, `pass plan show`, `measurement list`, `measurement show` and `measurement verify`** sign nothing and need no wallet. They do not read `--keypair` or `VOYNICH_KEYPAIR`.
+**`models`, `enclaves`, `verify`, `account`, `enclave status`, `benchmark list`, `quorum list`, `quorum show`, `batch list`, `batch show`, `blink`, `pass plan show`, `measurement list`, `measurement show` and `measurement verify`** sign nothing and need no wallet. They do not read `--keypair` or `VOYNICH_KEYPAIR`.
 
 A command that signs fails with one of these when its keypair file cannot be used:
 
