@@ -7632,3 +7632,118 @@ test('Build 19 Step 1: GET /v1/openai/models + createOpenAICompatServer non-stre
     await proxy.close()
   }
 })
+
+test('Build 20 Step 1: GET /v1/mcp/manifest + zero-dependency JSON-RPC 2.0 stdio createMcpServer end-to-end across all 5 tools', async () => {
+  const { PassThrough } = await import('node:stream')
+  const { PublicKey } = await import('@solana/web3.js')
+  const { MCP_PROTOCOL_VERSION, McpManifest } = await import('@voynich/contract')
+  const { FIXTURE } = await import('@voynich/contract/fixtures')
+  const { createMcpServer } = await import('../sdk/src/mcp-server.js')
+  const { buildApp } = await import('../src/app.js')
+
+  const app = buildApp()
+  const sessionHeaders = { 'X-Fixture-Session': 'mcp-server-test' }
+  const fetchFixture = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init)
+    const headers = new Headers(req.headers)
+    headers.set('X-Fixture-Session', 'mcp-server-test')
+    return app.request(new Request(req, { headers }))
+  }) as typeof fetch
+
+  // 1. GET /v1/mcp/manifest on fixture API
+  const manifestRes = await app.request('http://localhost/v1/mcp/manifest', { headers: sessionHeaders })
+  assert.equal(manifestRes.status, 200)
+  const manifest = McpManifest.parse(await manifestRes.json())
+  assert.equal(manifest.name, 'voynich')
+  assert.equal(manifest.protocolVersion, MCP_PROTOCOL_VERSION)
+  assert.equal(manifest.transport, 'stdio')
+  assert.deepEqual(
+    manifest.tools.map(t => t.name),
+    ['voynich_list_models', 'voynich_call_model', 'voynich_verify_receipt', 'voynich_model_benchmarks', 'voynich_model_quorums'],
+  )
+
+  // 2. Read-only MCP server (no signer): voynich_call_model returns clean isError: true
+  const roMcp = createMcpServer({ apiUrl: 'http://localhost', fetch: fetchFixture, pollMs: 5 })
+  const roCall = await roMcp.handleRequest({
+    jsonrpc: '2.0',
+    id: 99,
+    method: 'tools/call',
+    params: { name: 'voynich_call_model', arguments: { model: 'sketch-32', input: new Array<number>(784).fill(0) } },
+  })
+  assert.equal((roCall?.result as { isError: boolean }).isError, true)
+
+  // 3. Full signer MCP server over real PassThrough stdio streams (newline-delimited JSON-RPC 2.0)
+  const signer = {
+    publicKey: new PublicKey(FIXTURE.caller),
+    async signTransaction(vtx: import('@solana/web3.js').VersionedTransaction) { return vtx },
+  }
+  const input = new PassThrough()
+  const output = new PassThrough()
+  const lines: string[] = []
+  let buf = ''
+  output.on('data', chunk => {
+    buf += String(chunk)
+    const parts = buf.split('\n')
+    buf = parts.pop() ?? ''
+    for (const part of parts) if (part.trim()) lines.push(part.trim())
+  })
+
+  const mcp = createMcpServer({
+    apiUrl: 'http://localhost',
+    signer,
+    fetch: fetchFixture,
+    pollMs: 5,
+    answerMode: 'open',
+    webUrl: 'https://voynich.dev',
+    input,
+    output,
+  })
+  const running = mcp.start()
+
+  const send = (msg: Record<string, unknown>) => {
+    input.write(JSON.stringify(msg) + '\n')
+  }
+  send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: MCP_PROTOCOL_VERSION, clientInfo: { name: 'test', version: '1.0' } } })
+  send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+  send({ jsonrpc: '2.0', id: 2, method: 'ping' })
+  send({ jsonrpc: '2.0', id: 3, method: 'tools/list' })
+  send({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'voynich_list_models', arguments: {} } })
+  send({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'voynich_call_model', arguments: { model: 'sketch-32', input: new Array<number>(784).fill(0) } } })
+  send({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'voynich_verify_receipt', arguments: { receipt: FIXTURE.receipt } } })
+  send({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'voynich_model_benchmarks', arguments: { model: 'sketch-32' } } })
+  send({ jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'voynich_model_quorums', arguments: { model: 'sketch-32' } } })
+  input.end()
+  await running
+
+  // 8 requests with ids + 1 notification (produces no response) = 8 responses
+  assert.equal(lines.length, 8)
+  const responses = lines.map(l => JSON.parse(l) as { id: number; result?: Record<string, unknown>; error?: unknown })
+  assert.equal(responses[0]!.id, 1)
+  assert.equal((responses[0]!.result as { protocolVersion: string }).protocolVersion, MCP_PROTOCOL_VERSION)
+  assert.equal(responses[1]!.id, 2)
+  assert.deepEqual(responses[1]!.result, {})
+  assert.equal(((responses[2]!.result as { tools: unknown[] }).tools).length, 5)
+
+  const parseToolPayload = (resp: { result?: Record<string, unknown> }) => {
+    const r = resp.result as { isError: boolean; content: Array<{ type: string; text: string }> }
+    assert.equal(r.isError, false)
+    return JSON.parse(r.content[0]!.text) as Record<string, unknown>
+  }
+
+  const listPayload = parseToolPayload(responses[3]!)
+  assert.equal(listPayload.count, 1)
+  const callPayload = parseToolPayload(responses[4]!)
+  assert.equal(callPayload.model, 'sketch-32')
+  assert.equal(typeof callPayload.receipt, 'string')
+  assert.equal(callPayload.verifyUrl, `https://voynich.dev/receipts/${callPayload.receipt as string}`)
+  const verifyPayload = parseToolPayload(responses[5]!)
+  assert.equal(verifyPayload.receipt, FIXTURE.receipt)
+  assert.equal((verifyPayload.checks as { signature: boolean }).signature, true)
+  assert.equal(verifyPayload.verifyUrl, `https://voynich.dev/receipts/${FIXTURE.receipt}`)
+  const benchPayload = parseToolPayload(responses[6]!)
+  assert.equal(benchPayload.model, 'sketch-32')
+  assert(Array.isArray(benchPayload.benchmarks))
+  const quorumPayload = parseToolPayload(responses[7]!)
+  assert.equal(quorumPayload.model, 'sketch-32')
+  assert(Array.isArray(quorumPayload.quorums))
+})

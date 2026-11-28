@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Voynich API",
-    "version": "0.1.38",
+    "version": "0.1.39",
     "description": "Public reads and unsigned transaction builds. No sessions or login. MODE=fixture serves isolated in-memory fixture sessions selected by X-Fixture-Session. Amounts and slots are decimal strings. Null mint means native SOL. Example fixture monetary values are not launch configuration."
   },
   "servers": [
@@ -12860,6 +12860,248 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OpenAIModelsList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The error envelope: branch on error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mcp/manifest": {
+      "get": {
+        "operationId": "mcpManifest",
+        "summary": "Read machine-readable MCP server metadata and tool schemas",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Fixture",
+            "required": false,
+            "description": "Fixture server only: a scenario, or an error code to force that error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "failed",
+                "loading",
+                "waiting",
+                "expired-enclave",
+                "unreachable-enclave",
+                "revoked-grant",
+                "uploading",
+                "sealed",
+                "retired",
+                "refundable",
+                "refunded",
+                "call-ready",
+                "call-encrypting",
+                "call-awaiting-signature",
+                "call-escrowed",
+                "call-answering",
+                "call-verified",
+                "call-failed",
+                "seal-prepare",
+                "seal-encrypting",
+                "seal-awaiting-signature",
+                "seal-uploading",
+                "seal-upload-failed",
+                "seal-ready",
+                "seal-grant",
+                "seal-done",
+                "VALIDATION_ERROR",
+                "UNAUTHORIZED",
+                "ORIGIN_NOT_ALLOWED",
+                "NOT_FOUND",
+                "PROGRAM_UNAVAILABLE",
+                "CONFIGURATION_REQUIRED",
+                "IDEMPOTENCY_CONFLICT",
+                "TRANSACTION_EXPIRED",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SIMULATION_FAILED",
+                "CHAIN_REFUSED",
+                "RATE_LIMITED",
+                "INTERNAL_ERROR",
+                "UPSTREAM_UNAVAILABLE",
+                "MODEL_NOT_FOUND",
+                "MODEL_NOT_LIVE",
+                "MODEL_NOT_UPLOADING",
+                "ENCLAVE_NOT_FOUND",
+                "ENCLAVE_EXPIRED",
+                "MEASUREMENT_NOT_ALLOWED",
+                "MEASUREMENT_NOT_FOUND",
+                "MEASUREMENT_ALREADY_EXISTS",
+                "MEASUREMENT_DEPRECATED",
+                "INVALID_MEASUREMENT",
+                "POLICY_NOT_FOUND",
+                "INVALID_POLICY",
+                "POLICY_CALLER_DENIED",
+                "POLICY_OPERATOR_DENIED",
+                "POLICY_REQUIRED",
+                "SPLIT_NOT_FOUND",
+                "INVALID_SPLIT",
+                "BOND_NOT_FOUND",
+                "INVALID_BOND",
+                "BENCHMARK_NOT_FOUND",
+                "INVALID_BENCHMARK",
+                "PASS_PLAN_NOT_FOUND",
+                "PASS_NOT_FOUND",
+                "INVALID_PASS",
+                "REFERRAL_CONFIG_NOT_FOUND",
+                "REFERRAL_NOT_FOUND",
+                "INVALID_REFERRAL",
+                "QUORUM_NOT_FOUND",
+                "INVALID_QUORUM",
+                "BATCH_NOT_FOUND",
+                "INVALID_BATCH",
+                "GRANT_REQUIRED",
+                "INVALID_QUOTE",
+                "INVALID_VERSION",
+                "SESSION_NOT_FOUND",
+                "INVALID_SESSION",
+                "CALL_NOT_FOUND",
+                "CALL_NOT_OPEN",
+                "CALL_NOT_REFUNDABLE",
+                "CALL_DEADLINE_PASSED",
+                "RECEIPT_NOT_FOUND",
+                "INPUT_HASH_MISMATCH",
+                "INVALID_ENVELOPE",
+                "UPLOAD_INCOMPLETE",
+                "CIPHERTEXT_HASH_MISMATCH",
+                "PROGRAM_REFUSED",
+                "INSUFFICIENT_FUNDS",
+                "BOUNTY_NOT_FOUND",
+                "BOUNTY_NOT_OPEN"
+              ]
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fixture-Session",
+            "required": false,
+            "description": "Fixture-only per-tab state id. Reuse on every request; EventSource sends it as the session query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpManifest"
                 }
               }
             }
@@ -31441,6 +31683,103 @@
         "required": [
           "name",
           "inputKind"
+        ],
+        "additionalProperties": false
+      },
+      "McpManifest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "voynich"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "protocolVersion": {
+            "type": "string",
+            "const": "2024-11-05"
+          },
+          "transport": {
+            "type": "string",
+            "const": "stdio"
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tools": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "inputSchema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "name",
+                "description",
+                "inputSchema"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "protocolVersion",
+          "transport",
+          "command",
+          "args",
+          "tools"
+        ],
+        "additionalProperties": false
+      },
+      "McpToolSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "inputSchema": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "inputSchema"
         ],
         "additionalProperties": false
       },

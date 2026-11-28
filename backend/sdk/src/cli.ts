@@ -11,6 +11,7 @@ import { ApiClientError, createClient, decodeManifest, type AnswerMode, type Mea
 import { fromBase64, fromHex, sha256, signSealDerivation, streamInitialHash, streamNextHash, toHex, verifyPiece } from './crypto.js'
 import { createVoynich, type RoutingStrategy } from './client.js'
 import { createOpenAICompatServer } from './openai-proxy.js'
+import { createMcpServer } from './mcp-server.js'
 import type { SketchInput } from './preprocess.js'
 import { PROGRAM_ID, decodeMeasurementAccount, measurementPda } from './program.js'
 import { loadOwnerFile, saveOwnerFile } from './owner-file.js'
@@ -174,7 +175,7 @@ async function loadCliKeypair(): Promise<Keypair> {
   return Keypair.fromSecretKey(Uint8Array.from(decoded))
 }
 async function main(): Promise<unknown> {
-  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--pass <pass-address>] [--referrer <wallet>] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich quorum list [--model <id>] | quorum show <address> | quorum run <model> --votes <2..5> --input <file> [--distinct-enclaves] [--answer-mode open|sealed]\nvoynich batch list [--model <id>] | batch show <address> | batch run <model> --inputs <json-array-file> [--answer-mode open|sealed] [--enclave <key>] [--strategy balanced|cheapest|fastest] [--chunk-size <1..16>]\nvoynich serve --keypair <file> [--port 8787] [--host 127.0.0.1] [--api <url>] [--rpc <url>] [--session <pda> --delegate <file>] [--pass <pda>] [--referrer <wallet>] [--strategy balanced|cheapest|fastest] [--enclave <key>] [--answer-mode open|sealed] [--web <url>]\nvoynich pass plan show <model> | pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <n> [--inactive] | pass buy <model> --calls <n> | pass list [--wallet <pubkey>] | pass close <pass-address>\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model referral show <model> | model referral set <model> --share-bps <n> [--inactive] | model referral claim <model> [--referrer <wallet>]\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
+  if (values.help || !command) { stderr.write('voynich models | enclaves | call <model> [<input.json> | --text "<prompt>"] [--max-tokens <n>] [--ceiling <base units>] [--stream] [--open] [--pass <pass-address>] [--referrer <wallet>] [--enclave <key>] [--strategy <cheapest|fastest|balanced>] | verify <receipt> | seal <weights.onnx|adapter.voya> [--manifest <manifest.json> | --model <name|address>] [--base <json-file|url>] [--base-file <local-base>] [--base-sha256 <hex64>] [--base-size <bytes>] [--base-format <onnx|safetensors|gguf>] [--state <owner.enc.json>] [--price <base units>] [--price-unit <call|token>] [--operator-share-bps <bps>] [--measurement <hex48>] [--upload-funding <lamports>] [--upload-keys <1..8>] [--enclave <key>] [--resume]\nvoynich grant <model> <enclave> [--state <owner.enc.json>] | settle <call> (--count <n> --running-hash <hex64> --signature <base64> | --from-pieces) | refund <call> | enclave register|run|status | enclave quote <model> (--share-bps <n> | --clear) [--enclave <key>] | account <wallet>\nvoynich measurement list [--status active|deprecated] | measurement show <digest> | measurement publish [--recipe <path>] [--digest <hex96>] [--recipe-hash <hex64>] --repo <source_repo> --commit <commit_sha> [--version <semver>] | measurement deprecate <digest> | measurement verify <digest> [--recipe <path>] [--source <dir>] [--rebuild]\nvoynich benchmark list [<model>] [--evaluator <pubkey>] [--min-score-bps <n>] [--name <slug>] | benchmark run <model> --suite <json-file> [--name <slug>] [--dataset-uri <uri>] [--answer-mode open|sealed] [--strategy balanced|cheapest|fastest]\nvoynich quorum list [--model <id>] | quorum show <address> | quorum run <model> --votes <2..5> --input <file> [--distinct-enclaves] [--answer-mode open|sealed]\nvoynich batch list [--model <id>] | batch show <address> | batch run <model> --inputs <json-array-file> [--answer-mode open|sealed] [--enclave <key>] [--strategy balanced|cheapest|fastest] [--chunk-size <1..16>]\nvoynich serve --keypair <file> [--port 8787] [--host 127.0.0.1] [--api <url>] [--rpc <url>] [--session <pda> --delegate <file>] [--pass <pda>] [--referrer <wallet>] [--strategy balanced|cheapest|fastest] [--enclave <key>] [--answer-mode open|sealed] [--web <url>]\nvoynich mcp [--keypair <file>] [--api <url>] [--rpc <url>] [--session <pda> --delegate <file>] [--pass <pda>] [--referrer <wallet>] [--strategy balanced|cheapest|fastest] [--enclave <key>] [--answer-mode open|sealed] [--web <url>]\nvoynich pass plan show <model> | pass plan set <model> --price <base units> --min-calls <n> --max-calls <n> --ttl-slots <n> [--inactive] | pass buy <model> --calls <n> | pass list [--wallet <pubkey>] | pass close <pass-address>\nvoynich model price <model> --price <base units> [--price-unit <call|token>] [--operator-share-bps <bps>] [--mint <SOL|mint address>] [--decimals <n>] [--symbol <symbol>]\nvoynich model versions <model> | model upgrade <model> <weights-file> [--owner-key <file>] [--manifest <file>] [--base <source> --base-file <file>]\nvoynich model policy show <model> | model policy set <model> [--allow-list] [--caller <pubkey> ...] [--max-calls <n>] [--window-slots <slots>] [--operator <pubkey> ...] [--region <region> ...] | model policy clear <model>\nvoynich model referral show <model> | model referral set <model> --share-bps <n> [--inactive] | model referral claim <model> [--referrer <wallet>]\nvoynich model retire <model> | model revoke <model> <enclave>\nGlobal: --api-url <url> --keypair <Solana JSON file>; VOYNICH_PASSWORD supplies a noninteractive owner-file password when --state is used. Results are JSON on stdout; prompts and progress go to stderr.\n'); return }
   await configureCliSigner()
   if (command === 'models') return voynich.models()
   if (command === 'enclaves') return voynich.enclaves()
@@ -551,6 +552,48 @@ async function main(): Promise<unknown> {
       process.once('SIGINT', shutdown)
       process.once('SIGTERM', shutdown)
     })
+    return
+  }
+  if (command === 'mcp') {
+    const apiUrl = process.env.VOYNICH_API_URL ?? 'https://api.voynich.dev'
+    const rpcUrl = process.env.SOLANA_RPC_URL || undefined
+    const webUrl = values.web?.trim() || 'https://voynich.dev'
+    const strategy = parseStrategy(values.strategy)
+    let answerMode: AnswerMode | undefined
+    if (values['answer-mode'] !== undefined) {
+      const norm = values['answer-mode'].trim().toLowerCase()
+      if (norm !== 'open' && norm !== 'sealed') throw new Error('--answer-mode must be open or sealed.')
+      answerMode = norm
+    } else if (values.open) {
+      answerMode = 'open'
+    }
+    let sessionAuth: { address: string; delegate: Keypair } | undefined
+    if (values.session) {
+      const delegateFile = required(values.delegate, '--delegate <keypair-file> when --session is set')
+      const decoded = JSON.parse(await readFile(delegateFile, 'utf8')) as number[]
+      sessionAuth = { address: values.session, delegate: Keypair.fromSecretKey(Uint8Array.from(decoded)) }
+    }
+    let signer: Keypair | undefined
+    const explicitKeypair = values.keypair ?? process.env.VOYNICH_KEYPAIR
+    if (!sessionAuth && explicitKeypair) {
+      process.env.VOYNICH_KEYPAIR = explicitKeypair
+      signer = await loadCliKeypair()
+    }
+    const mcp = createMcpServer({
+      apiUrl,
+      ...(rpcUrl ? { rpcUrl } : {}),
+      ...(signer ? { signer } : {}),
+      webUrl,
+      ...(sessionAuth ? { session: sessionAuth } : {}),
+      ...(values.pass ? { pass: values.pass } : {}),
+      ...(values.referrer ? { referrer: values.referrer } : {}),
+      ...(strategy ? { strategy } : {}),
+      ...(values.enclave ? { enclave: values.enclave } : {}),
+      ...(answerMode ? { answerMode } : {}),
+      ...(values.ceiling ? { ceiling: values.ceiling } : {}),
+    })
+    stderr.write(`voynich MCP stdio server ready (API: ${apiUrl}, signer: ${signer ? signer.publicKey.toBase58() : sessionAuth ? `session:${sessionAuth.address}` : 'read-only'})\n`)
+    await mcp.start()
     return
   }
   if (command === 'measurement') {

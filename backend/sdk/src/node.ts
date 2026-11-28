@@ -90,4 +90,5 @@ const voynich = {
   account: async (...args: Parameters<Voynich['account']>) => (await load(args[0] === undefined)).account(...args),
 }
 export { createOpenAICompatServer, formatMessagesAsPrompt, type OpenAIChatMessage, type OpenAICompatServer, type OpenAICompatServerOptions } from './openai-proxy.js'
+export { createMcpServer, type JsonRpcRequest, type JsonRpcResponse, type McpServer, type McpServerOptions } from './mcp-server.js'
 export default voynich

@@ -241,6 +241,7 @@ export function buildApp() {
       }))
     return c.json({ object: 'list' as const, data })
   })
+  app.get('/v1/mcp/manifest', c => c.json(s.buildMcpManifest(new URL(c.req.url).origin)))
   app.get('/v1/calls/:id', c => c.json(c.get('fixture').call(readParam(c, 'id', s.Address))))
   app.get('/v1/bounties', c => {
     const state = c.get('fixture'); const q = readQuery(c, s.BountyQuery, queryKeys)

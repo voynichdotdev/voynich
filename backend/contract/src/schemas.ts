@@ -3,7 +3,7 @@ import { Address, Base64, PageQuery, Signature, Timestamp, U64, page } from './p
 import { defineErrors } from './errors.js'
 import { fromBase64 } from './encoding.js'
 
-export const CONTRACT_VERSION = '0.1.38'
+export const CONTRACT_VERSION = '0.1.39'
 export const errors = defineErrors({
   MODEL_NOT_FOUND: 404, MODEL_NOT_LIVE: 409, MODEL_NOT_UPLOADING: 409,
   ENCLAVE_NOT_FOUND: 404, ENCLAVE_EXPIRED: 409, MEASUREMENT_NOT_ALLOWED: 422,
@@ -480,6 +480,103 @@ export const OpenAIModelsList = z.strictObject({
   object: z.literal('list'),
   data: z.array(OpenAIModel),
 })
+export const MCP_PROTOCOL_VERSION = '2024-11-05' as const
+export const McpToolSchema = z.strictObject({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  inputSchema: z.record(z.string(), z.unknown()),
+})
+export const McpManifest = z.strictObject({
+  name: z.literal('voynich'),
+  version: z.string().min(1),
+  protocolVersion: z.literal(MCP_PROTOCOL_VERSION),
+  transport: z.literal('stdio'),
+  command: z.string().min(1),
+  args: z.array(z.string()),
+  tools: z.array(McpToolSchema).min(1),
+})
+export const MCP_TOOLS: ReadonlyArray<z.output<typeof McpToolSchema>> = [
+  {
+    name: 'voynich_list_models',
+    description: 'List live sealed models available on Voynich with pricing, input kind, and enclave counts.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum number of models to return.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'voynich_call_model',
+    description: 'Call a sealed Voynich model with encrypted input, settle on Solana, and return the decoded output with its verifiable receipt.',
+    inputSchema: {
+      type: 'object',
+      required: ['model', 'input'],
+      properties: {
+        model: { type: 'string', description: 'Model slug or PDA address (for example text-1m or sketch-32).' },
+        input: { description: 'Prompt string for text models, or JSON array/object for sketch or tensor models.' },
+        maxTokens: { type: 'integer', minimum: 1, maximum: 4096, description: 'Maximum tokens to generate for text models.' },
+        ceiling: { type: 'string', description: 'Maximum lamports/base units to escrow for metered token models.' },
+        answerMode: { type: 'string', enum: ['sealed', 'open'], description: 'Receipt answer mode (sealed or open).' },
+        strategy: { type: 'string', enum: ['balanced', 'cheapest', 'fastest'], description: 'Enclave routing strategy.' },
+        enclave: { type: 'string', description: 'Optional target enclave address or signing key.' },
+        pass: { type: 'string', description: 'Optional prepaid Pass PDA address.' },
+        referrer: { type: 'string', description: 'Optional referrer Solana wallet address.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'voynich_verify_receipt',
+    description: 'Fetch a Voynich receipt and cryptographically verify its Ed25519 enclave signature, attestation record, expiry, answer hash, and base commitment.',
+    inputSchema: {
+      type: 'object',
+      required: ['receipt'],
+      properties: {
+        receipt: { type: 'string', description: 'Receipt PDA address or settlement transaction signature.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'voynich_model_benchmarks',
+    description: 'List on-chain receipt-backed benchmark scores published for a Voynich model.',
+    inputSchema: {
+      type: 'object',
+      required: ['model'],
+      properties: {
+        model: { type: 'string', description: 'Model slug or PDA address.' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum number of benchmarks to return.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'voynich_model_quorums',
+    description: 'List on-chain receipt-backed multi-enclave quorum proofs for a Voynich model.',
+    inputSchema: {
+      type: 'object',
+      required: ['model'],
+      properties: {
+        model: { type: 'string', description: 'Model slug or PDA address.' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum number of quorums to return.' },
+      },
+      additionalProperties: false,
+    },
+  },
+]
+export function buildMcpManifest(apiUrl = 'https://api.voynich.dev'): z.output<typeof McpManifest> {
+  return {
+    name: 'voynich',
+    version: CONTRACT_VERSION,
+    protocolVersion: MCP_PROTOCOL_VERSION,
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'voynich', 'mcp', '--api', apiUrl.replace(/\/+$/, '')],
+    tools: [...MCP_TOOLS],
+  }
+}
 
 export const WalletRequest = z.strictObject({ wallet: Address })
 const CreateModelBase = z.strictObject({ wallet: Address, uploadKey: Address, uploadKeys: z.array(Address).min(1).max(MAX_UPLOAD_KEYS).optional(), weights: z.array(Address).min(1).max(INITIAL_CREATE_WEIGHTS).optional(), name: Slug, manifest: Manifest, sizeBytes: z.int().positive(), plaintextSizeBytes: z.int().positive(), cipher: CipherHeader, price: Money, priceUnit: PriceUnit.optional(), operatorShareBps: z.int().min(0).max(10000), allowedMeasurements: z.array(Measurement).min(1).max(8), uploadFundingLamports: U64, base: ModelBase.optional() })
@@ -869,6 +966,8 @@ export type AppendBatchReceiptsRequest = z.output<typeof AppendBatchReceiptsRequ
 export type OpenAIModelMetadata = z.output<typeof OpenAIModelMetadata>
 export type OpenAIModel = z.output<typeof OpenAIModel>
 export type OpenAIModelsList = z.output<typeof OpenAIModelsList>
+export type McpToolSchema = z.output<typeof McpToolSchema>
+export type McpManifest = z.output<typeof McpManifest>
 export type VersionStatus = z.output<typeof VersionStatus>
 export type ModelVersion = z.output<typeof ModelVersion>
 export type ModelVersions = z.output<typeof ModelVersions>
