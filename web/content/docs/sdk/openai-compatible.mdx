@@ -1,0 +1,162 @@
+---
+title: OpenAI-compatible gateway
+description: Point any OpenAI SDK client at voynich serve (http://127.0.0.1:8787/v1) to call sealed models, stream verified tokens, and inspect X-Voynich-Receipt headers.
+---
+
+`voynich serve` runs a local OpenAI-compatible HTTP gateway on `http://127.0.0.1:8787/v1` backed by your Solana keypair, caller session delegate, or prepaid call pass. Any client built for the OpenAI API (JavaScript/TypeScript `openai`, Python `openai`, LangChain, Vercel AI SDK, or `curl`) can call live Voynich models without changing application code, while every response carries an on-chain receipt proof in `X-Voynich-Receipt` and `X-Voynich-Verify-Url`.
+
+## Start the local gateway
+
+Build and link `voynich` from `backend/` (see [CLI: Install](/docs/cli/install)), then start the proxy pointed at `https://api.voynich.dev`:
+
+```bash
+export VOYNICH_API_URL=https://api.voynich.dev
+voynich serve --keypair ~/.config/solana/id.json --port 8787
+```
+
+Common flags:
+
+<Fields>
+<Field name="--keypair" type="file path" required>
+Solana JSON keypair file signing escrow calls (or omit when using `--session` + `--delegate`).
+</Field>
+<Field name="--port, --host" type="number, string">
+Bind address for the local HTTP server. Defaults to `127.0.0.1:8787`.
+</Field>
+<Field name="--session, --delegate" type="session PDA, keypair file">
+Route calls through an active one-signature `Session` PDA (`open_session_call` / `open_session_metered_call`) using the ephemeral delegate keypair.
+</Field>
+<Field name="--pass" type="pass PDA">
+Spend credits from an active discounted prepaid `Pass` PDA (`open_pass_call`) for per-call models.
+</Field>
+<Field name="--referrer" type="wallet address">
+Attach a referrer wallet (`register_call_referral`) when the target model has an active `ReferralConfig`.
+</Field>
+<Field name="--strategy, --enclave" type="routing options">
+Enclave routing strategy (`balanced`, `cheapest`, or `fastest`) or a pinned enclave address/signing key.
+</Field>
+<Field name="--answer-mode" type="'open' | 'sealed'">
+Choose `sealed` (encrypted to the caller) or `open` (verified plaintext stored on chain in the Receipt).
+</Field>
+<Field name="--web" type="URL">
+Base site URL used to format `X-Voynich-Verify-Url`. Defaults to `https://voynich.dev`.
+</Field>
+</Fields>
+
+## Call from existing OpenAI SDKs
+
+Set `OPENAI_BASE_URL=http://127.0.0.1:8787/v1` (any non-empty string works for `OPENAI_API_KEY`, as signing uses your local wallet):
+
+<Ways>
+<Way label="JavaScript / TypeScript">
+
+```ts
+import OpenAI from 'openai'
+
+const client = new OpenAI({
+  baseURL: 'http://127.0.0.1:8787/v1',
+  apiKey: 'voynich-local',
+})
+
+const { data, response } = await client.chat.completions
+  .create({
+    model: 'text-1m',
+    messages: [{ role: 'user', content: 'Q: What is a sealed adapter?\nA:' }],
+    max_tokens: 48,
+  })
+  .withResponse()
+
+console.log(data.choices[0]?.message.content)
+console.log('Receipt:', response.headers.get('x-voynich-receipt'))
+console.log('Verify:', response.headers.get('x-voynich-verify-url'))
+```
+
+</Way>
+<Way label="Python">
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://127.0.0.1:8787/v1",
+    api_key="voynich-local",
+)
+
+raw = client.chat.completions.with_raw_response.create(
+    model="text-1m",
+    messages=[{"role": "user", "content": "Q: What is a sealed adapter?\nA:"}],
+    max_tokens=48,
+)
+
+completion = raw.parse()
+print(completion.choices[0].message.content)
+print("Receipt:", raw.headers.get("x-voynich-receipt"))
+print("Verify:", raw.headers.get("x-voynich-verify-url"))
+```
+
+</Way>
+<Way label="cURL">
+
+```bash
+curl -i http://127.0.0.1:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "text-1m",
+    "messages": [{ "role": "user", "content": "Q: What is a sealed adapter?\nA:" }],
+    "max_tokens": 48
+  }'
+```
+
+</Way>
+</Ways>
+
+## Streaming (`stream: true`)
+
+Pass `stream: true` on per-token metered models such as `text-1m`. The gateway opens a verified [`voynich.stream`](/docs/sdk/stream) session, checks every signed `voynich/piece/v1` or `v2` chunk before emitting `chat.completion.chunk` SSE events, and finishes with `finish_reason`, the `voynich` receipt object, and `data: [DONE]`:
+
+```ts
+const stream = await client.chat.completions.create({
+  model: 'text-1m',
+  messages: [{ role: 'user', content: 'Q: What is a sealed adapter?\nA:' }],
+  max_tokens: 48,
+  stream: true,
+})
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? '')
+}
+```
+
+## Discovering models (`GET /v1/models`)
+
+`GET /v1/models` on the local gateway proxies [`GET /v1/openai/models`](/docs/api/models#get-v1openaimodels) on `https://api.voynich.dev`, returning standard OpenAI list JSON (`{ object: "list", data: [...] }`) where each entry carries `id`, `owned_by`, and a `voynich` metadata block (`address`, `slug`, `inputKind`, `pricingMode`, `price`, `mint`, `status`, `currentVersion`).
+
+## Verifying receipt headers
+
+Every non-streaming `POST /v1/chat/completions` response exposes three CORS-accessible headers and a `voynich` JSON object in the body:
+
+| Header / field | Value |
+| --- | --- |
+| `X-Voynich-Receipt` / `voynich.receipt` | The settled on-chain `Receipt` PDA address. |
+| `X-Voynich-Model` | The target model's slug or address. |
+| `X-Voynich-Verify-Url` / `voynich.verifyUrl` | Direct verification link (`https://voynich.dev/receipts/<receipt>`). |
+| `voynich.call`, `voynich.paid` | The settled `Call` PDA address and base-unit amount paid. |
+
+Verify any receipt independently from the terminal with [`voynich verify <receipt>`](/docs/cli/verify) or open `X-Voynich-Verify-Url` in the browser. On `/models/<name>`, the **OpenAI SDK** panel provides one-press copyable `CLI`, `JS`, `Python`, and `cURL` snippets pre-filled for that model.
+
+## Embedding in Node
+
+To run the gateway programmatically inside your own Node service, import `createOpenAICompatServer` and `formatMessagesAsPrompt` from `voynich/node`:
+
+```ts
+import { createOpenAICompatServer } from 'voynich/node'
+
+const gateway = createOpenAICompatServer({
+  apiUrl: 'https://api.voynich.dev',
+  signer: myKeypair,
+  port: 8787,
+})
+
+const { url } = await gateway.listen()
+console.log('Listening on', url)
+```

@@ -310,7 +310,7 @@ The protocol's `crank` service also sweeps expired (`expiresAtSlot < currentSlot
 
 ## voynich serve
 
-Starts a local OpenAI-compatible HTTP gateway (`127.0.0.1:8787` by default) backed by your configured wallet, session delegate, or prepaid pass so any OpenAI SDK client (`openai`, Python `openai`, `curl`) can call live Voynich models with on-chain receipt verification. The same from Node is [`createOpenAICompatServer`](/docs/sdk/models-and-enclaves#openai-compatible-gateway-createopenaicompatserver).
+Starts a local OpenAI-compatible HTTP gateway (`127.0.0.1:8787` by default) backed by your configured wallet, session delegate, or prepaid pass so any OpenAI SDK client (`openai`, Python `openai`, `curl`) can call live Voynich models with on-chain receipt verification. Full JavaScript, Python, and streaming examples are in [OpenAI-compatible gateway](/docs/sdk/openai-compatible), and the Node server API is [`createOpenAICompatServer`](/docs/sdk/models-and-enclaves#openai-compatible-gateway-createopenaicompatserver).
 
 ```bash
 voynich serve --keypair <file> [--port 8787] [--host 127.0.0.1] [--session <pda> --delegate <file>] [--pass <pda>] [--referrer <wallet>] [--strategy balanced|cheapest|fastest] [--enclave <key>] [--answer-mode open|sealed] [--web https://voynich.dev]

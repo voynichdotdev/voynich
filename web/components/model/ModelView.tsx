@@ -14,6 +14,7 @@ import { benchmarkRunCliCommand, formatScorePct, loadModelBenchmarks, type Bench
 import { computeUptimePct, formatBondSol } from '@/lib/bonds'
 import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
+import { buildOpenAISnippets, isMeteredTextModel, OPENAI_SNIPPET_TABS, openAIModelId, type OpenAISnippetTab } from '@/lib/openai'
 import { buyModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan } from '@/lib/passes'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
 import { formatQuorumMode, formatQuorumStatus, formatQuorumVotes, loadModelQuorums, quorumRunCliCommand, type QuorumRecord } from '@/lib/quorums'
@@ -81,6 +82,8 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
   const [quorumCopied, setQuorumCopied] = useState(false)
   const [batches, setBatches] = useState<BatchRecord[]>(initial.batches ?? [])
   const [batchCopied, setBatchCopied] = useState(false)
+  const [openaiTab, setOpenaiTab] = useState<OpenAISnippetTab>('js')
+  const [openaiCopied, setOpenaiCopied] = useState(false)
   const [config, setConfig] = useState<Config | null>(null)
   const [claimTx, setClaimTx] = useState<ClaimTx | null>(null)
   const id = initial.model.address
@@ -554,6 +557,67 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
         </section>
 
         {live ? null : facts}
+
+        <section id="openai-sdk" className={`panel ${s.full}`} aria-labelledby="openai-sdk-heading">
+          <div className="panel-head">
+            <div className={s.splitHeadMeta}>
+              <h2 id="openai-sdk-heading">OpenAI SDK</h2>
+              <span className={s.kindBadge}>OPENAI_BASE_URL</span>
+              {isMeteredTextModel(model) ? <span className={s.programBadge}>stream: true</span> : null}
+            </div>
+            <Link href="/docs/sdk/openai-compatible" className="link t-small" data-arrow>OpenAI guide</Link>
+          </div>
+          <div className="panel-body">
+            {(() => {
+              const snippets = buildOpenAISnippets(model)
+              const activeCode = snippets[openaiTab]
+              return (
+                <>
+                  <div className={s.openaiBar}>
+                    <div className={s.openaiTabs} role="tablist" aria-label="OpenAI SDK snippet language">
+                      {OPENAI_SNIPPET_TABS.map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={openaiTab === tab.id}
+                          className={s.openaiTab}
+                          onClick={() => {
+                            if (openaiTab !== tab.id) {
+                              play('toggle')
+                              setOpenaiTab(tab.id)
+                              setOpenaiCopied(false)
+                            }
+                          }}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn"
+                      data-size="s"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(activeCode)
+                        play('copy')
+                        setOpenaiCopied(true)
+                        setTimeout(() => setOpenaiCopied(false), 1800)
+                      }}
+                    >
+                      {openaiCopied ? 'Copied' : 'Copy snippet'}
+                    </button>
+                  </div>
+                  <pre className={s.openaiPre}><code>{activeCode}</code></pre>
+                </>
+              )
+            })()}
+          </div>
+          <div className={s.splitFoot}>
+            <span className="t-small dim">Run <span className="mono">voynich serve</span> locally, point any OpenAI client at <span className="mono">http://127.0.0.1:8787/v1</span>, and read <span className="mono">X-Voynich-Receipt</span> on every response.</span>
+            <span className="t-small dim">Model ID <span className="mono">{openAIModelId(model)}</span></span>
+          </div>
+        </section>
 
         <section className={`panel ${s.full}`} aria-labelledby="benchmarks">
           <div className="panel-head">

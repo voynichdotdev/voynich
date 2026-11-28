@@ -212,7 +212,7 @@ console.log(done.status, done.receiptsRoot, done.completedCount)
 
 ## OpenAI-compatible gateway (`createOpenAICompatServer`)
 
-`voynich/node` exports `createOpenAICompatServer(options)` and `formatMessagesAsPrompt(messages)` to embed the OpenAI-compatible `/v1/models` and `/v1/chat/completions` proxy directly inside a Node service (default `127.0.0.1:8787`, `webUrl: 'https://voynich.dev'`). Non-streaming calls return `chat.completion` JSON with `X-Voynich-Receipt`, `X-Voynich-Model`, and `X-Voynich-Verify-Url` headers plus a `voynich` receipt field; `stream: true` streams verified `chat.completion.chunk` SSE events ending with `data: [DONE]`.
+`voynich/node` exports `createOpenAICompatServer(options)` and `formatMessagesAsPrompt(messages)` to embed the OpenAI-compatible `/v1/models` and `/v1/chat/completions` proxy directly inside a Node service (default `127.0.0.1:8787`, `webUrl: 'https://voynich.dev'`). Non-streaming calls return `chat.completion` JSON with `X-Voynich-Receipt`, `X-Voynich-Model`, and `X-Voynich-Verify-Url` headers plus a `voynich` receipt field; `stream: true` streams verified `chat.completion.chunk` SSE events ending with `data: [DONE]`. See the full [OpenAI-compatible gateway](/docs/sdk/openai-compatible) guide for JS, Python, and `cURL` examples.
 
 ## enclaves and enclave
 

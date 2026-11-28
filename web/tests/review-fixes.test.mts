@@ -17,6 +17,7 @@ import { STREAM_PIECES_MAX_ENTRIES, STREAM_PIECES_STORAGE_KEY, STREAM_PIECES_TTL
 import { explorerUrl, siteUrl } from '@/lib/env'
 import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
+import { OPENAI_DEFAULT_BASE_URL, OPENAI_SNIPPET_TABS, buildOpenAISnippets, curlOpenAISnippet, isMeteredTextModel, jsOpenAISnippet, openAIModelId, pythonOpenAISnippet, serveCliSnippet } from '@/lib/openai'
 import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
 import { buyModelPass, closeModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan, passPlanCliCommand, setModelPassPlan } from '@/lib/passes'
 import { MAX_REFERRAL_SHARE_BPS, buildReferralLink, claimModelReferral, formatReferralBalance, formatReferralShare, loadAccountReferrals, loadModelReferralConfig, parseReferralFromParams, referralSetCliCommand, setModelReferralConfig } from '@/lib/referrals'
@@ -3461,4 +3462,54 @@ test('Build 18 Step 2: batch helpers, CLI hint, error mapping, /batches/[id] pro
   for (const sym of ['id="batches"', 'batchRunCliCommand', 'formatBatchProgress', '/batches/', '/receipts/']) {
     assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
   }
+})
+
+test('Build 19 Step 2: OpenAI SDK snippet helpers, /models/[id] OpenAI SDK panel, and /docs/sdk/openai-compatible sitemap entry', async () => {
+  assert.equal(OPENAI_DEFAULT_BASE_URL, 'http://127.0.0.1:8787/v1')
+  assert.deepEqual(OPENAI_SNIPPET_TABS.map((t) => t.id), ['cli', 'js', 'python', 'curl'])
+
+  const addr = Keypair.generate().publicKey.toBase58()
+  assert.equal(openAIModelId({ address: addr, name: 'text-1m' }), 'text-1m')
+  assert.equal(openAIModelId({ address: addr, slug: 'custom-slug', name: 'text-1m' }), 'custom-slug')
+  assert.equal(openAIModelId({ address: addr }), addr)
+
+  const textModel = { address: addr, name: 'text-1m', priceUnit: 'token' as const, manifest: { inputKind: 'text' as const } }
+  const sketchModel = { address: addr, name: 'sketch-32', priceUnit: 'call' as const, manifest: { inputKind: 'sketch' as const } }
+  assert.equal(isMeteredTextModel(textModel), true)
+  assert.equal(isMeteredTextModel(sketchModel), false)
+
+  const cli = serveCliSnippet(8787)
+  assert.ok(cli.includes('voynich serve --keypair ./caller.json --port 8787'))
+  assert.ok(cli.includes('--session'))
+
+  const textSnippets = buildOpenAISnippets(textModel)
+  assert.ok(textSnippets.js.includes('baseURL: "http://127.0.0.1:8787/v1"'))
+  assert.ok(textSnippets.js.includes('model: "text-1m"'))
+  assert.ok(textSnippets.js.includes('stream: true'))
+  assert.ok(textSnippets.js.includes('x-voynich-receipt'))
+  assert.ok(textSnippets.python.includes('base_url="http://127.0.0.1:8787/v1"'))
+  assert.ok(textSnippets.python.includes('model="text-1m"'))
+  assert.ok(textSnippets.python.includes('stream=True'))
+  assert.ok(textSnippets.python.includes('x-voynich-verify-url'))
+  assert.ok(textSnippets.curl.includes('http://127.0.0.1:8787/v1/chat/completions'))
+  assert.ok(textSnippets.curl.includes('"stream":true'))
+  assert.ok(textSnippets.curl.includes('X-Voynich-Receipt'))
+
+  const sketchJs = jsOpenAISnippet(sketchModel)
+  assert.ok(sketchJs.includes('model: "sketch-32"'))
+  assert.equal(sketchJs.includes('stream: true'), false)
+  const sketchPy = pythonOpenAISnippet(sketchModel)
+  assert.ok(sketchPy.includes('model="sketch-32"'))
+  assert.equal(sketchPy.includes('stream=True'), false)
+  const sketchCurl = curlOpenAISnippet(sketchModel)
+  assert.ok(sketchCurl.includes('"model":"sketch-32"'))
+  assert.equal(sketchCurl.includes('"stream":true'), false)
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['id="openai-sdk"', 'OPENAI_SNIPPET_TABS', 'buildOpenAISnippets', '/docs/sdk/openai-compatible', 'X-Voynich-Receipt']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+
+  const entries = sitemapMod.default()
+  assert.ok(entries.some((e) => e.url.endsWith('/docs/sdk/openai-compatible')), 'sitemap must include /docs/sdk/openai-compatible')
 })
