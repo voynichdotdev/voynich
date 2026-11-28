@@ -160,3 +160,5 @@ const gateway = createOpenAICompatServer({
 const { url } = await gateway.listen()
 console.log('Listening on', url)
 ```
+
+For MCP clients (Claude Desktop, Cursor, Antigravity, Windsurf) connecting over stdio instead of HTTP, see [MCP server](/docs/sdk/mcp-server).

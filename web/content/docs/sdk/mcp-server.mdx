@@ -1,0 +1,120 @@
+---
+title: MCP server
+description: Connect Claude Desktop, Cursor, Antigravity, Windsurf, or any MCP client to voynich mcp over stdio to discover sealed models, run paid calls, and verify receipts.
+---
+
+`voynich mcp` runs a zero-dependency JSON-RPC 2.0 Model Context Protocol (`2024-11-05`) server over newline-delimited stdio. Any MCP-compatible client can list live sealed models, invoke encrypted inference with on-chain escrow, cryptographically verify receipts across all five checks, and read receipt-backed benchmarks and quorums without custom glue code.
+
+## Client configuration (`mcpServers`)
+
+Add a `voynich` entry to your MCP client configuration (Claude Desktop `claude_desktop_config.json`, Cursor `.cursor/mcp.json`, Antigravity, or Windsurf).
+
+<Ways>
+<Way label="With signing wallet">
+
+```json
+{
+  "mcpServers": {
+    "voynich": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "voynich",
+        "mcp",
+        "--api",
+        "https://api.voynich.dev",
+        "--rpc",
+        "https://api.voynich.dev/v1/rpc",
+        "--keypair",
+        "./wallet.json"
+      ]
+    }
+  }
+}
+```
+
+</Way>
+<Way label="Read-only discovery">
+
+Omit `--keypair` to run in read-only mode. Model listing, receipt verification, benchmarks, and quorums work without any wallet; calling `voynich_call_model` returns an `isError: true` tool result until a signer is configured.
+
+```json
+{
+  "mcpServers": {
+    "voynich": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "voynich",
+        "mcp",
+        "--api",
+        "https://api.voynich.dev"
+      ]
+    }
+  }
+}
+```
+
+</Way>
+<Way label="Session delegate">
+
+Pass `--session <pda>` and `--delegate <file>` to spend from a bounded one-signature caller `Session` PDA without exposing your primary wallet keypair:
+
+```json
+{
+  "mcpServers": {
+    "voynich": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "voynich",
+        "mcp",
+        "--api",
+        "https://api.voynich.dev",
+        "--session",
+        "<session PDA>",
+        "--delegate",
+        "./delegate.json"
+      ]
+    }
+  }
+}
+```
+
+</Way>
+</Ways>
+
+Additional flags accepted by `voynich mcp`: `--pass <pda>` (spend from an active prepaid call pass), `--referrer <wallet>` (attribute calls to a referrer), `--strategy <balanced|cheapest|fastest>`, `--enclave <key>`, `--answer-mode <open|sealed>`, and `--web <url>` (defaults to `https://voynich.dev` for `verifyUrl`). On `/models/<name>`, the **MCP** tab in the **OpenAI SDK** panel provides a one-press copyable `mcpServers.voynich` config block.
+
+## Tools
+
+The server implements `initialize`, `notifications/initialized`, `ping`, `tools/list`, and `tools/call` across five tools:
+
+| Tool | Required arguments | Optional arguments | Does |
+| --- | --- | --- | --- |
+| `voynich_list_models` | none | `limit` (`1..100`) | Lists live sealed models with pricing, input kind, and granted enclave counts. |
+| `voynich_call_model` | `model`, `input` | `maxTokens`, `ceiling`, `answerMode`, `strategy`, `enclave`, `pass`, `referrer` | Encrypts input, escrows and settles a call on Solana, and returns the decoded output with its receipt address and `verifyUrl`. |
+| `voynich_verify_receipt` | `receipt` | none | Fetches a receipt by PDA address or settlement transaction signature and verifies all five checks (Ed25519 signature, attestation record, expiry, answer hash, and base commitment) with `verifyUrl`. |
+| `voynich_model_benchmarks` | `model` | `limit` (`1..100`) | Lists on-chain receipt-backed benchmark scores published for a model. |
+| `voynich_model_quorums` | `model` | `limit` (`1..100`) | Lists on-chain receipt-backed multi-enclave quorum proofs for a model. |
+
+## Machine-readable manifest (`GET /v1/mcp/manifest`)
+
+[`GET /v1/mcp/manifest`](/docs/api/models#get-v1mcpmanifest) on `https://api.voynich.dev` returns the canonical `McpManifest` (`name`, `version`, `protocolVersion: "2024-11-05"`, `transport: "stdio"`, `command`, `args`, and `tools` with JSON Schemas) for automated client discovery and registry indexing.
+
+## Embedding in Node (`createMcpServer`)
+
+To run or test the MCP server programmatically inside a Node process (including with custom in-memory `input`/`output` streams or direct `handleRequest(msg)` dispatch), import `createMcpServer` from `voynich/node`:
+
+```ts
+import { createMcpServer } from 'voynich/node'
+
+const server = createMcpServer({
+  apiUrl: 'https://api.voynich.dev',
+  signer: myKeypair,
+})
+
+server.start()
+```
+
+For clients speaking the OpenAI Chat Completions HTTP API instead of MCP, see [OpenAI-compatible gateway](/docs/sdk/openai-compatible).

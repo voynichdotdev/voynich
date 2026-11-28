@@ -17,7 +17,7 @@ import { STREAM_PIECES_MAX_ENTRIES, STREAM_PIECES_STORAGE_KEY, STREAM_PIECES_TTL
 import { explorerUrl, siteUrl } from '@/lib/env'
 import { CALL_STAGES, LINKS, PLACES, RECEIPT_CHECKS } from '@/lib/facts'
 import { findMeasurement, formatMeasurementLabel, indexMeasurements, isHttpUrl, loadMeasurements } from '@/lib/measurements'
-import { OPENAI_DEFAULT_BASE_URL, OPENAI_SNIPPET_TABS, buildOpenAISnippets, curlOpenAISnippet, isMeteredTextModel, jsOpenAISnippet, openAIModelId, pythonOpenAISnippet, serveCliSnippet } from '@/lib/openai'
+import { MCP_DEFAULT_API_URL, MCP_DEFAULT_RPC_URL, OPENAI_DEFAULT_BASE_URL, OPENAI_SNIPPET_TABS, buildOpenAISnippets, curlOpenAISnippet, isMeteredTextModel, jsOpenAISnippet, mcpConfigSnippet, mcpToolPromptNote, openAIModelId, pythonOpenAISnippet, serveCliSnippet } from '@/lib/openai'
 import { EMPTY_POLICY_DRAFT, formatRateCeiling, isCallerAllowedByPolicy, loadModelPolicy, parseAddressList, parseRegionList, policyEquals, policyToDraft, validatePolicyDraft } from '@/lib/policy'
 import { buyModelPass, closeModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan, passPlanCliCommand, setModelPassPlan } from '@/lib/passes'
 import { MAX_REFERRAL_SHARE_BPS, buildReferralLink, claimModelReferral, formatReferralBalance, formatReferralShare, loadAccountReferrals, loadModelReferralConfig, parseReferralFromParams, referralSetCliCommand, setModelReferralConfig } from '@/lib/referrals'
@@ -3466,7 +3466,7 @@ test('Build 18 Step 2: batch helpers, CLI hint, error mapping, /batches/[id] pro
 
 test('Build 19 Step 2: OpenAI SDK snippet helpers, /models/[id] OpenAI SDK panel, and /docs/sdk/openai-compatible sitemap entry', async () => {
   assert.equal(OPENAI_DEFAULT_BASE_URL, 'http://127.0.0.1:8787/v1')
-  assert.deepEqual(OPENAI_SNIPPET_TABS.map((t) => t.id), ['cli', 'js', 'python', 'curl'])
+  assert.deepEqual(OPENAI_SNIPPET_TABS.map((t) => t.id), ['cli', 'js', 'python', 'curl', 'mcp'])
 
   const addr = Keypair.generate().publicKey.toBase58()
   assert.equal(openAIModelId({ address: addr, name: 'text-1m' }), 'text-1m')
@@ -3512,4 +3512,40 @@ test('Build 19 Step 2: OpenAI SDK snippet helpers, /models/[id] OpenAI SDK panel
 
   const entries = sitemapMod.default()
   assert.ok(entries.some((e) => e.url.endsWith('/docs/sdk/openai-compatible')), 'sitemap must include /docs/sdk/openai-compatible')
+})
+
+test('Build 20 Step 2: MCP config snippet helper, MCP tab on /models/[id], and /docs/sdk/mcp-server sitemap entry', async () => {
+  assert.equal(MCP_DEFAULT_API_URL, 'https://api.voynich.dev')
+  assert.equal(MCP_DEFAULT_RPC_URL, 'https://api.voynich.dev/v1/rpc')
+
+  const addr = Keypair.generate().publicKey.toBase58()
+  const model = { address: addr, name: 'text-1m', priceUnit: 'token' as const, manifest: { inputKind: 'text' as const } }
+  const snippets = buildOpenAISnippets(model)
+  assert.equal(snippets.mcp, mcpConfigSnippet(model))
+
+  const parsed = JSON.parse(snippets.mcp) as { mcpServers: { voynich: { command: string; args: string[] } } }
+  assert.equal(parsed.mcpServers.voynich.command, 'npx')
+  assert.deepEqual(parsed.mcpServers.voynich.args, [
+    '-y',
+    'voynich',
+    'mcp',
+    '--api',
+    'https://api.voynich.dev',
+    '--rpc',
+    'https://api.voynich.dev/v1/rpc',
+    '--keypair',
+    './wallet.json',
+  ])
+
+  const note = mcpToolPromptNote(model)
+  assert.ok(note.includes('--keypair') && note.includes('text-1m') && note.includes('voynich_call_model'))
+  assert.ok(mcpToolPromptNote({ address: addr }).includes(addr))
+
+  const modelViewSrc = fs.readFileSync(path.join(ROOT, 'components/model/ModelView.tsx'), 'utf8')
+  for (const sym of ['/docs/sdk/mcp-server', 'mcpToolPromptNote', 'MCP guide', 'stdio MCP']) {
+    assert.ok(modelViewSrc.includes(sym), `ModelView must include ${sym}`)
+  }
+
+  const entries = sitemapMod.default()
+  assert.ok(entries.some((e) => e.url.endsWith('/docs/sdk/mcp-server')), 'sitemap must include /docs/sdk/mcp-server')
 })

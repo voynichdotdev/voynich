@@ -44,7 +44,8 @@
         { "slug": "sdk/grant-and-refund", "title": "grant and refund", "job": "Granting and revoking an enclave, setting the price and retiring a model as the owner, refunding an expired call, and send." },
         { "slug": "sdk/types-and-errors", "title": "Types and errors", "job": "Every exported type and every error the SDK raises, complete." },
         { "slug": "sdk/from-an-agent", "title": "Calling from an agent", "job": "Run an autonomous agent with a Solana keypair, verify all four receipt checks before acting, forward the receipt proof, and inspect agent receipts on /account." },
-        { "slug": "sdk/openai-compatible", "title": "OpenAI-compatible gateway", "job": "Point any OpenAI SDK client (JS, Python, cURL) at voynich serve for streaming chat completions and X-Voynich-Receipt verification headers." }
+        { "slug": "sdk/openai-compatible", "title": "OpenAI-compatible gateway", "job": "Point any OpenAI SDK client (JS, Python, cURL) at voynich serve for streaming chat completions and X-Voynich-Receipt verification headers." },
+        { "slug": "sdk/mcp-server", "title": "MCP server", "job": "Connect Claude Desktop, Cursor, Antigravity, or any MCP client to voynich mcp over stdio for model discovery, paid calls, and receipt verification." }
       ]
     },
     {

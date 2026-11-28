@@ -324,7 +324,7 @@ Routes served by the gateway:
 
 ## voynich mcp
 
-Starts a zero-dependency JSON-RPC 2.0 Model Context Protocol (`2024-11-05`) server over newline-delimited stdio so MCP-compatible clients (Claude Desktop, Cursor, custom agents) can discover models, call sealed models, verify receipts, and read benchmarks or quorums. The same from Node is [`createMcpServer`](/docs/sdk/models-and-enclaves#mcp-server-createmcpserver).
+Starts a zero-dependency JSON-RPC 2.0 Model Context Protocol (`2024-11-05`) server over newline-delimited stdio so MCP-compatible clients (Claude Desktop, Cursor, Antigravity, Windsurf, custom agents) can discover models, call sealed models, verify receipts, and read benchmarks or quorums. Client config snippets are in [MCP server](/docs/sdk/mcp-server), and the Node server API is [`createMcpServer`](/docs/sdk/models-and-enclaves#mcp-server-createmcpserver).
 
 ```bash
 voynich mcp [--keypair <file>] [--api <url>] [--rpc <url>] [--session <pda> --delegate <file>] [--pass <pda>] [--referrer <wallet>] [--strategy balanced|cheapest|fastest] [--enclave <key>] [--answer-mode open|sealed] [--web https://voynich.dev]

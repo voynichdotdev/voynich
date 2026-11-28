@@ -14,7 +14,7 @@ import { benchmarkRunCliCommand, formatScorePct, loadModelBenchmarks, type Bench
 import { computeUptimePct, formatBondSol } from '@/lib/bonds'
 import { effectiveShareBps, formatLatency } from '@/lib/call'
 import { findMeasurement, loadMeasurements, type MeasurementMap } from '@/lib/measurements'
-import { buildOpenAISnippets, isMeteredTextModel, OPENAI_SNIPPET_TABS, openAIModelId, type OpenAISnippetTab } from '@/lib/openai'
+import { buildOpenAISnippets, isMeteredTextModel, mcpToolPromptNote, OPENAI_SNIPPET_TABS, openAIModelId, type OpenAISnippetTab } from '@/lib/openai'
 import { buyModelPass, computePassSavingsPct, findActiveModelPass, loadAccountPasses, loadModelPassPlan } from '@/lib/passes'
 import { formatRateCeiling, loadModelPolicy } from '@/lib/policy'
 import { formatQuorumMode, formatQuorumStatus, formatQuorumVotes, loadModelQuorums, quorumRunCliCommand, type QuorumRecord } from '@/lib/quorums'
@@ -561,11 +561,14 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
         <section id="openai-sdk" className={`panel ${s.full}`} aria-labelledby="openai-sdk-heading">
           <div className="panel-head">
             <div className={s.splitHeadMeta}>
-              <h2 id="openai-sdk-heading">OpenAI SDK</h2>
-              <span className={s.kindBadge}>OPENAI_BASE_URL</span>
-              {isMeteredTextModel(model) ? <span className={s.programBadge}>stream: true</span> : null}
+              <h2 id="openai-sdk-heading">OpenAI SDK &amp; MCP</h2>
+              <span className={s.kindBadge}>{openaiTab === 'mcp' ? 'stdio MCP' : 'OPENAI_BASE_URL'}</span>
+              {openaiTab !== 'mcp' && isMeteredTextModel(model) ? <span className={s.programBadge}>stream: true</span> : null}
             </div>
-            <Link href="/docs/sdk/openai-compatible" className="link t-small" data-arrow>OpenAI guide</Link>
+            <div className={s.splitHeadMeta}>
+              <Link href="/docs/sdk/openai-compatible" className="link t-small" data-arrow>OpenAI guide</Link>
+              <Link href="/docs/sdk/mcp-server" className="link t-small" data-arrow>MCP guide</Link>
+            </div>
           </div>
           <div className="panel-body">
             {(() => {
@@ -574,7 +577,7 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
               return (
                 <>
                   <div className={s.openaiBar}>
-                    <div className={s.openaiTabs} role="tablist" aria-label="OpenAI SDK snippet language">
+                    <div className={s.openaiTabs} role="tablist" aria-label="OpenAI SDK and MCP snippet format">
                       {OPENAI_SNIPPET_TABS.map((tab) => (
                         <button
                           key={tab.id}
@@ -614,7 +617,11 @@ export function ModelView({ fixture, asOwner, referrer = null, initial }: Props)
             })()}
           </div>
           <div className={s.splitFoot}>
-            <span className="t-small dim">Run <span className="mono">voynich serve</span> locally, point any OpenAI client at <span className="mono">http://127.0.0.1:8787/v1</span>, and read <span className="mono">X-Voynich-Receipt</span> on every response.</span>
+            {openaiTab === 'mcp' ? (
+              <span className="t-small dim">{mcpToolPromptNote(model)}</span>
+            ) : (
+              <span className="t-small dim">Run <span className="mono">voynich serve</span> locally, point any OpenAI client at <span className="mono">http://127.0.0.1:8787/v1</span>, and read <span className="mono">X-Voynich-Receipt</span> on every response.</span>
+            )}
             <span className="t-small dim">Model ID <span className="mono">{openAIModelId(model)}</span></span>
           </div>
         </section>

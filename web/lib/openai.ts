@@ -1,12 +1,15 @@
 export const OPENAI_DEFAULT_BASE_URL = 'http://127.0.0.1:8787/v1'
+export const MCP_DEFAULT_API_URL = 'https://api.voynich.dev'
+export const MCP_DEFAULT_RPC_URL = 'https://api.voynich.dev/v1/rpc'
 
-export type OpenAISnippetTab = 'cli' | 'js' | 'python' | 'curl'
+export type OpenAISnippetTab = 'cli' | 'js' | 'python' | 'curl' | 'mcp'
 
 export const OPENAI_SNIPPET_TABS: readonly { id: OpenAISnippetTab; label: string }[] = [
   { id: 'cli', label: 'CLI' },
   { id: 'js', label: 'JS' },
   { id: 'python', label: 'Python' },
   { id: 'curl', label: 'cURL' },
+  { id: 'mcp', label: 'MCP' },
 ]
 
 export type OpenAISnippetModel = {
@@ -147,6 +150,40 @@ export function curlOpenAISnippet(
   ].join('\n')
 }
 
+export function mcpConfigSnippet(
+  _model?: OpenAISnippetModel,
+  apiUrl = MCP_DEFAULT_API_URL,
+  rpcUrl = MCP_DEFAULT_RPC_URL,
+): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        voynich: {
+          command: 'npx',
+          args: [
+            '-y',
+            'voynich',
+            'mcp',
+            '--api',
+            apiUrl,
+            '--rpc',
+            rpcUrl,
+            '--keypair',
+            './wallet.json',
+          ],
+        },
+      },
+    },
+    null,
+    2,
+  )
+}
+
+export function mcpToolPromptNote(model: OpenAISnippetModel): string {
+  const id = openAIModelId(model)
+  return `Omit --keypair for read-only discovery; ask your agent to run voynich_call_model on "${id}" and verify with voynich_verify_receipt.`
+}
+
 export function buildOpenAISnippets(
   model: OpenAISnippetModel,
   baseUrl = OPENAI_DEFAULT_BASE_URL,
@@ -156,5 +193,6 @@ export function buildOpenAISnippets(
     js: jsOpenAISnippet(model, baseUrl),
     python: pythonOpenAISnippet(model, baseUrl),
     curl: curlOpenAISnippet(model, baseUrl),
+    mcp: mcpConfigSnippet(model),
   }
 }
